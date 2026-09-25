@@ -18,7 +18,9 @@ import android.view.inputmethod.InputMethodManager
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.personal.guardian.util.GuardianLog
+import com.personal.guardian.util.ProcessDiagnostics
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Stage 3 — screen scanning via the Accessibility Service's one-shot screenshot API.
@@ -54,9 +56,21 @@ class GuardianAccessibilityService : AccessibilityService() {
 
     private val tick = Runnable { onTick() }
 
+    /** Distinguishes service instances in the log (a new instance = a new bind). */
+    private val instanceId = instanceCounter.incrementAndGet()
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         ScanStatus.connected = true
+        // Lifecycle diagnostics: a young process here means Guardian's process was
+        // restarted (the reason, if recorded by the system, is logged just after).
+        GuardianLog.i(
+            this,
+            "Screen scanning accessibility service connected " +
+                "(instance #$instanceId, pid ${android.os.Process.myPid()}, " +
+                "process age ${ProcessDiagnostics.processAgeSeconds()?.let { "${it}s" } ?: "unknown"})."
+        )
+        ProcessDiagnostics.logPreviousExitsIfNew(this)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             ScanStatus.unsupported = true
             GuardianLog.w(
@@ -107,12 +121,21 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        GuardianLog.w(this, "Screen scanning accessibility service disabled/unbound.")
+        // The system only unbinds a running accessibility service when it is no
+        // longer enabled/allowed (Settings toggle, force-stop, device policy), on a
+        // package update, a user switch, or while UI automation suppresses services.
+        // Logging whether it is still enabled tells those cases apart.
+        GuardianLog.w(
+            this,
+            "Screen scanning accessibility service unbound by system (instance #$instanceId; " +
+                "still enabled in Settings: ${yesNo(isEnabledInSettings(this))}; screen on: ${yesNo(isScreenOn())})."
+        )
         shutdown()
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
+        GuardianLog.i(this, "Screen scanning accessibility service destroyed (instance #$instanceId).")
         shutdown()
         super.onDestroy()
     }
@@ -198,6 +221,17 @@ class GuardianAccessibilityService : AccessibilityService() {
             val score = model.classify(frame)
             ScanStatus.onFrame(System.currentTimeMillis(), score, source)
             val confirmation = confirmer.onFrame(score, SystemClock.elapsedRealtime(), source)
+            if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
+                // TEMPORARY calibration logging (see ScanConfig.LOG_EVERY_FRAME_SCORE).
+                val streak = if (confirmation != null) confirmer.requiredConsecutive else confirmer.pendingPositives
+                GuardianLog.i(
+                    applicationContext,
+                    ScanLog.frameLine(
+                        score, confirmer.threshold, source, scheduler.foregroundPackage,
+                        streak, confirmer.requiredConsecutive
+                    )
+                )
+            }
             if (confirmation != null) onConfirmed(confirmation, frame)
         } finally {
             frame.recycle()
@@ -276,7 +310,11 @@ class GuardianAccessibilityService : AccessibilityService() {
         else -> "code $code"
     }
 
+    private fun yesNo(b: Boolean) = if (b) "yes" else "no"
+
     companion object {
+        private val instanceCounter = AtomicInteger()
+
         /** Repeated identical failures are logged at most this often. */
         private const val FAILURE_LOG_INTERVAL_MS = 60_000L
 

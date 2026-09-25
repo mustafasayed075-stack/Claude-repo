@@ -14,6 +14,7 @@ import com.personal.guardian.MainActivity
 import com.personal.guardian.R
 import com.personal.guardian.blocklist.BlocklistUpdateWorker
 import com.personal.guardian.util.GuardianLog
+import com.personal.guardian.util.ProcessDiagnostics
 import com.personal.guardian.vpn.GuardianVpnController
 
 /**
@@ -39,6 +40,8 @@ class GuardianForegroundService : LifecycleService() {
         super.onCreate()
         createNotificationChannel()
         GuardianLog.i(this, "Core foreground service creating.")
+        // If Guardian's process was killed and restarted, record why (Android 11+).
+        ProcessDiagnostics.logPreviousExitsIfNew(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

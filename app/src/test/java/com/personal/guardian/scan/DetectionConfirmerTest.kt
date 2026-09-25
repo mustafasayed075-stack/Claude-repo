@@ -26,6 +26,18 @@ class DetectionConfirmerTest {
     }
 
     @Test
+    fun defaultThresholdIsHalfForGeneralNudityAndSuggestiveContent() {
+        assertEquals(0.5f, ScanConfig.NSFW_THRESHOLD)
+        val c = DetectionConfirmer()
+        assertTrue(c.isPositive(0.5f))
+        assertTrue(c.isPositive(0.63f))
+        assertFalse(c.isPositive(0.4999f))
+        // Two consecutive 0.5+ frames now confirm with the default config.
+        assertNull(c.onFrame(0.55f, 0, p))
+        assertNotNull(c.onFrame(0.6f, 1_500, p))
+    }
+
+    @Test
     fun thresholdIsInclusive() {
         val c = confirmer()
         assertTrue(c.isPositive(0.8f))

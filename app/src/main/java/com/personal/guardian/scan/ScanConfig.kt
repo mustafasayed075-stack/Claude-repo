@@ -59,8 +59,22 @@ object ScanConfig {
      * Classifier score (OpenNSFW "nsfw" probability, 0..1) at or above which a frame
      * counts as positive. Yahoo's guidance: < 0.2 very likely safe, > 0.8 very
      * likely NSFW.
+     *
+     * Set to 0.5 (not 0.8) so general nudity / suggestive content such as swimwear
+     * is caught, not only explicit pornography. Tradeoff: more sensitive, but more
+     * false positives on skin-heavy safe images (beach, sports, fitness). Tune using
+     * the per-frame scores from [LOG_EVERY_FRAME_SCORE].
      */
-    const val NSFW_THRESHOLD = 0.8f
+    const val NSFW_THRESHOLD = 0.5f
+
+    /**
+     * TEMPORARY calibration aid: when true, every classified frame's raw score is
+     * written to GuardianLog, not just confirmed detections. Set to false (or delete
+     * this flag and its single use in GuardianAccessibilityService) once the
+     * threshold is calibrated. Note: in fast mode this adds ~40 log lines a minute,
+     * so the 1 MiB event log rotates within a few hours of heavy use.
+     */
+    const val LOG_EVERY_FRAME_SCORE = true
 
     /** Consecutive positive frames required for a confirmed detection. */
     const val CONFIRMATION_COUNT = 2

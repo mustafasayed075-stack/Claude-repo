@@ -13,7 +13,7 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
 - **Stage 3 — Screen scanning:** an Accessibility Service takes one-shot
   screenshots (every 7 s, every 1.5 s while a watched app is in the foreground),
   classifies them **on-device** with a TensorFlow Lite NSFW model, and — after 2
-  consecutive positive frames within 10 s — logs the detection, saves a small
+  consecutive frames scoring ≥ 0.5 within 10 s — logs the detection, saves a small
   review thumbnail locally and shows a notification. **Detection and logging only;
   no lock action yet.**
 
@@ -189,9 +189,22 @@ these in order (from the spec):
   frame is scaled to 256×256, centre-cropped to 224×224, converted to BGR minus the
   VGG mean, and the model's NSFW probability is the score.
 - **Confirmation:** `DetectionConfirmer` — a frame is positive when its score ≥
-  `NSFW_THRESHOLD` = **0.8**; a detection is confirmed after
+  `NSFW_THRESHOLD` = **0.5**; a detection is confirmed after
   `CONFIRMATION_COUNT` = **2** consecutive positive frames within
   `CONFIRMATION_WINDOW_MS` = **10 s**. A negative frame resets the streak.
+  - The threshold is 0.5 (not Yahoo's 0.8 "very likely NSFW") so that general
+    nudity and suggestive content such as swimwear is caught, not only explicit
+    pornography. Expect more false positives on skin-heavy safe images (beach,
+    sports, fitness); this is accepted while calibrating.
+- **Calibration logging (temporary):** with `LOG_EVERY_FRAME_SCORE = true` every
+  classified frame is logged, e.g.
+  `Scan frame: score=0.6312 [>= 0.50] trigger=event app=com.whatsapp streak=1/2`.
+  Set the flag to `false` (or delete it and its one use) when calibration is done;
+  while on, the event log rotates within a few hours of heavy use.
+- **Lifecycle diagnostics:** the service logs each connect (instance number, pid,
+  process age), each unbind (whether it was still enabled in Settings), and — on
+  Android 11+ — the system-recorded reason the previous Guardian process ended
+  (`CRASH`, `CRASH_NATIVE`, `LOW_MEMORY`, `ANR`, `USER_REQUESTED`, …).
 - **On a confirmed detection:**
   - a thumbnail (longest side 256 px, JPEG) is saved to
     `files/detections/detection-<timestamp>.jpg` (newest 100 kept) and a metadata
@@ -222,8 +235,8 @@ these in order (from the spec):
 - The **whole screen** is squashed into one 224×224 input, so a small image inside
   a larger page (e.g. a thumbnail in a chat list) may score low until opened
   full-screen.
-- Accuracy on real content can only be judged on-device; the threshold (0.8) is a
-  starting point to tune.
+- Accuracy on real content can only be judged on-device; the threshold (0.5) is a
+  starting point to tune with the per-frame score log.
 
 ### Stage 3 — Definition of Done → how it's met
 
