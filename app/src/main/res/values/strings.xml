@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">Guardian</string>
+
+    <!-- Device admin -->
+    <string name="admin_label">Guardian Protection</string>
+    <string name="admin_description">Keeps Guardian\'s on-device content protection active. Removal requires a full factory reset.</string>
+    <string name="admin_explanation">Guardian is a personal accountability tool. Activating device administration prevents casual removal of the on-device content filter.</string>
+
+    <!-- Core service notification -->
+    <string name="core_service_channel_name">Guardian core service</string>
+    <string name="core_service_channel_desc">Keeps on-device protection running.</string>
+    <string name="core_service_notification_title">Guardian is active</string>
+    <string name="core_service_notification_text">On-device content protection is running.</string>
+
+    <!-- Status screen -->
+    <string name="status_owner">Device Owner: %1$s</string>
+    <string name="status_admin">Device Admin active: %1$s</string>
+    <string name="status_vpn">DNS filter consent granted: %1$s</string>
+    <string name="status_blocklist">Blocklist domains loaded: %1$d</string>
+    <string name="provision_hint">To provision as Device Owner (after factory reset, before adding a Google account):\n\nadb install app-release.apk\nadb shell dpm set-device-owner %1$s/%2$s</string>
+    <string name="log_empty">No events logged yet.</string>
+
+    <string name="btn_enable_vpn">Enable DNS filter</string>
+    <string name="btn_request_admin">Activate device admin</string>
+    <string name="btn_refresh_list">Refresh blocklist now</string>
+    <string name="btn_start_service">Start core service</string>
+    <string name="btn_refresh_status">Refresh status</string>
+    <string name="section_status">Status</string>
+    <string name="section_log">Event log</string>
+
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+</resources>

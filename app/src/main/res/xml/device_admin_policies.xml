@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Device Admin policy declaration for GuardianDeviceAdminReceiver.
+
+  These <uses-policies> entries are the admin capabilities the app requests.
+  Combined with Device Owner provisioning (`dpm set-device-owner`), they let the
+  app lock the device and make it non-removable through normal Settings — removal
+  then requires a full factory reset.
+
+    - limit-password / reset-password : establish/enforce a screen lock credential
+    - force-lock                      : lock the device on demand (used by later stages)
+    - watch-login                     : observe login attempts
+    - disable-keyguard-features       : manage keyguard behavior when locking
+    - wipe-data is intentionally NOT requested; this is a personal accountability
+      tool, not an MDM, and it must never erase the device.
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <limit-password />
+        <reset-password />
+        <force-lock />
+        <watch-login />
+        <disable-keyguard-features />
+    </uses-policies>
+</device-admin>

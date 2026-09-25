@@ -1,0 +1,7 @@
+<resources>
+    <color name="guardian_primary">#1B5E20</color>
+    <color name="guardian_primary_dark">#003300</color>
+    <color name="guardian_accent">#2E7D32</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="ic_launcher_background">#1B5E20</color>
+</resources>
