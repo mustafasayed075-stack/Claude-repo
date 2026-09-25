@@ -8,9 +8,9 @@ import com.personal.guardian.blocklist.BlocklistManager
 import com.personal.guardian.util.GuardianLog
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.net.DatagramPacket
+import java.io.IOException
 import java.net.DatagramSocket
-import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -29,8 +29,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *    non-DNS flows.
  *  - Every packet read from the tunnel is therefore a DNS query. We parse the
  *    queried name, check it against [BlocklistManager]; matches get a synthesized
- *    NXDOMAIN, everything else is forwarded to [UPSTREAM_DNS] over a protected
- *    socket and the reply is written back into the tunnel.
+ *    NXDOMAIN, everything else is handed to [DnsForwarder], which resolves it
+ *    against [UPSTREAM_DNS] concurrently over protected sockets and writes the
+ *    reply back into the tunnel. The tunnel loop itself never waits on the network.
  */
 class GuardianVpnService : VpnService() {
 
@@ -93,14 +94,33 @@ class GuardianVpnService : VpnService() {
         val output = FileOutputStream(pfd.fileDescriptor)
         val packet = ByteArray(MTU)
 
-        // One protected UDP socket for forwarding allowed queries upstream. Created
-        // inside the try so any failure is logged and cleaned up like any other.
-        var upstream: DatagramSocket? = null
-        try {
-            val socket = DatagramSocket().also { protect(it) }
-            upstream = socket
-            val upstreamAddr = InetAddress.getByName(UPSTREAM_DNS)
+        // Allowed queries are forwarded concurrently off this thread, so this loop
+        // only ever does cheap work (parse + O(1) set lookup) and never waits on
+        // the network. Each lookup gets its own protected upstream socket.
+        val forwarder = DnsForwarder(
+            upstream = InetSocketAddress(UPSTREAM_DNS, DnsPacket.DNS_PORT),
+            timeoutMs = UPSTREAM_TIMEOUT_MS,
+            socketFactory = {
+                DatagramSocket().also {
+                    if (!protect(it)) {
+                        it.close()
+                        throw IOException("VpnService.protect() failed for upstream DNS socket")
+                    }
+                }
+            },
+            onFailure = { query, t ->
+                // Fail closed for this one query (no reply written); the client
+                // resolver will retry. Warn-level to avoid log spam on flaky networks.
+                GuardianLog.w(applicationContext, "Upstream DNS forward failed for ${query.qName}.", t)
+            }
+        )
+        // Replies are written from the forwarder's threads as well as this one;
+        // serialize writes so each packet reaches the tunnel intact.
+        val writeToTunnel: (ByteArray) -> Unit = { bytes ->
+            synchronized(output) { output.write(bytes) }
+        }
 
+        try {
             while (running.get()) {
                 val n = try {
                     input.read(packet)
@@ -115,45 +135,21 @@ class GuardianVpnService : VpnService() {
 
                 if (host != null && BlocklistManager.isBlocked(host)) {
                     // Blocked: answer locally, nothing leaves the device.
-                    val response = DnsPacket.buildBlockedResponse(query)
-                    output.write(response)
+                    writeToTunnel(DnsPacket.buildBlockedResponse(query))
                     GuardianLog.i(applicationContext, "BLOCKED dns query: $host")
                 } else {
-                    // Allowed: forward to the real resolver and relay the answer.
-                    forward(query, socket, upstreamAddr, output)
+                    // Allowed: forward to the real resolver without blocking this loop.
+                    forwarder.forward(query) { reply ->
+                        if (running.get()) runCatching { writeToTunnel(reply) }
+                    }
                 }
             }
         } catch (t: Throwable) {
             if (running.get()) GuardianLog.e(applicationContext, "DNS loop terminated abnormally.", t)
         } finally {
-            runCatching { upstream?.close() }
+            forwarder.shutdown()
             runCatching { input.close() }
             runCatching { output.close() }
-        }
-    }
-
-    private fun forward(
-        query: DnsPacket.Query,
-        upstream: DatagramSocket,
-        upstreamAddr: InetAddress,
-        output: FileOutputStream
-    ) {
-        try {
-            val out = DatagramPacket(query.dnsPayload, query.dnsPayload.size, upstreamAddr, DnsPacket.DNS_PORT)
-            upstream.send(out)
-
-            val buf = ByteArray(MTU)
-            val reply = DatagramPacket(buf, buf.size)
-            upstream.soTimeout = UPSTREAM_TIMEOUT_MS
-            upstream.receive(reply)
-
-            val answer = buf.copyOfRange(0, reply.length)
-            output.write(DnsPacket.buildForwardedResponse(query, answer))
-        } catch (t: Throwable) {
-            // On upstream failure, fail closed for this one query (no reply written);
-            // the client resolver will retry. Log at warn to avoid log spam on flaky
-            // networks.
-            GuardianLog.w(applicationContext, "Upstream DNS forward failed for ${query.qName}.", t)
         }
     }
 
