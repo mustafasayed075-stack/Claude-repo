@@ -89,4 +89,43 @@ class BlocklistManagerTest {
         assertFalse(set.contains("8.8.8.8"))
         assertFalse(set.contains("not_a_domain"))
     }
+
+    @Test
+    fun matchingStaysFastAtRealListSize() {
+        // Same size as the live oisd NSFW list (49,288 domains), in ABP format.
+        val listSize = 49_288
+        val rnd = java.util.Random(42)
+        fun label() = (1..(4 + rnd.nextInt(10))).map { ('a' + rnd.nextInt(26)) }.joinToString("")
+        val listText = (0 until listSize).joinToString("\n") { "||${label()}.${label()}.example^" }
+
+        var t0 = System.nanoTime()
+        val set = parse(listText)
+        val parseMs = (System.nanoTime() - t0) / 1_000_000
+        assertEquals(listSize, set.size)
+
+        // Mix of misses (typical browsing) and subdomain hits, 4-label names so the
+        // matcher walks several parent domains per lookup.
+        val entries = set.toList()
+        val hosts = (0 until 10_000).map { i ->
+            if (i % 10 == 0) "cdn.img.${entries[rnd.nextInt(entries.size)]}"
+            else "www.${label()}.${label()}.com"
+        }
+        repeat(3) { hosts.forEach { BlocklistManager.matches(set, it) } } // JIT warm-up
+
+        val rounds = 10
+        var hits = 0
+        t0 = System.nanoTime()
+        repeat(rounds) { hosts.forEach { if (BlocklistManager.matches(set, it)) hits++ } }
+        val totalNs = System.nanoTime() - t0
+        val lookups = rounds * hosts.size
+        val avgUs = totalNs / 1_000.0 / lookups
+
+        println(
+            "BlocklistManagerTest: parsed $listSize domains in $parseMs ms; " +
+                "$lookups lookups in ${totalNs / 1_000_000} ms (avg ${"%.3f".format(avgUs)} µs/lookup)"
+        )
+        assertEquals("every subdomain of a listed domain is blocked", rounds * 1_000, hits)
+        // Generous bound so the test isn't flaky on slow CI; real cost is ~1 µs.
+        assertTrue("lookup too slow: avg $avgUs µs", avgUs < 50.0)
+    }
 }
