@@ -60,12 +60,15 @@ object ScanConfig {
      * counts as positive. Yahoo's guidance: < 0.2 very likely safe, > 0.8 very
      * likely NSFW.
      *
-     * Set to 0.5 (not 0.8) so general nudity / suggestive content such as swimwear
-     * is caught, not only explicit pornography. Tradeoff: more sensitive, but more
-     * false positives on skin-heavy safe images (beach, sports, fitness). Tune using
-     * the per-frame scores from [LOG_EVERY_FRAME_SCORE].
+     * Set to 0.2 — deliberately at the bottom of Yahoo's "likely safe" band — for
+     * maximum sensitivity to any suggestive / skin-exposure content (chosen after
+     * on-device testing). Tradeoff, accepted for this use case: frequent false
+     * positives on ordinary photos (beach, sports, fitness, close-up portraits,
+     * skin-toned backgrounds). The 2-consecutive-frames rule is the only filter left
+     * against one-off spikes. Tune using the per-frame scores from
+     * [LOG_EVERY_FRAME_SCORE].
      */
-    const val NSFW_THRESHOLD = 0.5f
+    const val NSFW_THRESHOLD = 0.2f
 
     /**
      * TEMPORARY calibration aid: when true, every classified frame's raw score is

@@ -25,16 +25,74 @@ class DetectionConfirmerTest {
         assertEquals(10_000L, c.windowMs)
     }
 
+    // ---- Default config (threshold 0.2, 2 frames, 10 s): the rule as shipped ----
+
     @Test
-    fun defaultThresholdIsHalfForGeneralNudityAndSuggestiveContent() {
-        assertEquals(0.5f, ScanConfig.NSFW_THRESHOLD)
+    fun defaultThresholdIsPointTwoForMaximumSensitivity() {
+        assertEquals(0.2f, ScanConfig.NSFW_THRESHOLD)
         val c = DetectionConfirmer()
-        assertTrue(c.isPositive(0.5f))
-        assertTrue(c.isPositive(0.63f))
-        assertFalse(c.isPositive(0.4999f))
-        // Two consecutive 0.5+ frames now confirm with the default config.
-        assertNull(c.onFrame(0.55f, 0, p))
-        assertNotNull(c.onFrame(0.6f, 1_500, p))
+        assertTrue(c.isPositive(0.2f))
+        assertTrue(c.isPositive(0.25f))
+        assertFalse(c.isPositive(0.1999f))
+        assertFalse(c.isPositive(0.05f))
+    }
+
+    @Test
+    fun atDefaultThresholdASingleLowPositiveStillDoesNotConfirm() {
+        val c = DetectionConfirmer()
+        assertNull(c.onFrame(0.21f, 0, p))
+        assertEquals(1, c.pendingPositives)
+        // A frame just under 0.2 is negative and clears the streak.
+        assertNull(c.onFrame(0.19f, 1_500, p))
+        assertEquals(0, c.pendingPositives)
+        assertNull(c.onFrame(0.21f, 3_000, p))
+    }
+
+    @Test
+    fun atDefaultThresholdTwoConsecutiveLowPositivesWithin10sConfirm() {
+        val c = DetectionConfirmer()
+        assertNull(c.onFrame(0.2f, 0, e))
+        val confirmation = c.onFrame(0.22f, ScanConfig.FAST_INTERVAL_MS, e)
+        assertNotNull(confirmation)
+        assertEquals(0.22f, confirmation!!.latest.score)
+    }
+
+    @Test
+    fun atDefaultThresholdTwoBaselineFramesConfirmButStalePositiveDoesNot() {
+        val c = DetectionConfirmer()
+        assertNull(c.onFrame(0.3f, 0, p))
+        assertNotNull("7 s apart is inside the 10 s window", c.onFrame(0.3f, ScanConfig.BASELINE_INTERVAL_MS, p))
+
+        assertNull(c.onFrame(0.3f, 20_000, p))
+        assertNull("10.001 s apart is outside the window", c.onFrame(0.3f, 30_001, p))
+        assertEquals(1, c.pendingPositives)
+    }
+
+    @Test
+    fun atDefaultThresholdAlternatingScoresAroundPointTwoNeverConfirm() {
+        // A frame just under threshold between every positive keeps resetting the streak.
+        val c = DetectionConfirmer()
+        var t = 0L
+        repeat(20) { i ->
+            val score = if (i % 2 == 0) 0.25f else 0.15f
+            assertNull("frame $i", c.onFrame(score, t, e))
+            t += ScanConfig.FAST_INTERVAL_MS
+        }
+    }
+
+    @Test
+    fun atDefaultThresholdContinuousPositivesConfirmOncePerTwoFrames() {
+        // E.g. 30 s of a beach photo in fast mode (1.5 s): 20 frames, all >= 0.2.
+        // The streak restarts after each confirmation, so this yields 10 confirmed
+        // detections, not 19 — one every 3 s while the content stays on screen.
+        val c = DetectionConfirmer()
+        var t = 0L
+        var confirmations = 0
+        repeat(20) {
+            if (c.onFrame(0.35f, t, e) != null) confirmations++
+            t += ScanConfig.FAST_INTERVAL_MS
+        }
+        assertEquals(10, confirmations)
     }
 
     @Test
