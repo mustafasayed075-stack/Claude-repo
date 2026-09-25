@@ -14,6 +14,7 @@ import com.personal.guardian.MainActivity
 import com.personal.guardian.R
 import com.personal.guardian.blocklist.BlocklistUpdateWorker
 import com.personal.guardian.util.GuardianLog
+import com.personal.guardian.vpn.GuardianVpnController
 
 /**
  * Stage 1 — the core persistent foreground service.
