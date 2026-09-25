@@ -85,6 +85,20 @@ object ScanConfig {
     /** All [CONFIRMATION_COUNT] positive frames must fall within this rolling window. */
     const val CONFIRMATION_WINDOW_MS = 10_000L
 
+    /**
+     * After a detection is reported, further detections of the *same on-screen
+     * content* are suppressed for this long (no notification, thumbnail, log entry
+     * or event). Different content is still reported immediately.
+     */
+    const val DETECTION_COOLDOWN_MS = 60_000L
+
+    /**
+     * Two frames count as the same content when their 64-bit screen fingerprints
+     * (dHash) differ in at most this many bits. ~10 tolerates the clock ticking and
+     * small scrolls; a different image or page differs far more.
+     */
+    const val SAME_CONTENT_MAX_DISTANCE = 10
+
     /** Longest edge of the saved review thumbnail, in pixels. */
     const val THUMBNAIL_MAX_DIM = 256
 

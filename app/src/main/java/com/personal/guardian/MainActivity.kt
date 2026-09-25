@@ -174,6 +174,10 @@ class MainActivity : AppCompatActivity() {
             GuardianDeviceAdminReceiver.componentName(this).className
         )
 
+        // Diagnostics have their own file, so the event log's churn can't hide them.
+        binding.txtDiagnostics.text = GuardianLog.readDiagnostics(this).takeLast(4000)
+            .ifEmpty { getString(R.string.diagnostics_empty) }
+
         // Show the tail of the event log for quick review.
         val log = GuardianLog.readAll(this)
         binding.txtLog.text = log.takeLast(4000).ifEmpty { getString(R.string.log_empty) }
@@ -207,6 +211,7 @@ class MainActivity : AppCompatActivity() {
             ScanStatus.framesScanned,
             last,
             ScanStatus.confirmedCount,
+            ScanStatus.suppressedCount,
             DetectionStore.thumbnailCount(this)
         )
 

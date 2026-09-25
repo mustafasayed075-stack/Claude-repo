@@ -50,6 +50,8 @@ class GuardianAccessibilityService : AccessibilityService() {
     // Worker-thread state.
     private val scheduler = CaptureScheduler()
     private val confirmer = DetectionConfirmer()
+    private val cooldown = DetectionCooldown()
+    private val fingerprintPixels = IntArray(ScreenFingerprint.WIDTH * ScreenFingerprint.HEIGHT)
     private var classifier: NsfwClassifier? = null
     private var captureInFlight = false
     private val lastFailureLogAt = HashMap<String, Long>()
@@ -68,7 +70,8 @@ class GuardianAccessibilityService : AccessibilityService() {
             this,
             "Screen scanning accessibility service connected " +
                 "(instance #$instanceId, pid ${android.os.Process.myPid()}, " +
-                "process age ${ProcessDiagnostics.processAgeSeconds()?.let { "${it}s" } ?: "unknown"})."
+                "process age ${ProcessDiagnostics.processAgeSeconds()?.let { "${it}s" } ?: "unknown"}).",
+            diagnostic = true
         )
         ProcessDiagnostics.logPreviousExitsIfNew(this)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
@@ -128,14 +131,15 @@ class GuardianAccessibilityService : AccessibilityService() {
         GuardianLog.w(
             this,
             "Screen scanning accessibility service unbound by system (instance #$instanceId; " +
-                "still enabled in Settings: ${yesNo(isEnabledInSettings(this))}; screen on: ${yesNo(isScreenOn())})."
+                "still enabled in Settings: ${yesNo(isEnabledInSettings(this))}; screen on: ${yesNo(isScreenOn())}).",
+            diagnostic = true
         )
         shutdown()
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
-        GuardianLog.i(this, "Screen scanning accessibility service destroyed (instance #$instanceId).")
+        GuardianLog.i(this, "Screen scanning accessibility service destroyed (instance #$instanceId).", diagnostic = true)
         shutdown()
         super.onDestroy()
     }
@@ -240,6 +244,11 @@ class GuardianAccessibilityService : AccessibilityService() {
 
     private fun onConfirmed(confirmation: DetectionConfirmer.Confirmation, frame: Bitmap) {
         val ctx = applicationContext
+        if (!cooldown.shouldReport(SystemClock.elapsedRealtime(), fingerprint(frame))) {
+            // Same content as a detection reported within the cooldown: no reaction.
+            ScanStatus.suppressedCount++
+            return
+        }
         val now = System.currentTimeMillis()
         val latest = confirmation.latest
         val thumbnail = DetectionStore.saveThumbnail(ctx, frame, now)
@@ -258,8 +267,10 @@ class GuardianAccessibilityService : AccessibilityService() {
         GuardianLog.w(
             ctx,
             "CONFIRMED screen detection: confidence=${"%.3f".format(latest.score)} trigger=${latest.source.label} " +
-                "app=${event.foregroundPackage ?: "unknown"} frames=[$scores] thumbnail=${thumbnail ?: "not saved"}"
+                "app=${event.foregroundPackage ?: "unknown"} frames=[$scores] thumbnail=${thumbnail ?: "not saved"} " +
+                "(same-content repeats suppressed since last report: ${cooldown.suppressedSinceLastReport})"
         )
+        cooldown.resetSuppressedCount()
         if (!DetectionNotifier.show(ctx, event)) {
             GuardianLog.w(ctx, "Detection notification not shown: notifications are not permitted for Guardian.")
         }
@@ -269,6 +280,16 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     // ---- helpers ----
+
+    private fun fingerprint(frame: Bitmap): Long {
+        val small = Bitmap.createScaledBitmap(frame, ScreenFingerprint.WIDTH, ScreenFingerprint.HEIGHT, true)
+        try {
+            small.getPixels(fingerprintPixels, 0, ScreenFingerprint.WIDTH, 0, 0, ScreenFingerprint.WIDTH, ScreenFingerprint.HEIGHT)
+        } finally {
+            if (small !== frame) small.recycle()
+        }
+        return ScreenFingerprint.dHash(fingerprintPixels)
+    }
 
     private fun shutdown() {
         ScanStatus.connected = false
@@ -362,6 +383,7 @@ object ScanStatus {
     @Volatile var lastSource: TriggerSource? = null
         private set
     @Volatile var confirmedCount = 0
+    @Volatile var suppressedCount = 0
 
     fun onFrame(atMs: Long, score: Float, source: TriggerSource) {
         framesScanned++

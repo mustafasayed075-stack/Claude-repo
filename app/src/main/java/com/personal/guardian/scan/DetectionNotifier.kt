@@ -53,6 +53,9 @@ object DetectionNotifier {
             .setContentText(text)
             .setContentIntent(openApp)
             .setAutoCancel(true)
+            // Sound/vibrate only when first posted; later detections update it
+            // silently until the user dismisses it.
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()

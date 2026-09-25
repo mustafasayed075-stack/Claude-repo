@@ -205,7 +205,11 @@ these in order (from the spec):
 - **Lifecycle diagnostics:** the service logs each connect (instance number, pid,
   process age), each unbind (whether it was still enabled in Settings), and — on
   Android 11+ — the system-recorded reason the previous Guardian process ended
-  (`CRASH`, `CRASH_NATIVE`, `LOW_MEMORY`, `ANR`, `USER_REQUESTED`, …).
+  (`CRASH`, `CRASH_NATIVE`, `LOW_MEMORY`, `ANR`, `USER_REQUESTED`, …). These lines
+  (plus core-service create/destroy) are also written to a separate
+  `files/guardian-diagnostics.log` (256 KiB cap, own rotation) that per-frame
+  lines never go to, so they can't be rotated away; it is shown in its own
+  "Diagnostics log" section on the main screen.
 - **On a confirmed detection:**
   - a thumbnail (longest side 256 px, JPEG) is saved to
     `files/detections/detection-<timestamp>.jpg` (newest 100 kept) and a metadata
@@ -215,7 +219,15 @@ these in order (from the spec):
   - a `DetectionEvent` is published on `DetectionBus` — the later lock stage
     registers a `DetectionListener` there;
   - stub reaction: a local notification **"Guardian: flagged content detected"**.
-    No lock, no blocking.
+    No lock, no blocking. It sounds/vibrates only when first posted; later
+    detections update it silently until it is dismissed.
+- **Same-content cooldown:** each confirmed detection is fingerprinted (64-bit
+  dHash of the screen). If it matches content already reported within
+  `DETECTION_COOLDOWN_MS` = **60 s** (≤ `SAME_CONTENT_MAX_DISTANCE` = 10 differing
+  bits), it is suppressed entirely — no notification, thumbnail, log entry or
+  `DetectionBus` event. Different content is reported immediately; the same content
+  is reported again after 60 s. The number suppressed is shown on the main screen
+  and in the next `CONFIRMED` log line.
 
 ### Model: source and license
 
@@ -271,8 +283,10 @@ these in order (from the spec):
   lookup benchmark at the live list size.
 - **DNS packet parse/build:** `DnsPacketTest` (pure JVM).
 - **Concurrent DNS forwarding:** `DnsForwarderTest` (pure JVM, fake local resolver).
-- **Screen-scan logic:** `DetectionConfirmerTest`, `CaptureSchedulerTest`,
-  `NsfwPreprocessorTest`, `DetectionEventTest` (pure JVM).
+- **Screen-scan logic:** `DetectionConfirmerTest`, `DetectionCooldownTest`,
+  `CaptureSchedulerTest`, `NsfwPreprocessorTest`, `DetectionEventTest`,
+  `ScanLogTest` (pure JVM).
+- **Log retention:** `LogFilesTest` (diagnostics survive main-log rotation).
 - **Screen scanning on a device:** enable the accessibility service, open WhatsApp
   or a browser and watch the event log for "fast capture ON/OFF"; the main screen
   shows frames scanned and the last score.

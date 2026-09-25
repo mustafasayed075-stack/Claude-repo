@@ -39,7 +39,7 @@ class GuardianForegroundService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        GuardianLog.i(this, "Core foreground service creating.")
+        GuardianLog.i(this, "Core foreground service creating.", diagnostic = true)
         // If Guardian's process was killed and restarted, record why (Android 11+).
         ProcessDiagnostics.logPreviousExitsIfNew(this)
     }
@@ -86,7 +86,7 @@ class GuardianForegroundService : LifecycleService() {
     }
 
     override fun onDestroy() {
-        GuardianLog.w(this, "Core foreground service destroyed; will be restarted (sticky/boot).")
+        GuardianLog.w(this, "Core foreground service destroyed; will be restarted (sticky/boot).", diagnostic = true)
         super.onDestroy()
     }
 
