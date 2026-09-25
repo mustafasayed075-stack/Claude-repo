@@ -41,6 +41,12 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    // Stage 3: the TFLite model is memory-mapped from the APK, so it must be stored
+    // uncompressed.
+    androidResources {
+        noCompress += "tflite"
+    }
 }
 
 dependencies {
@@ -56,7 +62,12 @@ dependencies {
     // WorkManager drives the periodic, unattended blocklist refresh.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
+    // Stage 3: on-device image classification. Plain TensorFlow Lite runtime (no Play
+    // Services, no model downloads) — inference is fully local.
+    implementation("org.tensorflow:tensorflow-lite:2.17.0")
+
     // Local unit tests (pure-JVM logic: blocklist parsing/matching, DNS packet
-    // build/parse round-trips). Run with: ./gradlew testDebugUnitTest
+    // build/parse round-trips, scan scheduling/confirmation). Run with:
+    // ./gradlew testDebugUnitTest
     testImplementation("junit:junit:4.13.2")
 }

@@ -28,6 +28,25 @@
     <string name="section_status">Status</string>
     <string name="section_log">Event log</string>
 
+    <!-- Stage 3: screen scanning -->
+    <string name="accessibility_service_description">Guardian screen scanning: periodically takes a single screenshot and checks it for explicit content with an on-device model. Nothing leaves the device. Confirmed detections are logged locally with a small thumbnail for review.</string>
+    <string name="detection_channel_name">Guardian detections</string>
+    <string name="detection_channel_desc">Shown when screen scanning confirms flagged content.</string>
+    <string name="detection_notification_title">Guardian: flagged content detected</string>
+    <string name="detection_notification_text">Confidence %1$.2f · %2$s scan · %3$s</string>
+    <string name="status_scan_active">Screen scanning: Active</string>
+    <string name="status_scan_starting">Screen scanning: Starting (or model failed to load — check the event log)</string>
+    <string name="status_scan_enabled_not_running">Screen scanning: Enabled, service not running yet</string>
+    <string name="status_scan_off">Screen scanning: Off — enable in Settings → Accessibility → Installed apps → Guardian</string>
+    <string name="status_scan_unsupported">Screen scanning: Unsupported (needs Android 11+, this device is API %1$d)</string>
+    <string name="status_scan_details">Mode: %1$s · frames scanned: %2$d · last: %3$s · confirmed: %4$d · saved thumbnails: %5$d</string>
+    <string name="status_scan_mode_fast">fast (%1$s)</string>
+    <string name="status_scan_mode_baseline">baseline</string>
+    <string name="status_scan_last_frame">%1$s (%2$s, score %3$.2f)</string>
+    <string name="status_scan_no_frames">none yet</string>
+    <string name="status_notifications_off">Notifications are off for Guardian: detection alerts will not be shown.</string>
+    <string name="btn_open_accessibility">Open Accessibility settings</string>
+
     <string name="yes">Yes</string>
     <string name="no">No</string>
 </resources>

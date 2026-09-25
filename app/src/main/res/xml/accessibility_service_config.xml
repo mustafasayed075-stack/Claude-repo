@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stage 3: screen scanning. Window-state events drive fast capture for watched
+     apps; canTakeScreenshot enables the one-shot takeScreenshot() API (Android 11+);
+     canRetrieveWindowContent is used to read the current foreground package at start
+     (and will be reused by the later text-reading stage). -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
+    android:description="@string/accessibility_service_description"
+    android:notificationTimeout="100"
+    tools:ignore="UnusedAttribute" />

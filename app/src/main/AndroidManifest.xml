@@ -13,7 +13,8 @@
     <!-- Restart everything after a reboot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- Ongoing notification for the core service on Android 13+. -->
+    <!-- Ongoing notification for the core service and Stage 3 detection
+         notifications on Android 13+. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Device administration (Device Owner is provisioned via ADB, see README). -->
@@ -75,6 +76,21 @@
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
+        </service>
+
+        <!-- Stage 3: screen scanning. Enabled by the user once in
+             Settings → Accessibility → Installed apps → Guardian. -->
+        <service
+            android:name=".scan.GuardianAccessibilityService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
         </service>
 
         <!-- Restart core service + filtering on boot. -->

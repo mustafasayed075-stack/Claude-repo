@@ -69,9 +69,12 @@ class GuardianForegroundService : LifecycleService() {
         // has not yet been granted, MainActivity handles the one-time prompt.
         GuardianVpnController.startIfPermitted(applicationContext)
 
+        // Stage 3 (screen scanning) runs in GuardianAccessibilityService, which the
+        // system binds once the user enables it in Accessibility settings; it shares
+        // this process, which this foreground service keeps alive.
+        //
         // Later stages will add, e.g.:
-        //   ScreenScanController.start(this)
-        //   LockController.attach(this)
+        //   LockController.attach(this)  // subscribes to scan.DetectionBus
     }
 
     override fun onBind(intent: Intent): IBinder? {
