@@ -11,21 +11,22 @@ object ScanLog {
     /**
      * One line per classified frame (calibration aid, see
      * [ScanConfig.LOG_EVERY_FRAME_SCORE]), e.g.
-     * `Scan frame: score=0.6312 [>= 0.50] trigger=event app=com.whatsapp streak=1/2`.
+     * `Scan frame: score=0.2311 [>= 0.20] trigger=event app=com.whatsapp positives=1/2`,
+     * where `positives` counts positive frames currently inside the confirmation window.
      */
     fun frameLine(
         score: Float,
         threshold: Float,
         source: TriggerSource,
         foregroundPackage: String?,
-        streak: Int,
+        positives: Int,
         required: Int
     ): String {
         val cmp = if (score >= threshold) ">=" else "<"
         return String.format(
             Locale.US,
-            "Scan frame: score=%.4f [%s %.2f] trigger=%s app=%s streak=%d/%d",
-            score, cmp, threshold, source.label, foregroundPackage ?: "unknown", streak, required
+            "Scan frame: score=%.4f [%s %.2f] trigger=%s app=%s positives=%d/%d",
+            score, cmp, threshold, source.label, foregroundPackage ?: "unknown", positives, required
         )
     }
 

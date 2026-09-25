@@ -11,9 +11,9 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
   device** — allowed lookups go to a normal public resolver exactly as they would
   without the app; blocked lookups are answered locally with `NXDOMAIN`.
 - **Stage 3 — Screen scanning:** an Accessibility Service takes one-shot
-  screenshots (every 7 s, every 1.5 s while a watched app is in the foreground),
-  classifies them **on-device** with a TensorFlow Lite NSFW model, and — after 2
-  consecutive frames scoring ≥ 0.2 within 10 s — logs the detection, saves a small
+  screenshots (every 6 s, every 1.5 s while a watched app is in the foreground),
+  classifies them **on-device** with a TensorFlow Lite NSFW model, and — once 2
+  frames scoring ≥ 0.2 fall within 7 s (not necessarily in a row) — logs the detection, saves a small
   review thumbnail locally and shows a notification. **Detection and logging only;
   no lock action yet.**
 
@@ -61,7 +61,7 @@ app/src/main/java/com/personal/guardian/
 ├── scan/GuardianAccessibilityService  Stage 3: capture triggers, takeScreenshot(), detection pipeline
 ├── scan/ScanConfig                    Stage 3: all tunable constants (intervals, watched apps, threshold, N, window)
 ├── scan/CaptureScheduler              Stage 3: baseline vs fast capture timing (pure, unit-tested)
-├── scan/DetectionConfirmer            Stage 3: threshold + N-consecutive-in-window rule (pure, unit-tested)
+├── scan/DetectionConfirmer            Stage 3: threshold + N-positives-in-window rule (pure, unit-tested)
 ├── scan/NsfwPreprocessor              Stage 3: pixels → model input tensor (pure, unit-tested)
 ├── scan/NsfwClassifier                Stage 3: TFLite interpreter over the bundled model
 ├── scan/DetectionEvent                Stage 3: DetectionEvent, DetectionListener, DetectionBus (for later stages)
@@ -173,11 +173,13 @@ these in order (from the spec):
 ### How it works
 
 - **Capture triggers** (constants in `ScanConfig`):
-  - *Periodic:* every `BASELINE_INTERVAL_MS` = **7 s** while the service is active.
+  - *Periodic:* every `BASELINE_INTERVAL_MS` = **6 s** while the service is active.
+    Kept 1 s below the 7 s confirmation window so two normal-mode frames can
+    still confirm despite timer/classification jitter.
   - *Foreground fast capture:* when a `TYPE_WINDOW_STATE_CHANGED` event shows a
     package from `WATCHED_PACKAGES` (WhatsApp, Telegram, major browsers — edit the
     list freely) in the foreground, capture immediately and then every
-    `FAST_INTERVAL_MS` = **1.5 s**; revert to 7 s when another app comes to the
+    `FAST_INTERVAL_MS` = **1.5 s**; revert to 6 s when another app comes to the
     foreground. System UI and keyboard windows are ignored so the notification
     shade or keyboard doesn't drop fast mode. Notifications arriving are *not* a
     trigger. Mode switches are written to the event log.
@@ -190,8 +192,11 @@ these in order (from the spec):
   VGG mean, and the model's NSFW probability is the score.
 - **Confirmation:** `DetectionConfirmer` — a frame is positive when its score ≥
   `NSFW_THRESHOLD` = **0.2**; a detection is confirmed after
-  `CONFIRMATION_COUNT` = **2** consecutive positive frames within
-  `CONFIRMATION_WINDOW_MS` = **10 s**. A negative frame resets the streak.
+  at least `CONFIRMATION_COUNT` = **2** positive frames within the last
+  `CONFIRMATION_WINDOW_MS` = **7 s**. Negative frames in between don't reset
+  anything (e.g. positive → negative → positive within 7 s confirms); positives
+  simply age out of the window. This bounds time-to-detection at about 7 s in
+  fast mode (1.5 s frames) and normal mode (6 s frames).
   - The threshold is deliberately low — 0.2, the edge of Yahoo's "likely safe"
     band, versus their 0.8 "very likely NSFW" — for maximum sensitivity to any
     suggestive or skin-exposure content (set after on-device testing). Frequent
@@ -199,7 +204,8 @@ these in order (from the spec):
     expected and accepted for this use case.
 - **Calibration logging (temporary):** with `LOG_EVERY_FRAME_SCORE = true` every
   classified frame is logged, e.g.
-  `Scan frame: score=0.6312 [>= 0.50] trigger=event app=com.whatsapp streak=1/2`.
+  `Scan frame: score=0.2311 [>= 0.20] trigger=event app=com.whatsapp positives=1/2`
+  (`positives` = positive frames currently inside the window).
   Set the flag to `false` (or delete it and its one use) when calibration is done;
   while on, the event log rotates within a few hours of heavy use.
 - **Lifecycle diagnostics:** the service logs each connect (instance number, pid,
@@ -265,7 +271,7 @@ these in order (from the spec):
 - **Classified fully on-device, zero network calls** — bundled model + plain
   TFLite runtime (no Play Services, no downloads); `DetectionEventTest` statically
   checks the `scan` package uses no networking APIs.
-- **One positive frame doesn't confirm; N consecutive within the window do** —
+- **One positive frame doesn't confirm; N positives within the window do** —
   `DetectionConfirmerTest`.
 - **Confirmed detection → notification + GuardianLog entry + saved thumbnail** —
   `GuardianAccessibilityService.onConfirmed`.

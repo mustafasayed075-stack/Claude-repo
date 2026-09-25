@@ -7,13 +7,13 @@ import org.junit.Test
 class ScanLogTest {
 
     @Test
-    fun frameLineShowsRawScoreThresholdSourceAppAndStreak() {
+    fun frameLineShowsRawScoreThresholdSourceAppAndPositives() {
         assertEquals(
-            "Scan frame: score=0.6312 [>= 0.50] trigger=event app=com.whatsapp streak=1/2",
+            "Scan frame: score=0.6312 [>= 0.50] trigger=event app=com.whatsapp positives=1/2",
             ScanLog.frameLine(0.63124f, 0.5f, TriggerSource.EVENT, "com.whatsapp", 1, 2)
         )
         assertEquals(
-            "Scan frame: score=0.0421 [< 0.50] trigger=periodic app=unknown streak=0/2",
+            "Scan frame: score=0.0421 [< 0.50] trigger=periodic app=unknown positives=0/2",
             ScanLog.frameLine(0.0421f, 0.5f, TriggerSource.PERIODIC, null, 0, 2)
         )
     }
@@ -21,7 +21,7 @@ class ScanLogTest {
     @Test
     fun frameLineAtExactThresholdCountsAsPositive() {
         val line = ScanLog.frameLine(0.5f, 0.5f, TriggerSource.PERIODIC, "a.b", 1, 2)
-        assertEquals("Scan frame: score=0.5000 [>= 0.50] trigger=periodic app=a.b streak=1/2", line)
+        assertEquals("Scan frame: score=0.5000 [>= 0.50] trigger=periodic app=a.b positives=1/2", line)
     }
 
     @Test

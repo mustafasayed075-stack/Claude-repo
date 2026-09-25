@@ -5,8 +5,13 @@ package com.personal.guardian.scan
  */
 object ScanConfig {
 
-    /** Baseline capture interval while the service is active (spec: 6–8 s). */
-    const val BASELINE_INTERVAL_MS = 7_000L
+    /**
+     * Baseline capture interval while the service is active (spec: 6–8 s).
+     * Must stay comfortably below [CONFIRMATION_WINDOW_MS]: two consecutive baseline
+     * frames are never closer than this (plus timer/classification jitter), so if
+     * it approached the window, apps outside [WATCHED_PACKAGES] could never confirm.
+     */
+    const val BASELINE_INTERVAL_MS = 6_000L
 
     /** Faster capture interval while a watched app is in the foreground (spec: 1–2 s). */
     const val FAST_INTERVAL_MS = 1_500L
@@ -64,8 +69,8 @@ object ScanConfig {
      * maximum sensitivity to any suggestive / skin-exposure content (chosen after
      * on-device testing). Tradeoff, accepted for this use case: frequent false
      * positives on ordinary photos (beach, sports, fitness, close-up portraits,
-     * skin-toned backgrounds). The 2-consecutive-frames rule is the only filter left
-     * against one-off spikes. Tune using the per-frame scores from
+     * skin-toned backgrounds). The 2-positives-within-the-window rule is the only
+     * filter left against one-off spikes. Tune using the per-frame scores from
      * [LOG_EVERY_FRAME_SCORE].
      */
     const val NSFW_THRESHOLD = 0.2f
@@ -79,11 +84,17 @@ object ScanConfig {
      */
     const val LOG_EVERY_FRAME_SCORE = true
 
-    /** Consecutive positive frames required for a confirmed detection. */
+    /**
+     * Positive frames required for a confirmed detection. They need not be
+     * consecutive: negative frames in between don't reset the count.
+     */
     const val CONFIRMATION_COUNT = 2
 
-    /** All [CONFIRMATION_COUNT] positive frames must fall within this rolling window. */
-    const val CONFIRMATION_WINDOW_MS = 10_000L
+    /**
+     * At least [CONFIRMATION_COUNT] positive frames must fall within this rolling
+     * window. 7 s bounds time-to-detection in fast mode (1.5 s frames).
+     */
+    const val CONFIRMATION_WINDOW_MS = 7_000L
 
     /**
      * After a detection is reported, further detections of the *same on-screen

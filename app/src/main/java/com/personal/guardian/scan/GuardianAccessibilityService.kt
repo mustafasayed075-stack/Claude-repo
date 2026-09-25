@@ -175,7 +175,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         if (classifier == null || captureInFlight) return
         val now = SystemClock.elapsedRealtime()
         if (!isScreenOn()) {
-            // Nothing visible: don't capture, and don't let a streak span a screen-off.
+            // Nothing visible: don't capture, and don't let positives span a screen-off.
             confirmer.reset()
             scheduler.onCaptured(now) // keep the cadence without spinning
             return
@@ -227,12 +227,12 @@ class GuardianAccessibilityService : AccessibilityService() {
             val confirmation = confirmer.onFrame(score, SystemClock.elapsedRealtime(), source)
             if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
                 // TEMPORARY calibration logging (see ScanConfig.LOG_EVERY_FRAME_SCORE).
-                val streak = if (confirmation != null) confirmer.requiredConsecutive else confirmer.pendingPositives
+                val positives = if (confirmation != null) confirmer.requiredPositives else confirmer.pendingPositives
                 GuardianLog.i(
                     applicationContext,
                     ScanLog.frameLine(
                         score, confirmer.threshold, source, scheduler.foregroundPackage,
-                        streak, confirmer.requiredConsecutive
+                        positives, confirmer.requiredPositives
                     )
                 )
             }
