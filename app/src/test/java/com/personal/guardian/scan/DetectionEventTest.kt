@@ -31,6 +31,20 @@ class DetectionEventTest {
     }
 
     @Test
+    fun metadataLineIncludesPerClassScoresWhenKnown() {
+        val withClasses = event.copy(
+            confidence = 0.643f,
+            classScores = NsfwScores(drawings = 0.017f, hentai = 0f, neutral = 0.34f, porn = 0.031f, sexy = 0.612f)
+        ).toJsonLine()
+        assertTrue(withClasses.contains("\"confidence\":0.6430"))
+        assertTrue(
+            withClasses.endsWith(
+                ",\"classes\":{\"sexy\":0.6120,\"porn\":0.0310,\"hentai\":0.0000,\"neutral\":0.3400,\"drawings\":0.0170}}"
+            )
+        )
+    }
+
+    @Test
     fun metadataLineHandlesNullsAndEscaping() {
         val line = event.copy(source = TriggerSource.PERIODIC, foregroundPackage = null, thumbnailFile = "a\"b\\c").toJsonLine()
         assertTrue(line.contains("\"trigger\":\"periodic\""))

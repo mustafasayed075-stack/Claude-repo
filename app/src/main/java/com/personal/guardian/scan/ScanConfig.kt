@@ -61,19 +61,19 @@ object ScanConfig {
     )
 
     /**
-     * Classifier score (OpenNSFW "nsfw" probability, 0..1) at or above which a frame
-     * counts as positive. Yahoo's guidance: < 0.2 very likely safe, > 0.8 very
-     * likely NSFW.
+     * Threshold on the frame's signal ([NsfwScores.signal] = sexy + porn + hentai
+     * probability from the GantMan 5-class model, 0..1) at or above which a frame
+     * counts as positive. For suggestive photos the signal is essentially the "sexy"
+     * class; explicit content moves to porn/hentai and still counts.
      *
-     * Set to 0.2 — deliberately at the bottom of Yahoo's "likely safe" band — for
-     * maximum sensitivity to any suggestive / skin-exposure content (chosen after
-     * on-device testing). Tradeoff, accepted for this use case: frequent false
-     * positives on ordinary photos (beach, sports, fitness, close-up portraits,
-     * skin-toned backgrounds). The 2-positives-within-the-window rule is the only
-     * filter left against one-off spikes. Tune using the per-frame scores from
-     * [LOG_EVERY_FRAME_SCORE].
+     * Starting point 0.3, chosen for maximum sensitivity: in testing, ordinary photos
+     * and phone-screen layouts scored median ~0.01 and at most ~0.19 (textures and
+     * logos, mostly "hentai"/"drawings" noise), so 0.3 sits just above that, while a
+     * frame only needs ~30% combined sexy/porn probability — well below "sexy is the
+     * most likely class". Lower (e.g. 0.2) for more sensitivity; tune with the
+     * per-class scores from [LOG_EVERY_FRAME_SCORE].
      */
-    const val NSFW_THRESHOLD = 0.2f
+    const val NSFW_THRESHOLD = 0.3f
 
     /**
      * TEMPORARY calibration aid: when true, every classified frame's raw score is
@@ -119,6 +119,9 @@ object ScanConfig {
     /** Keep at most this many review thumbnails on disk (oldest deleted first). */
     const val MAX_SAVED_THUMBNAILS = 100
 
-    /** Bundled TFLite model (see README "Stage 3" for source and license). */
-    const val MODEL_ASSET = "models/open_nsfw.tflite"
+    /**
+     * Bundled TFLite model: GantMan nsfw_model, MobileNetV2 140 224, 5 classes
+     * (see README "Stage 3" for source, license and checksum).
+     */
+    const val MODEL_ASSET = "models/nsfw_mobilenet_v2_140_224.tflite"
 }

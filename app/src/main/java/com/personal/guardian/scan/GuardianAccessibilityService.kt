@@ -222,7 +222,8 @@ class GuardianAccessibilityService : AccessibilityService() {
             }
         }
         try {
-            val score = model.classify(frame)
+            val scores = model.classify(frame)
+            val score = scores.signal
             ScanStatus.onFrame(System.currentTimeMillis(), score, source)
             val confirmation = confirmer.onFrame(score, SystemClock.elapsedRealtime(), source)
             if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
@@ -231,18 +232,18 @@ class GuardianAccessibilityService : AccessibilityService() {
                 GuardianLog.i(
                     applicationContext,
                     ScanLog.frameLine(
-                        score, confirmer.threshold, source, scheduler.foregroundPackage,
+                        scores, confirmer.threshold, source, scheduler.foregroundPackage,
                         positives, confirmer.requiredPositives
                     )
                 )
             }
-            if (confirmation != null) onConfirmed(confirmation, frame)
+            if (confirmation != null) onConfirmed(confirmation, frame, scores)
         } finally {
             frame.recycle()
         }
     }
 
-    private fun onConfirmed(confirmation: DetectionConfirmer.Confirmation, frame: Bitmap) {
+    private fun onConfirmed(confirmation: DetectionConfirmer.Confirmation, frame: Bitmap, scores: NsfwScores) {
         val ctx = applicationContext
         if (!cooldown.shouldReport(SystemClock.elapsedRealtime(), fingerprint(frame))) {
             // Same content as a detection reported within the cooldown: no reaction.
@@ -257,17 +258,18 @@ class GuardianAccessibilityService : AccessibilityService() {
             confidence = latest.score,
             source = latest.source,
             foregroundPackage = scheduler.foregroundPackage,
-            thumbnailFile = thumbnail
+            thumbnailFile = thumbnail,
+            classScores = scores
         )
         runCatching { DetectionStore.appendMetadata(ctx, event) }
             .onFailure { GuardianLog.e(ctx, "Screen scan: failed to write detection metadata.", it) }
         ScanStatus.confirmedCount++
 
-        val scores = confirmation.frames.joinToString { "%.3f".format(it.score) }
+        val frameSignals = confirmation.frames.joinToString { "%.3f".format(it.score) }
         GuardianLog.w(
             ctx,
-            "CONFIRMED screen detection: confidence=${"%.3f".format(latest.score)} trigger=${latest.source.label} " +
-                "app=${event.foregroundPackage ?: "unknown"} frames=[$scores] thumbnail=${thumbnail ?: "not saved"} " +
+            "CONFIRMED screen detection: signal=${"%.3f".format(latest.score)} (${scores.breakdown()}) trigger=${latest.source.label} " +
+                "app=${event.foregroundPackage ?: "unknown"} frames=[$frameSignals] thumbnail=${thumbnail ?: "not saved"} " +
                 "(same-content repeats suppressed since last report: ${cooldown.suppressedSinceLastReport})"
         )
         cooldown.resetSuppressedCount()

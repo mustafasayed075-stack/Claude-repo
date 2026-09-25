@@ -19,24 +19,37 @@ enum class TriggerSource(val label: String) {
 data class DetectionEvent(
     /** Wall-clock time of the confirming frame, epoch millis. */
     val timestampMs: Long,
-    /** Classifier NSFW score of the confirming frame, 0..1. */
+    /** Signal (sexy + porn + hentai) of the confirming frame, 0..1. */
     val confidence: Float,
     val source: TriggerSource,
     /** Package in the foreground when confirmed, if known. */
     val foregroundPackage: String?,
     /** File name of the saved review thumbnail (inside the detections dir), if saved. */
-    val thumbnailFile: String?
+    val thumbnailFile: String?,
+    /** Per-class probabilities of the confirming frame, if known. */
+    val classScores: NsfwScores? = null
 ) {
     /** One JSON object per line for the local review log (no Android JSON dependency). */
     fun toJsonLine(): String = buildString {
         append("{\"timestamp\":").append(timestampMs)
         append(",\"time\":\"").append(isoUtc(timestampMs)).append('"')
-        append(",\"confidence\":").append(String.format(Locale.US, "%.4f", confidence))
+        append(",\"confidence\":").append(num(confidence))
         append(",\"trigger\":\"").append(source.label).append('"')
         append(",\"foreground\":").append(jsonString(foregroundPackage))
         append(",\"thumbnail\":").append(jsonString(thumbnailFile))
+        classScores?.let { s ->
+            append(",\"classes\":{")
+            append("\"sexy\":").append(num(s.sexy))
+            append(",\"porn\":").append(num(s.porn))
+            append(",\"hentai\":").append(num(s.hentai))
+            append(",\"neutral\":").append(num(s.neutral))
+            append(",\"drawings\":").append(num(s.drawings))
+            append('}')
+        }
         append('}')
     }
+
+    private fun num(v: Float): String = String.format(Locale.US, "%.4f", v)
 
     private fun isoUtc(ms: Long): String =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)

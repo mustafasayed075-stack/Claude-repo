@@ -45,7 +45,7 @@ class LogFilesTest {
         val exitLine = "2026-09-25 14:00:00.000 WARN Previous Guardian process (pid 123) ended: reason=CRASH_NATIVE\n"
         log(exitLine, diagnostic = true)
         // ~2.3 MB of per-frame score lines: roughly 14 h of fast-mode scanning.
-        val frame = "2026-09-25 14:00:01.500 INFO Scan frame: score=0.2311 [>= 0.20] trigger=event app=com.whatsapp positives=1/2\n"
+        val frame = "2026-09-25 14:00:01.500 INFO Scan frame: signal=0.2311 [< 0.30] sexy=0.200 porn=0.030 hentai=0.001 neutral=0.760 drawings=0.009 trigger=event app=com.whatsapp positives=1/2\n"
         repeat(20_000) { log(frame, diagnostic = false) }
 
         assertFalse("main log has rotated the diagnostic line out", main.readText().contains("CRASH_NATIVE"))

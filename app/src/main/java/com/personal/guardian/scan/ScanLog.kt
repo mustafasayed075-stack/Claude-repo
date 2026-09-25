@@ -11,22 +11,25 @@ object ScanLog {
     /**
      * One line per classified frame (calibration aid, see
      * [ScanConfig.LOG_EVERY_FRAME_SCORE]), e.g.
-     * `Scan frame: score=0.2311 [>= 0.20] trigger=event app=com.whatsapp positives=1/2`,
-     * where `positives` counts positive frames currently inside the confirmation window.
+     * `Scan frame: signal=0.6430 [>= 0.30] sexy=0.612 porn=0.031 hentai=0.000 neutral=0.340 drawings=0.017 trigger=event app=com.whatsapp positives=1/2`,
+     * where `signal` = sexy + porn + hentai (what the threshold applies to) and
+     * `positives` counts positive frames currently inside the confirmation window.
      */
     fun frameLine(
-        score: Float,
+        scores: NsfwScores,
         threshold: Float,
         source: TriggerSource,
         foregroundPackage: String?,
         positives: Int,
         required: Int
     ): String {
-        val cmp = if (score >= threshold) ">=" else "<"
+        val signal = scores.signal
+        val cmp = if (signal >= threshold) ">=" else "<"
         return String.format(
             Locale.US,
-            "Scan frame: score=%.4f [%s %.2f] trigger=%s app=%s positives=%d/%d",
-            score, cmp, threshold, source.label, foregroundPackage ?: "unknown", positives, required
+            "Scan frame: signal=%.4f [%s %.2f] %s trigger=%s app=%s positives=%d/%d",
+            signal, cmp, threshold, scores.breakdown(), source.label,
+            foregroundPackage ?: "unknown", positives, required
         )
     }
 

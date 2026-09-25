@@ -13,7 +13,7 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
 - **Stage 3 — Screen scanning:** an Accessibility Service takes one-shot
   screenshots (every 6 s, every 1.5 s while a watched app is in the foreground),
   classifies them **on-device** with a TensorFlow Lite NSFW model, and — once 2
-  frames scoring ≥ 0.2 fall within 7 s (not necessarily in a row) — logs the detection, saves a small
+  frames with a suggestive/explicit signal ≥ 0.3 fall within 7 s (not necessarily in a row) — logs the detection, saves a small
   review thumbnail locally and shows a notification. **Detection and logging only;
   no lock action yet.**
 
@@ -72,10 +72,10 @@ app/src/main/java/com/personal/guardian/
 
 app/src/main/res/xml/device_admin_policies.xml        Stage 1: device-admin policy declaration
 app/src/main/res/xml/accessibility_service_config.xml Stage 3: accessibility service declaration
-app/src/main/assets/models/open_nsfw.tflite           Stage 3: bundled NSFW model (see below)
+app/src/main/assets/models/nsfw_mobilenet_v2_140_224.tflite  Stage 3: bundled 5-class NSFW model (see below)
 app/src/test/...                                       Unit tests (pure JVM)
-tools/convert_open_nsfw.py                             Stage 3: rebuilds the .tflite from source weights
-third_party/open_nsfw/                                 Stage 3: model licenses
+tools/verify_nsfw_model.py                             Stage 3: re-verifies the bundled model + preprocessing
+third_party/nsfw_model/                                Stage 3: model licenses + class labels
 ```
 
 The single local event log lives on-device at
@@ -187,24 +187,37 @@ these in order (from the spec):
   single frame, no screen-recording notification. Skipped while the screen is off.
   Below API 30 the service logs *"Screen scanning unsupported on this Android
   version"* and stays idle.
-- **Classifier:** TensorFlow Lite on-device (`NsfwClassifier`), 2 threads. The
-  frame is scaled to 256×256, centre-cropped to 224×224, converted to BGR minus the
-  VGG mean, and the model's NSFW probability is the score.
-- **Confirmation:** `DetectionConfirmer` — a frame is positive when its score ≥
-  `NSFW_THRESHOLD` = **0.2**; a detection is confirmed after
+- **Classifier:** TensorFlow Lite on-device (`NsfwClassifier`), 2 threads, running
+  the GantMan 5-class model (drawings / hentai / neutral / porn / sexy). The frame
+  is shrunk to 224×224 by repeated filtered halving (≈ area averaging — a single
+  big bitmap scale aliases and made a plain logo read as 0.65 "hentai" in testing),
+  converted to RGB in 0..1, and classified.
+- **Signal:** the threshold applies to **sexy + porn + hentai** probability. On
+  suggestive photos (swimwear, lingerie…) that is essentially the *sexy* class,
+  which is the primary signal; explicit content moves its probability to
+  *porn*/*hentai* (a sexy-only score would miss it), so those count too.
+- **Confirmation:** `DetectionConfirmer` — a frame is positive when its signal ≥
+  `NSFW_THRESHOLD` = **0.3**; a detection is confirmed after
   at least `CONFIRMATION_COUNT` = **2** positive frames within the last
   `CONFIRMATION_WINDOW_MS` = **7 s**. Negative frames in between don't reset
   anything (e.g. positive → negative → positive within 7 s confirms); positives
   simply age out of the window. This bounds time-to-detection at about 7 s in
   fast mode (1.5 s frames) and normal mode (6 s frames).
-  - The threshold is deliberately low — 0.2, the edge of Yahoo's "likely safe"
-    band, versus their 0.8 "very likely NSFW" — for maximum sensitivity to any
-    suggestive or skin-exposure content (set after on-device testing). Frequent
-    false positives on ordinary photos (beach, sports, fitness, portraits) are
-    expected and accepted for this use case.
+  - **Why 0.3 (and how this scale differs from the old model):** the previous
+    model (OpenNSFW) only separated "explicit" from "everything else", so a swimwear
+    photo and an ordinary photo both scored low and no threshold could split them.
+    This model is a 5-way softmax with a separate *sexy* class, and it is
+    **confident**: ordinary content puts almost everything on *neutral* (or
+    *drawings*). In testing (`tools/verify_nsfw_model.py`: sample photos plus the
+    same photos laid out as 1080×2400 phone screens) the signal had a median of
+    0.01 and a maximum of 0.18 (textures/illustrations leaking into *hentai*).
+    0.3 sits just above that noise while still firing when only ~30% of the
+    probability is suggestive/explicit — far below "sexy is the most likely class"
+    (~0.5). Lower it for more sensitivity; the per-class frame log shows where real
+    content lands.
 - **Calibration logging (temporary):** with `LOG_EVERY_FRAME_SCORE = true` every
   classified frame is logged, e.g.
-  `Scan frame: score=0.2311 [>= 0.20] trigger=event app=com.whatsapp positives=1/2`
+  `Scan frame: signal=0.6430 [>= 0.30] sexy=0.612 porn=0.031 hentai=0.000 neutral=0.340 drawings=0.017 trigger=event app=com.whatsapp positives=1/2`
   (`positives` = positive frames currently inside the window).
   Set the flag to `false` (or delete it and its one use) when calibration is done;
   while on, the event log rotates within a few hours of heavy use.
@@ -219,8 +232,9 @@ these in order (from the spec):
 - **On a confirmed detection:**
   - a thumbnail (longest side 256 px, JPEG) is saved to
     `files/detections/detection-<timestamp>.jpg` (newest 100 kept) and a metadata
-    line (timestamp, confidence, trigger `periodic`/`event`, foreground app,
-    thumbnail name) is appended to `files/detections/detections.jsonl`;
+    line (timestamp, signal as `confidence`, per-class scores, trigger
+    `periodic`/`event`, foreground app, thumbnail name) is appended to
+    `files/detections/detections.jsonl`;
   - a `CONFIRMED screen detection …` entry is written to the event log;
   - a `DetectionEvent` is published on `DetectionBus` — the later lock stage
     registers a `DetectionListener` there;
@@ -239,12 +253,12 @@ these in order (from the spec):
 
 | | |
 |---|---|
-| Model | **Yahoo open_nsfw** (ResNet-50 "thin" NSFW classifier), via the Keras port **OpenNSFW2** |
-| Sources | https://github.com/yahoo/open_nsfw (weights) · https://github.com/bhky/opennsfw2 (port; weights file `open_nsfw_weights.h5`, release v0.1.0, SHA-256 `14ca261f48bdd88c1eecba96a761bd1579b523adae1b749b0a4ffd8b7ed8babe`) |
-| Licenses | open_nsfw: **BSD 2-Clause** (© 2016 Yahoo Inc.) · OpenNSFW2: **MIT** (© 2021 Bosco Yung) — full texts in `third_party/open_nsfw/` |
-| Bundled file | `assets/models/open_nsfw.tflite`, float16 weights, 11.9 MB, SHA-256 `25275eb202277f35657acbfe7038647502c4ee3d45eef9c2eeccc26717ea7bb5` |
-| I/O | input `1×224×224×3` float32 (BGR, mean-subtracted); output `1×2` softmax `[sfw, nsfw]` |
-| Conversion | `tools/convert_open_nsfw.py`; converted model matches the Keras reference to within 0.0013 |
+| Model | **GantMan nsfw_model** — MobileNetV2 (depth 1.4, 224×224) fine-tuned into 5 classes: drawings, hentai, neutral, porn, sexy (~92% validation accuracy per its training log) |
+| Source | https://github.com/GantMan/nsfw_model — official release `1.2.0`, asset `mobilenet_v2_140_224.1.zip` (SHA-256 `22c0892695929639c16ea302996b8f64df9c52e7a6c1d874c1de1047bfe109f7`). Bundled unmodified: its `saved_model.tflite`. (The README's S3 links return 403; the GitHub release asset is reachable.) |
+| Licenses | nsfw_model: **MIT** (© 2020 The nsfw_model Developers); base MobileNetV2 weights: **Apache 2.0** (Google) — full texts in `third_party/nsfw_model/` |
+| Bundled file | `assets/models/nsfw_mobilenet_v2_140_224.tflite`, float32, 17.4 MB, SHA-256 `380f98f7685f9d8a386f8cc595b6dfcb972989aae3d1b8b270d3a4a5b96fab40` |
+| I/O | input `1×224×224×3` float32, RGB scaled to 0..1 (as in the project's `predict.py`); output `1×5` softmax in `class_labels.txt` order |
+| Verification | `tools/verify_nsfw_model.py`: bundled file is byte-identical to the release's; TFLite matches the release's SavedModel to within 0.000004 |
 
 ### Known limitations
 
@@ -254,8 +268,11 @@ these in order (from the spec):
 - The **whole screen** is squashed into one 224×224 input, so a small image inside
   a larger page (e.g. a thumbnail in a chat list) may score low until opened
   full-screen.
-- Accuracy on real content can only be judged on-device; the threshold (0.2) is a
-  starting point to tune with the per-frame score log.
+- Accuracy on real content can only be judged on-device; the threshold (0.3) is a
+  starting point to tune with the per-frame (per-class) score log.
+- The model is a MobileNet: fast and small, but less accurate than large models.
+  It was trained on whole photos, so screens with a lot of UI around an image score
+  lower than the image alone.
 
 ### Stage 3 — Definition of Done → how it's met
 

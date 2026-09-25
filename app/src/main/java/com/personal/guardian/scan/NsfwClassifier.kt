@@ -11,24 +11,25 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 
 /**
- * On-device NSFW classifier: TensorFlow Lite running the bundled OpenNSFW model
- * ([ScanConfig.MODEL_ASSET]). Inference is entirely local — the interpreter and the
- * model file make no network calls.
+ * On-device NSFW classifier: TensorFlow Lite running the bundled GantMan
+ * nsfw_model ([ScanConfig.MODEL_ASSET]; 5 classes: drawings, hentai, neutral, porn,
+ * sexy). Inference is entirely local — the interpreter and the model file make no
+ * network calls.
  *
  * Not thread-safe; use from the scanner's single worker thread.
  */
 class NsfwClassifier private constructor(private val interpreter: Interpreter) : Closeable {
 
-    private val pixels = IntArray(NsfwPreprocessor.RESIZE_DIM * NsfwPreprocessor.RESIZE_DIM)
+    private val pixels = IntArray(NsfwPreprocessor.INPUT_DIM * NsfwPreprocessor.INPUT_DIM)
     private val floats = FloatArray(NsfwPreprocessor.INPUT_FLOATS)
     private val input: ByteBuffer =
         ByteBuffer.allocateDirect(NsfwPreprocessor.INPUT_FLOATS * 4).order(ByteOrder.nativeOrder())
-    private val output = Array(1) { FloatArray(2) }
+    private val output = Array(1) { FloatArray(NsfwPreprocessor.CLASS_LABELS.size) }
 
-    /** Returns the NSFW probability (0..1) for [bitmap] (any size, software config). */
-    fun classify(bitmap: Bitmap): Float {
-        val dim = NsfwPreprocessor.RESIZE_DIM
-        val scaled = Bitmap.createScaledBitmap(bitmap, dim, dim, /* filter = */ true)
+    /** Returns the per-class probabilities for [bitmap] (any size, software config). */
+    fun classify(bitmap: Bitmap): NsfwScores {
+        val dim = NsfwPreprocessor.INPUT_DIM
+        val scaled = downscale(bitmap)
         try {
             scaled.getPixels(pixels, 0, dim, 0, 0, dim, dim)
         } finally {
@@ -38,7 +39,18 @@ class NsfwClassifier private constructor(private val interpreter: Interpreter) :
         input.rewind()
         input.asFloatBuffer().put(floats)
         interpreter.run(input, output)
-        return NsfwPreprocessor.scoreFromOutput(output[0])
+        return NsfwPreprocessor.scoresFromOutput(output[0])
+    }
+
+    /** Area-like downscale via repeated filtered halving (see [NsfwPreprocessor.downscaleSteps]). */
+    private fun downscale(src: Bitmap): Bitmap {
+        var current = src
+        for ((w, h) in NsfwPreprocessor.downscaleSteps(src.width, src.height)) {
+            val next = Bitmap.createScaledBitmap(current, w, h, /* filter = */ true)
+            if (current !== src && current !== next) current.recycle()
+            current = next
+        }
+        return current
     }
 
     override fun close() = interpreter.close()
