@@ -386,8 +386,8 @@ time and how many were flagged or suppressed.
   Generic evasions (leetspeak, repeated/spaced letters, diacritics, tatweel) are
   handled by the matcher, so the list doesn't need every variant.
 - **Coverage expansion** (glued compounds, genitals / private areas, adult
-  clothing, sex toys): see *Coverage expansion* below, including borderline terms
-  left out for your decision.
+  clothing, sex toys): see *Coverage expansion* below, including the borderline
+  terms added by owner decision.
 - **False-positive check:** see *Validation on ordinary-text corpora* below.
 - **Editing:** edit `tools/build_keyword_list.py` and run it (or edit
   `app/src/main/assets/text/keywords.txt` directly) and rebuild the APK; no code
@@ -734,22 +734,32 @@ Only items and phrasing specific to a sexual context are added:
 - **Rules:** فتيش is in noun mode, so ت + فتيش = تفتيش "inspection" is not matched.
   ملابس مثيرة has a context rule for "مثيرة للجدل" (controversial clothing in news).
 
-**Borderline — not added, for you to decide:**
+**Borderline terms — added by your decision (unconditional, no context rule).**
+These were flagged in the coverage round and are now in the list on purpose: max
+sensitivity, with false positives on ordinary shopping and clothing talk accepted.
+The counts are all matches on the corpora (every one is an ordinary shopping,
+fashion or everyday use):
 
-| Term | Why it is borderline |
-|---|---|
-| lingerie | sold in ordinary shops; fashion and retail news |
-| thong, g-string | ordinary underwear styles; a G string is also a violin or guitar string; thong = flip-flop |
-| garter, garter belt, suspenders | wedding garter; suspenders = braces (US) |
-| babydoll, negligee, chemise, teddy | sleepwear and dress styles ("babydoll dress"); teddy bear |
-| corset, bustier, bralette | mainstream fashion; a corset is also a medical back brace |
-| fishnets, stockings, sheer, see-through | hosiery and fabric words in clothing reviews |
-| micro bikini | swimwear; revealing but not specific to a sexual context |
-| لانجري | ordinary lingerie-shop vocabulary |
-| قميص نوم, بيبي دول | everyday sleepwear (also bridal trousseau talk) |
-| كلوت فتلة, اندر فتلة | thong-cut underwear, an ordinary style |
-| بدلة رقص | belly-dance costume: performances, weddings, classes |
-| ملابس فاضحة | "indecent clothing", mostly in news and dress-code debates |
+| Term | Known innocent sense (accepted) | Matches |
+|---|---|---|
+| lingerie | ordinary shops, fashion/retail news | 10 in clothing reviews ("lingerie bag", "my lingerie drawer") |
+| thong | underwear style; flip-flop | 6 in clothing reviews ("no need to wear a thong") |
+| g-string (also g string, gstring) | underwear style; violin/guitar string | 0 |
+| garter | wedding garter; garter snake | 1 ("use a garter" for stockings) |
+| babydoll | dress style ("babydoll dress") | 2 |
+| corset | mainstream fashion; medical back brace | 1 ("corset-style summer tops") |
+| fishnets | hosiery | 0 |
+| micro bikini | swimwear | 0 |
+| لانجري | lingerie-shop vocabulary | 0 |
+| قميص نوم | everyday nightgown, bridal trousseau talk | 0 |
+| بيبي دول | babydoll sleepwear | 0 |
+| كلوت فتلة | thong-cut underwear | 0 |
+| بدلة رقص | belly-dance costume (weddings, classes) | 0 |
+| ملابس فاضحة | "indecent clothing" in news and dress-code debates | 0 |
+
+Still **not** added, because they were not in the approved list: suspenders,
+negligee, chemise, teddy, bustier, bralette, stockings, sheer, see-through and
+اندر فتلة.
 
 Existing generic underwear and colour words exposed by the clothing-review
 corpus now have clothing/laundry companions: panty, panties, nude (a colour),
@@ -775,23 +785,36 @@ knobby are now exceptions.
   - منشط جنسي: seizure and counterfeit-drug news, clinical.
   - هزاز alone is corroboration-only (a phone's vibrate mode, كرسي هزاز "rocking
     chair"); the phrase هزاز جنسي always matches.
-- **Borderline — not added:**
-  - lube, lubricant, مزلق, جل مزلق: bike and car lubricant, medical dryness;
-    Egyptian مزلقان = level crossing.
-  - magic wand: a toy wand, or a massager sold for muscles.
-  - aphrodisiac, spanish fly: food and folklore writing.
+- **Borderline aids — added by your decision** (unconditional; same accepted
+  tradeoff). Matches on the corpora are in brackets, all ordinary or clinical uses:
+  - lube [1], lubricant [8]: bike and car lubricant; medical advice on dryness and
+    condoms.
+  - مزلق [2, as المزلقات in medical advice], جل مزلق [0]: medical gel, playground
+    slide. Egyptian مزلقان (level crossing) is **not** matched: ان is not an accepted
+    ending.
+  - magic wand [0]: a toy or fairy wand, a muscle massager.
+  - aphrodisiac [4, doctors describing sildenafil or "aphrodisiac foods"], spanish
+    fly [0]: food and folklore writing.
+  - lubricant, جل مزلق and spanish fly were part of the same flagged rows as lube,
+    مزلق and aphrodisiac, so they were added with them.
 
-#### Decisions for you (measured, not applied)
+#### Decisions taken
 
-- **Activity words in health text.** Most remaining alerts on the medical corpora
-  come from sex, intercourse, sexual, semen, masturbation, ejaculation, جماع,
-  احتلام and شهوة. These are activity words, outside the anatomy scope of this change.
-  Giving them the same clinical companions would cut alerting lines in the medical
-  samples: Arabic 536 → 294, English 3,368 → 2,368. It is a policy call, because
-  reading sexual-health Q&A about masturbation may be exactly what you want to know
-  about.
-- **"sexy" (83) and "busty" (46) in clothing reviews** ("a sexy strapless dress",
-  "great for busty women"). These are existing entries and are unchanged.
+- **Activity words have no clinical context rule — your max-sensitivity choice.**
+  sex, intercourse, masturbation, semen, جماع, احتلام and شهوة (and sexual,
+  ejaculation) match in medical and health text too, so sexual-health Q&A alerts.
+  - **Measured cost** in the medical samples: 2,504 of their 2,543 occurrences are
+    active. They drive most alerts there: 541 of 12,432 Arabic lines and 3,384 of
+    4,474 English consultations.
+  - **The rule that was declined** would have cut those to about 294 and 2,368.
+  - **The older context rules are unchanged.** They are for these words' non-sexual
+    senses: gender ("the opposite/same/other sex"), social intercourse ("daily,
+    frequent intercourse"), and fiqh rulings (حكم الجماع…). They still suppress 39 of
+    the 2,543 occurrences in the medical text: sex 24, intercourse 6, شهوة 6, جماع 2,
+    احتلام 1. They were not added for health text, so they stay.
+- **Still open: "sexy" (83) and "busty" (46) in clothing reviews** ("a sexy
+  strapless dress", "great for busty women"). These are existing entries and are
+  unchanged.
 
 ### Validation on ordinary-text corpora
 
@@ -872,16 +895,29 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
   - Arabic: قضيب 263 → 73, شرج 75 → 12.
   - The remaining ones are mostly in sentences that also contain an unambiguous
     explicit term (masturbation, anal sex…), which overrides suppression. The
-    activity words themselves are unchanged (see *Decisions for you*).
+    activity words themselves deliberately have no clinical rule (see *Decisions taken*).
 - **Across the new corpora:** 945 active matches removed, all clinical or shopping
   uses. 74 added:
   - corroboration-only clinical words next to an explicit term (vaginal, testicle,
     foreskin…);
   - "breasts" in symptom descriptions with no clinical word nearby (16);
   - a few Arabic مؤخرة and خصية uses.
-- **Clothing and toy terms:** no matches on about 600k words of shopping and review
+- **Clothing and toy terms (coverage round, before the borderline additions):** no matches on about 600k words of shopping and review
   text, so no false positives. That text has no genuine uses either, so recall rests
   on the unit tests.
+- **Owner-approved borderline terms** (added after the coverage round, rerun on
+  every corpus):
+  - Original 1.9M words: no change.
+  - New corpora: 44 matches added, none removed. All are the intended words, with
+    no word-form artifacts. All are accepted false positives.
+  - Clothing reviews, 23: 20 direct (lingerie 10, thong 6, babydoll 2, corset 1,
+    garter 1), plus 3 "panty/panties" matches they make active, because an unconditional term in the
+    sentence overrides context suppression.
+  - Medical text, 21: 15 direct (lubricant 8, aphrodisiac 4, مزلق 2, lube 1), plus 6
+    clinical-word matches they make active through the same override.
+  - Lines that alert, before → after: clothing reviews 165 → 188, English medical
+    3,368 → 3,384, Arabic medical 536 → 541. Arabic shopping and reviews are
+    unchanged.
 - **Caveat:** for these additions the matches of both halves were read while tuning,
   so these numbers are not held-out. The dev/test split files are kept, so reruns
   are reproducible.
@@ -919,7 +955,7 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
   at runtime by `KeywordList`; no code change needed to edit it.
 - **Matcher unit-testable with plain strings** — `KeywordMatcherTest` (17 tests),
   `KeywordRulesTest` (22 tests: context rules, restored terms, morphology) and
-  `KeywordCoverageTest` (14 tests: glued compounds, anatomy, adult clothing, sex
+  `KeywordCoverageTest` (17 tests: glued compounds, anatomy, adult clothing, sex
   toys — matched and correctly-excluded cases).
 - **No obvious false matches on ordinary conversation** —
   `ordinaryConversationHasNoFalseMatches` (English, Egyptian Arabic, Franco-Arabic,

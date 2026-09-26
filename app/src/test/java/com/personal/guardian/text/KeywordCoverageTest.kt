@@ -113,10 +113,19 @@ class KeywordCoverageTest {
     }
 
     @Test
-    fun everydayOrBorderlineClothingDoesNotMatch() {
-        assertNoMatch(bundled, "lingerie sale at the mall", "thong sandals", "the G string on my violin",
-            "garter belt for the wedding", "corset top", "babydoll dress", "ملابس مثيرة للجدل", "تفتيش الشنط",
-            "لانجري", "قميص نوم قطن", "بدلة رقص")
+    fun borderlineClothingAddedByOwnerDecisionMatches() {
+        assertMatches(bundled, "lingerie", "thong", "thongs", "g-string", "g string", "gstring", "garter", "garters",
+            "babydoll", "corset", "fishnets", "micro bikini", "لانجري", "قميص نوم", "قميص نومها", "بيبي دول",
+            "كلوت فتلة", "بدلة رقص", "ملابس فاضحة")
+        // Accepted false positives (max sensitivity): ordinary shopping / everyday senses alert too.
+        assertMatches(bundled, "lingerie sale at the mall", "thong sandals", "the G string on my violin",
+            "garter belt for the wedding", "babydoll dress", "corset top")
+    }
+
+    @Test
+    fun clothingNotAddedStillDoesNotMatch() {
+        assertNoMatch(bundled, "ملابس مثيرة للجدل", "تفتيش الشنط", "bralette", "a silk chemise", "wool stockings",
+            "fishing net", "قميص قطن", "بدلة رسمي", "a bikini top")
     }
 
     // ---- 4. Sex toys / sexual aids ----
@@ -127,6 +136,23 @@ class KeywordCoverageTest {
             "chastity cage", "vibrator", "العاب جنسية", "لعبة جنسية", "قضيب صناعي", "دمية جنسية", "ديلدو", "هزاز جنسي",
             "منشط جنسي")
         assertTrue("هزاز" in bundled.find("هزاز في كسها").map { it.term })
+    }
+
+    @Test
+    fun borderlineAidsAddedByOwnerDecisionMatch() {
+        assertMatches(bundled, "lube", "lubricant", "lubricants", "magic wand", "aphrodisiac", "aphrodisiacs",
+            "spanish fly", "مزلق", "جل مزلق", "المزلقات")
+        // Accepted false positives.
+        assertMatches(bundled, "lube the bike chain", "a magic wand for the fairy costume", "oysters are an aphrodisiac")
+        assertNoMatch(bundled, "مزلقان السكة الحديد", "wand", "magic trick")
+    }
+
+    @Test
+    fun activityWordsMatchInHealthTextByOwnerDecision() {
+        // No clinical suppression for activity words (max sensitivity): sexual-health discussion alerts.
+        assertMatches(bundled, "doctor, I have pain after sex", "is masturbation harmful? asking my doctor",
+            "semen analysis results from the clinic", "pain during intercourse, doctor", "ألم بعد الجماع يا دكتور",
+            "احتلام متكرر، هل يحتاج علاج؟", "ضعف الشهوة بعد العملية")
     }
 
     @Test

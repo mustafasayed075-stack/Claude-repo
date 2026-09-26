@@ -657,6 +657,32 @@ adult toys ~ lego puzzle puzzles board game games collectible collectibles figur
 منشطات جنسيه ~ طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض القذف اضرار اضراره ضبط مصادره مغشوشه مجهوله المصدر هيئه الدواء وزاره
 ?=هزاز
 
+# --- English: borderline clothing + aids, added by owner decision (unconditional) (14) ---
+lingerie
+thong
+g-string
+gstring
+garter
+babydoll
+corset
+fishnets
+micro bikini
+lube
+lubricant
+magic wand
+aphrodisiac
+spanish fly
+
+# --- Arabic: borderline clothing + aids, added by owner decision (unconditional) (8) ---
+لانجري
+قميص نوم
+بيبي دول
+كلوت فتله
+بدله رقص
+ملابس فاضحه
+مزلق
+جل مزلق
+
 # --- Glued compounds (4 rules): every front + back is an entry (then affixes) ---
 @fuse كس طيز > ام م اخت خت خالت عمت مرات ست اهل ابو دين عرض
 @fuse يا ابنال بنتال يابنال يابنتال > متناك متناكه شرموط شرموطه منيوك منيوكه قحبه عاهر عاهره مومس لبوه

@@ -346,21 +346,27 @@ AR_CLOTHING = {
     "بدله اغراء": "", "قميص اغراء": "", "ملابس فتيش": "", "فتيش": "",
     "ملابس مثيره": "للجدل الجدل جدل للاهتمام للسخريه للانتباه للاعجاب للدهشه",
 }
-# Borderline — NOT added; listed in the README for the owner to decide. Everyday
-# fashion / underwear vocabulary or with a strong non-sexual sense.
-BORDERLINE_CLOTHING = {
-    "lingerie": "sold in ordinary shops; fashion news (e.g. store/brand reports)",
-    "thong / g-string": "ordinary underwear styles; 'G string' is also a violin/guitar string; thong = flip-flop",
-    "garter / garter belt / suspenders": "wedding garter; suspenders = braces (US)",
-    "babydoll / negligee / chemise / teddy": "sleepwear and dress styles ('babydoll dress'); teddy = teddy bear",
-    "corset / bustier / bralette": "mainstream fashion; corset is also a medical back brace",
-    "fishnet(s) / stockings / sheer / see-through": "hosiery and fabric descriptions in clothing reviews",
-    "micro bikini": "swimwear; revealing but not specific to sexual context",
-    "لانجري": "ordinary lingerie-shop vocabulary in Arabic shopping text",
-    "قميص نوم / بيبي دول": "nightgown / babydoll: everyday sleepwear (also bridal trousseau talk)",
-    "كلوت فتله / اندر فتله": "thong-cut underwear: ordinary underwear style",
-    "بدله رقص": "belly-dance costume: performances, weddings, dance classes",
-    "ملابس فاضحه": "'indecent clothing' mostly in news/morality debates about dress codes",
+# Borderline — flagged in the previous round, then ADDED by the owner's decision
+# (max sensitivity; false positives on ordinary shopping/clothing talk accepted).
+# Unconditional: no context rule. The value records the known innocent sense.
+OWNER_CLOTHING_EN = {
+    "lingerie": "sold in ordinary shops; fashion/retail news",
+    "thong": "underwear style; also a flip-flop",
+    "g-string": "underwear style; also a violin/guitar string",
+    "gstring": "spelling of g-string",
+    "garter": "wedding garter; garter snake",
+    "babydoll": "sleepwear and dress style ('babydoll dress')",
+    "corset": "mainstream fashion; medical back brace",
+    "fishnets": "hosiery",
+    "micro bikini": "swimwear",
+}
+OWNER_CLOTHING_AR = {
+    "لانجري": "ordinary lingerie-shop vocabulary",
+    "قميص نوم": "everyday nightgown (also bridal trousseau talk)",
+    "بيبي دول": "babydoll sleepwear",
+    "كلوت فتله": "thong-cut underwear",
+    "بدله رقص": "belly-dance costume: performances, weddings, classes",
+    "ملابس فاضحه": "'indecent clothing' in news and dress-code debates",
 }
 
 # ---- 4. Sex toys / sexual aids ----
@@ -386,16 +392,25 @@ AR_TOYS = {
     "منشطات جنسيه": MED_AR + " القذف اضرار اضراره ضبط مصادره مغشوشه مجهوله المصدر هيئه الدواء وزاره",
 }
 AR_TOYS_WEAK = {"هزاز"}
-EN_WEAK_SLANG = {"booty"}  # mostly body/fit talk in clothing reviews ("hung below my booty")  # also a phone's vibrate mode and a rocking chair (كرسي هزاز)
-BORDERLINE_TOYS = {
-    "lube / lubricant / مزلق / جل مزلق": "bike/car lubricant; medical (dryness) use; مزلق = railway crossing",
-    "magic wand": "fairy/magician wand; the massager of that name is also sold for muscles",
-    "aphrodisiac / spanish fly": "food and news writing (oysters, folklore)",
+# (هزاز is also a phone's vibrate mode and a rocking chair, كرسي هزاز)
+EN_WEAK_SLANG = {"booty"}  # mostly body/fit talk in clothing reviews ("hung below my booty")
+# Borderline sexual aids — ADDED by the owner's decision (same accepted tradeoff).
+OWNER_AIDS_EN = {
+    "lube": "bike chain / car lubricant",
+    "lubricant": "engine and industrial lubricant; medical (dryness)",
+    "magic wand": "fairy/magician wand; also a muscle massager",
+    "aphrodisiac": "food writing (oysters, chocolate) and folklore",
+    "spanish fly": "a beetle; folklore",
+}
+OWNER_AIDS_AR = {
+    "مزلق": "railway crossing (مزلقان is not matched), playground slide, ramp; medical gel",
+    "جل مزلق": "medical lubricating gel",
 }
 
 # Existing terms that now take clinical / clothing context rules (anatomy with a
 # common health or shopping sense). Activity words (sex, intercourse, masturbation,
-# ejaculation, semen, جماع, احتلام) are unchanged: see README "decisions for the owner".
+# ejaculation, semen, جماع, احتلام, شهوة) deliberately get NO clinical rule — owner's
+# max-sensitivity decision: sexual-health discussion alerts too (README).
 ANATOMY_CONTEXT_EN = {
     "penis": MED_EN, "vagina": MED_EN, "vulva": MED_EN, "clitoris": MED_EN, "genitals": MED_EN,
     "nipple": MED_EN + " " + CLOTH_EN + " breastfeeding feeding baby latch bottle pacifier",
@@ -493,7 +508,11 @@ def main():
                          ("English: adult clothing", EN_CLOTHING),
                          ("Arabic: adult clothing", AR_CLOTHING),
                          ("English: sex toys / sexual aids", EN_TOYS),
-                         ("Arabic: sex toys / sexual aids", AR_TOYS)]:
+                         ("Arabic: sex toys / sexual aids", AR_TOYS),
+                         ("English: borderline clothing + aids, added by owner decision (unconditional)",
+                          dict.fromkeys([*OWNER_CLOTHING_EN, *OWNER_AIDS_EN], "")),
+                         ("Arabic: borderline clothing + aids, added by owner decision (unconditional)",
+                          dict.fromkeys([*OWNER_CLOTHING_AR, *OWNER_AIDS_AR], ""))]:
         target = EN_CONTEXT if not any("\u0600" <= ch <= "\u06ff" for ch in title + "".join(rules)) else AR_CONTEXT
         terms = []
         for t, c in rules.items():
@@ -505,7 +524,7 @@ def main():
         sections.append((title, terms, target))
     for t in AR_TOYS_WEAK | WEAK_CLINICAL | EN_WEAK_SLANG:
         WEAK.add(t)
-    sections[-1][1].extend(sorted(AR_TOYS_WEAK))
+    next(sec for sec in sections if sec[0] == "Arabic: sex toys / sexual aids")[1].extend(sorted(AR_TOYS_WEAK))
     missing = [t for t in EN_CONTEXT if t not in en_kept + en_extra and not any(t in s[1] for s in sections)] + \
               [t for t in AR_CONTEXT if t not in ar_kept + ar_extra and not any(t in s[1] for s in sections)]
     assert not missing, f"context rules for terms not in the list: {missing}"
