@@ -44,6 +44,25 @@ class DetectionCooldown(
         return true
     }
 
+    /**
+     * Multi-fingerprint variant for text detections (Stage 4, one fingerprint per
+     * matched term): reports if *any* fingerprint is new — i.e. not reported within
+     * the cooldown — and records the new ones. If all are repeats it counts one
+     * suppressed detection.
+     */
+    fun shouldReportAny(nowMs: Long, fingerprints: Collection<Long>): Boolean {
+        while (recent.isNotEmpty() && nowMs - recent.first().atMs >= cooldownMs) recent.removeFirst()
+        val fresh = fingerprints.distinct().filter { fp ->
+            recent.none { ScreenFingerprint.distance(it.fingerprint, fp) <= maxDistance }
+        }
+        if (fresh.isEmpty()) {
+            suppressedSinceLastReport++
+            return false
+        }
+        fresh.forEach { recent.addLast(Reported(nowMs, it)) }
+        return true
+    }
+
     /** Call after logging a reported detection, to restart the suppressed count. */
     fun resetSuppressedCount() {
         suppressedSinceLastReport = 0

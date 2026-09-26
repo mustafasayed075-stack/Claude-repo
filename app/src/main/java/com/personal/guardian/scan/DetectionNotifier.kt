@@ -18,8 +18,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Temporary stub reaction for Stage 3 (spec §6): a local notification on each
- * confirmed detection. No lock or blocking action — that is a later stage, which
+ * Temporary stub reaction for Stages 3 and 4: a local notification on each
+ * confirmed detection (image or text), sharing one notification that alerts once. No lock or blocking action — that is a later stage, which
  * will subscribe to [DetectionBus] instead.
  */
 object DetectionNotifier {
@@ -38,12 +38,19 @@ object DetectionNotifier {
         ensureChannel(context)
 
         val time = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(event.timestampMs))
-        val text = context.getString(
-            R.string.detection_notification_text,
-            event.confidence,
-            event.source.label,
-            time
-        )
+        val text = when (event.kind) {
+            DetectionKind.IMAGE -> context.getString(
+                R.string.detection_notification_text,
+                event.confidence,
+                event.source.label,
+                time
+            )
+            DetectionKind.TEXT -> context.getString(
+                R.string.detection_notification_text_words,
+                event.foregroundPackage ?: "?",
+                time
+            )
+        }
         val openApp = PendingIntent.getActivity(
             context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )

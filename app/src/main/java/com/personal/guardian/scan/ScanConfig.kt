@@ -1,7 +1,8 @@
 package com.personal.guardian.scan
 
 /**
- * Stage 3 — tunable constants for screen scanning, kept in one place.
+ * Stage 3 (image) and Stage 4 (text) — tunable constants for screen scanning, kept
+ * in one place.
  */
 object ScanConfig {
 
@@ -118,6 +119,31 @@ object ScanConfig {
 
     /** Keep at most this many review thumbnails on disk (oldest deleted first). */
     const val MAX_SAVED_THUMBNAILS = 100
+
+    // ---- Stage 4: text scanning ----
+
+    /** Bundled keyword/phrase list (see README "Stage 4"); editable without code changes. */
+    const val KEYWORD_ASSET = "text/keywords.txt"
+
+    /**
+     * Content-changed events come in bursts (typing, scrolling, new messages); the
+     * first one schedules a single text check this much later and the rest of the
+     * burst is absorbed.
+     */
+    const val TEXT_CHECK_DEBOUNCE_MS = 750L
+
+    /** Upper bounds per text check, so a huge web page can't stall the scanner. */
+    const val TEXT_MAX_NODES = 2_000
+    const val TEXT_MAX_CHARS = 50_000
+
+    /**
+     * Same-content cooldown for text detections, matching image detections: the same
+     * matched term in the same app is reported at most once per this period.
+     */
+    const val TEXT_COOLDOWN_MS = DETECTION_COOLDOWN_MS
+
+    /** Characters of context kept either side of a match in the review-log snippet. */
+    const val TEXT_SNIPPET_RADIUS = 40
 
     /**
      * Bundled TFLite model: GantMan nsfw_model, MobileNetV2 140 224, 5 classes

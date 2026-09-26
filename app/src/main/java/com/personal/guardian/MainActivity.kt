@@ -215,6 +215,22 @@ class MainActivity : AppCompatActivity() {
             DetectionStore.thumbnailCount(this)
         )
 
+        // Stage 4: text scanning status.
+        val hhmmss = SimpleDateFormat("HH:mm:ss", Locale.US)
+        binding.txtTextScanStatus.text = when {
+            ScanStatus.textFailed -> getString(R.string.status_text_scan_failed)
+            ScanStatus.connected && ScanStatus.textEntries > 0 -> getString(
+                R.string.status_text_scan_active,
+                ScanStatus.textEntries,
+                ScanStatus.textChecks,
+                if (ScanStatus.lastTextCheckAtMs == 0L) getString(R.string.status_scan_no_frames)
+                else hhmmss.format(Date(ScanStatus.lastTextCheckAtMs)),
+                ScanStatus.textDetectionCount,
+                ScanStatus.textSuppressedCount
+            )
+            else -> getString(R.string.status_text_scan_inactive)
+        }
+
         val notificationsOk = NotificationManagerCompat.from(this).areNotificationsEnabled()
         binding.txtNotificationStatus.visibility = if (notificationsOk) View.GONE else View.VISIBLE
         binding.txtNotificationStatus.text = getString(R.string.status_notifications_off)

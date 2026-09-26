@@ -25,7 +25,7 @@ class DetectionEventTest {
     fun metadataLineHasTimestampConfidenceAndTrigger() {
         assertEquals(
             "{\"timestamp\":1790000000123,\"time\":\"2026-09-21T14:13:20.123Z\",\"confidence\":0.9346," +
-                "\"trigger\":\"event\",\"foreground\":\"com.whatsapp\",\"thumbnail\":\"detection-1790000000123.jpg\"}",
+                "\"kind\":\"image\",\"trigger\":\"event\",\"foreground\":\"com.whatsapp\",\"thumbnail\":\"detection-1790000000123.jpg\"}",
             event.toJsonLine()
         )
     }
@@ -42,6 +42,23 @@ class DetectionEventTest {
                 ",\"classes\":{\"sexy\":0.6120,\"porn\":0.0310,\"hentai\":0.0000,\"neutral\":0.3400,\"drawings\":0.0170}}"
             )
         )
+    }
+
+    @Test
+    fun textDetectionRecordsKindTermsAndSnippetInsteadOfThumbnail() {
+        val text = DetectionEvent(
+            timestampMs = 1_790_000_000_123L,
+            confidence = 1f,
+            source = TriggerSource.TEXT,
+            foregroundPackage = "com.whatsapp",
+            thumbnailFile = null,
+            kind = DetectionKind.TEXT,
+            matchedTerms = listOf("send nudes", "horny"),
+            textSnippet = "hey \"you\" send nudes"
+        ).toJsonLine()
+        assertTrue(text, text.contains("\"kind\":\"text\",\"trigger\":\"text\""))
+        assertTrue(text, text.contains("\"thumbnail\":null"))
+        assertTrue(text, text.endsWith("\"terms\":[\"send nudes\",\"horny\"],\"snippet\":\"hey \\\"you\\\" send nudes\"}"))
     }
 
     @Test
@@ -72,20 +89,23 @@ class DetectionEventTest {
     }
 
     /**
-     * Static guard for "classified fully on-device, with zero network calls": the
-     * scanning package must not reference any networking API.
+     * Static guard for "classified / matched fully on-device, with zero network
+     * calls": the scanning (Stage 3) and text-matching (Stage 4) packages must not
+     * reference any networking API.
      */
     @Test
-    fun scanPackageUsesNoNetworkingApis() {
-        val dir = File("src/main/java/com/personal/guardian/scan")
-        assertTrue("scan sources not found from ${File(".").absolutePath}", dir.isDirectory)
+    fun scanAndTextPackagesUseNoNetworkingApis() {
         val forbidden = listOf("java.net", "HttpURLConnection", "okhttp", "URLConnection", "Socket(", "WorkManager")
-        val sources = dir.listFiles { f -> f.extension == "kt" }!!.toList()
-        assertTrue(sources.size >= 5)
-        for (file in sources) {
-            val text = file.readText()
-            for (token in forbidden) {
-                assertFalse("${file.name} references $token", text.contains(token))
+        for (dirName in listOf("scan", "text")) {
+            val dir = File("src/main/java/com/personal/guardian/$dirName")
+            assertTrue("sources not found: ${dir.absolutePath}", dir.isDirectory)
+            val sources = dir.listFiles { f -> f.extension == "kt" }!!.toList()
+            assertTrue(sources.isNotEmpty())
+            for (file in sources) {
+                val text = file.readText()
+                for (token in forbidden) {
+                    assertFalse("${file.name} references $token", text.contains(token))
+                }
             }
         }
     }

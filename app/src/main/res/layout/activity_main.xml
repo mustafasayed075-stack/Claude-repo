@@ -59,6 +59,13 @@
             android:textSize="12sp" />
 
         <TextView
+            android:id="@+id/txtTextScanStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:textSize="12sp" />
+
+        <TextView
             android:id="@+id/txtNotificationStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

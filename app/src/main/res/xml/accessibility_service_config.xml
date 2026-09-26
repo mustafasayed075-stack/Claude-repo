@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Stage 3: screen scanning. Window-state events drive fast capture for watched
-     apps; canTakeScreenshot enables the one-shot takeScreenshot() API (Android 11+);
-     canRetrieveWindowContent is used to read the current foreground package at start
-     (and will be reused by the later text-reading stage). -->
+     apps; canTakeScreenshot enables the one-shot takeScreenshot() API (Android 11+).
+     Stage 4: window-content-changed events trigger text checks in watched apps;
+     canRetrieveWindowContent lets the service read the active window's node tree
+     (text and content descriptions), and flagIncludeNotImportantViews includes text
+     nodes that apps mark "not important for accessibility" (common in web content). -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault"
+    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
     android:description="@string/accessibility_service_description"

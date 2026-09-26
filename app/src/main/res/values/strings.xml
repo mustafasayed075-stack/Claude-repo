@@ -31,11 +31,15 @@
     <string name="diagnostics_empty">No diagnostics logged yet.</string>
 
     <!-- Stage 3: screen scanning -->
-    <string name="accessibility_service_description">Guardian screen scanning: periodically takes a single screenshot and checks it for explicit content with an on-device model. Nothing leaves the device. Confirmed detections are logged locally with a small thumbnail for review.</string>
+    <string name="accessibility_service_description">Guardian screen scanning: periodically takes a single screenshot and checks it for explicit content with an on-device model, and checks the visible text in messaging apps and browsers against an on-device word list. Nothing leaves the device. Detections are logged locally (a small thumbnail or a short text excerpt) for review.</string>
     <string name="detection_channel_name">Guardian detections</string>
     <string name="detection_channel_desc">Shown when screen scanning confirms flagged content.</string>
     <string name="detection_notification_title">Guardian: flagged content detected</string>
     <string name="detection_notification_text">Confidence %1$.2f · %2$s scan · %3$s</string>
+    <string name="detection_notification_text_words">Flagged words on screen · %1$s · %2$s</string>
+    <string name="status_text_scan_active">Text scanning: Active · list entries: %1$d · checks: %2$d · last: %3$s · flagged: %4$d · repeats suppressed: %5$d</string>
+    <string name="status_text_scan_inactive">Text scanning: Not running (enable Guardian in Accessibility settings)</string>
+    <string name="status_text_scan_failed">Text scanning: Keyword list failed to load — check the event log</string>
     <string name="status_scan_active">Screen scanning: Active</string>
     <string name="status_scan_starting">Screen scanning: Starting (or model failed to load — check the event log)</string>
     <string name="status_scan_enabled_not_running">Screen scanning: Enabled, service not running yet</string>

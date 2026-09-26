@@ -89,6 +89,27 @@ class DetectionCooldownTest {
         assertEquals(listOf(1_500L, 61_500L), reportedAt)
     }
 
+    // ---- Multi-fingerprint (text detections) ----
+
+    @Test
+    fun shouldReportAnyReportsWhenAnyFingerprintIsNew() {
+        val c = DetectionCooldown(cooldownMs = 60_000, maxDistance = 0)
+        assertTrue(c.shouldReportAny(0, listOf(1L, 2L)))
+        assertFalse("all seen", c.shouldReportAny(1_000, listOf(2L, 1L)))
+        assertFalse("subset seen", c.shouldReportAny(2_000, listOf(1L)))
+        assertTrue("one new", c.shouldReportAny(3_000, listOf(1L, 3L)))
+        assertFalse(c.shouldReportAny(4_000, listOf(3L)))
+        assertEquals(3, c.suppressedSinceLastReport)
+        assertTrue("expired", c.shouldReportAny(60_000, listOf(1L)))
+    }
+
+    @Test
+    fun exactMatchingForTextFingerprints() {
+        val c = DetectionCooldown(cooldownMs = 60_000, maxDistance = 0)
+        assertTrue(c.shouldReportAny(0, listOf(a)))
+        assertTrue("one bit different is different text", c.shouldReportAny(1, listOf(near(a, 1))))
+    }
+
     // ---- ScreenFingerprint ----
 
     private fun gray(v: Int) = (0xFF shl 24) or (v shl 16) or (v shl 8) or v

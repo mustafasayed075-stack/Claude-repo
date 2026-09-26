@@ -14,9 +14,17 @@ import android.provider.Settings
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.InputMethodManager
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
+import com.personal.guardian.text.KeywordList
+import com.personal.guardian.text.KeywordMatcher
+import com.personal.guardian.text.TextExtractor
+import com.personal.guardian.text.TextFingerprint
+import com.personal.guardian.text.TextNode
+import com.personal.guardian.text.TextScanTrigger
+import com.personal.guardian.text.TextSnippet
 import com.personal.guardian.util.GuardianLog
 import com.personal.guardian.util.ProcessDiagnostics
 import java.util.concurrent.Executor
@@ -36,11 +44,18 @@ import java.util.concurrent.atomic.AtomicInteger
  *    ([DetectionStore]), logged ([GuardianLog]), shown as a notification
  *    ([DetectionNotifier]) and published on [DetectionBus] for later stages.
  *
- * Detection and logging only — no lock/block action in this stage.
+ * Stage 4 adds a second, independent path in the same service: on window-content
+ * (and window-state) changes in a watched app, the visible text of the active
+ * window's node tree is read (no OCR, no screenshot) and checked on-device by
+ * [KeywordMatcher]; matches go through the same pipeline — cooldown, review log
+ * (text snippet instead of a thumbnail), GuardianLog, notification, [DetectionBus].
  *
- * `takeScreenshot()` needs Android 11 (API 30); on older versions the service logs a
- * warning and stays idle. All scanning state lives on one worker thread; the
- * accessibility callbacks (main thread) only post to it.
+ * Detection and logging only — no lock/block action in these stages.
+ *
+ * `takeScreenshot()` needs Android 11 (API 30); on older versions image scanning
+ * logs a warning and stays off, while text scanning still runs. All scanning state
+ * lives on one worker thread; the accessibility callbacks (main thread) only post
+ * to it.
  */
 class GuardianAccessibilityService : AccessibilityService() {
 
@@ -58,6 +73,12 @@ class GuardianAccessibilityService : AccessibilityService() {
 
     private val tick = Runnable { onTick() }
 
+    // Stage 4: text scanning (worker-thread state, except the thread-safe trigger).
+    private val textTrigger = TextScanTrigger(ScanConfig.WATCHED_PACKAGES)
+    private val textCooldown = DetectionCooldown(cooldownMs = ScanConfig.TEXT_COOLDOWN_MS, maxDistance = 0)
+    private var keywordMatcher: KeywordMatcher? = null
+    private val textCheck = Runnable { runTextCheck() }
+
     /** Distinguishes service instances in the log (a new instance = a new bind). */
     private val instanceId = instanceCounter.incrementAndGet()
 
@@ -74,12 +95,21 @@ class GuardianAccessibilityService : AccessibilityService() {
             diagnostic = true
         )
         ProcessDiagnostics.logPreviousExitsIfNew(this)
+
+        val thread = HandlerThread("guardian-screen-scan").also { it.start() }
+        val handler = Handler(thread.looper)
+        workerThread = thread
+        worker = handler
+
+        // Stage 4: text scanning works on every supported Android version.
+        handler.post { loadKeywordList() }
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             ScanStatus.unsupported = true
             GuardianLog.w(
                 this,
                 "Screen scanning unsupported on this Android version (API ${Build.VERSION.SDK_INT}); " +
-                    "requires Android 11 (API 30)+. Accessibility service stays idle."
+                    "image scanning requires Android 11 (API 30)+ and stays off. Text scanning remains active."
             )
             return
         }
@@ -87,10 +117,6 @@ class GuardianAccessibilityService : AccessibilityService() {
         scheduler.overlayPackages = ScanConfig.OVERLAY_PACKAGES + enabledKeyboardPackages()
         val initialForeground = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
 
-        val thread = HandlerThread("guardian-screen-scan").also { it.start() }
-        val handler = Handler(thread.looper)
-        workerThread = thread
-        worker = handler
         handler.post {
             classifier = try {
                 NsfwClassifier.create(applicationContext)
@@ -114,9 +140,18 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        val pkg = event.packageName?.toString() ?: return
-        worker?.post { onForegroundChanged(pkg) }
+        val type = event?.eventType ?: return
+        val pkg = event.packageName?.toString()
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != null) {
+            worker?.post { onForegroundChanged(pkg) }
+        }
+        // Stage 4: content/state change in a watched app → one debounced text check.
+        if (textTrigger.onEvent(type, pkg)) {
+            val handler = worker
+            if (handler == null || !handler.postDelayed(textCheck, ScanConfig.TEXT_CHECK_DEBOUNCE_MS)) {
+                textTrigger.onCheckStarted()
+            }
+        }
     }
 
     override fun onInterrupt() {
@@ -281,6 +316,100 @@ class GuardianAccessibilityService : AccessibilityService() {
         }
     }
 
+    // ---- Stage 4: text scanning (worker thread) ----
+
+    private fun loadKeywordList() {
+        keywordMatcher = try {
+            val list = applicationContext.assets.open(ScanConfig.KEYWORD_ASSET)
+                .bufferedReader(Charsets.UTF_8).use { KeywordList.parse(it) }
+            KeywordMatcher(list).also {
+                ScanStatus.textEntries = it.entryCount
+                GuardianLog.i(
+                    applicationContext,
+                    "Text scanning active: ${list.entries.size} list entries, ${list.exceptions.size} exceptions " +
+                        "(${ScanConfig.KEYWORD_ASSET}); watched apps only, on content changes."
+                )
+            }
+        } catch (t: Throwable) {
+            GuardianLog.e(applicationContext, "Text scanning: failed to load keyword list; text scanning disabled.", t)
+            ScanStatus.textFailed = true
+            null
+        }
+    }
+
+    private fun runTextCheck() {
+        textTrigger.onCheckStarted()
+        val matcher = keywordMatcher ?: return
+        val root = runCatching { rootInActiveWindow }.getOrNull() ?: return
+        val pkg = root.packageName?.toString()
+        try {
+            // Only the watched apps' own windows (the event's package could differ from
+            // what is now in front, e.g. after switching away within the debounce).
+            if (!textTrigger.isWatched(pkg) || pkg == null) return
+            val texts = TextExtractor.collect(
+                AccessibilityTextNode(root), ScanConfig.TEXT_MAX_NODES, ScanConfig.TEXT_MAX_CHARS
+            )
+            ScanStatus.onTextCheck(System.currentTimeMillis())
+            val found = texts.flatMap { t -> matcher.find(t).map { m -> t to m } }
+            if (found.isNotEmpty()) onTextMatched(pkg, found)
+        } catch (t: Throwable) {
+            logFailureRateLimited("text-check", "Text scan: check failed.", t)
+        } finally {
+            releaseNode(root)
+        }
+    }
+
+    private fun onTextMatched(pkg: String, found: List<Pair<String, KeywordMatcher.Match>>) {
+        val ctx = applicationContext
+        val terms = found.map { it.second.term }.distinct()
+        val fingerprints = terms.map { TextFingerprint.of(pkg, it) }
+        if (!textCooldown.shouldReportAny(SystemClock.elapsedRealtime(), fingerprints)) {
+            // Same terms in the same app reported within the cooldown: no reaction.
+            ScanStatus.textSuppressedCount++
+            return
+        }
+        val (firstText, firstMatch) = found.first()
+        val snippet = TextSnippet.around(firstText, firstMatch, ScanConfig.TEXT_SNIPPET_RADIUS)
+        val event = DetectionEvent(
+            timestampMs = System.currentTimeMillis(),
+            confidence = 1f,
+            source = TriggerSource.TEXT,
+            foregroundPackage = pkg,
+            thumbnailFile = null,
+            kind = DetectionKind.TEXT,
+            matchedTerms = terms,
+            textSnippet = snippet
+        )
+        runCatching { DetectionStore.appendMetadata(ctx, event) }
+            .onFailure { GuardianLog.e(ctx, "Text scan: failed to write detection metadata.", it) }
+        ScanStatus.textDetectionCount++
+
+        // The snippet goes to the review log only; the event log names the terms.
+        GuardianLog.w(
+            ctx,
+            "CONFIRMED text detection: terms=[${terms.joinToString()}] app=$pkg matches=${found.size} " +
+                "snippet=saved to review log " +
+                "(same-content repeats suppressed since last report: ${textCooldown.suppressedSinceLastReport})"
+        )
+        textCooldown.resetSuppressedCount()
+        if (!DetectionNotifier.show(ctx, event)) {
+            GuardianLog.w(ctx, "Detection notification not shown: notifications are not permitted for Guardian.")
+        }
+        DetectionBus.publish(event).forEach {
+            GuardianLog.e(ctx, "Detection listener failed.", it)
+        }
+    }
+
+    /** [TextNode] over a live accessibility node (children are fetched lazily). */
+    private class AccessibilityTextNode(private val node: AccessibilityNodeInfo) : TextNode {
+        override val text: CharSequence? get() = node.text
+        override val contentDescription: CharSequence? get() = node.contentDescription
+        override val isVisibleToUser: Boolean get() = node.isVisibleToUser
+        override val childCount: Int get() = node.childCount
+        override fun child(index: Int): TextNode? = node.getChild(index)?.let { AccessibilityTextNode(it) }
+        override fun release() = releaseNode(node)
+    }
+
     // ---- helpers ----
 
     private fun fingerprint(frame: Bitmap): Long {
@@ -295,6 +424,7 @@ class GuardianAccessibilityService : AccessibilityService() {
 
     private fun shutdown() {
         ScanStatus.connected = false
+        ScanStatus.textEntries = 0
         ScanStatus.modelLoaded = false
         ScanStatus.fastModePackage = null
         val handler = worker ?: return
@@ -303,6 +433,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         handler.post {
             classifier?.close()
             classifier = null
+            keywordMatcher = null
         }
         workerThread?.quitSafely()
         workerThread = null
@@ -337,6 +468,12 @@ class GuardianAccessibilityService : AccessibilityService() {
 
     companion object {
         private val instanceCounter = AtomicInteger()
+
+        /** Recycles a node on Android < 13 (a no-op / deprecated from 13 on). */
+        @Suppress("DEPRECATION")
+        private fun releaseNode(node: AccessibilityNodeInfo) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) runCatching { node.recycle() }
+        }
 
         /** Repeated identical failures are logged at most this often. */
         private const val FAILURE_LOG_INTERVAL_MS = 60_000L
@@ -386,6 +523,21 @@ object ScanStatus {
         private set
     @Volatile var confirmedCount = 0
     @Volatile var suppressedCount = 0
+
+    // Stage 4: text scanning
+    @Volatile var textEntries = 0
+    @Volatile var textFailed = false
+    @Volatile var textChecks = 0L
+        private set
+    @Volatile var lastTextCheckAtMs = 0L
+        private set
+    @Volatile var textDetectionCount = 0
+    @Volatile var textSuppressedCount = 0
+
+    fun onTextCheck(atMs: Long) {
+        textChecks++
+        lastTextCheckAtMs = atMs
+    }
 
     fun onFrame(atMs: Long, score: Float, source: TriggerSource) {
         framesScanned++

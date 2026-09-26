@@ -16,8 +16,15 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
   frames with a suggestive/explicit signal ≥ 0.3 fall within 7 s (not necessarily in a row) — logs the detection, saves a small
   review thumbnail locally and shows a notification. **Detection and logging only;
   no lock action yet.**
+- **Stage 4 — Text scanning:** the same Accessibility Service reads the **visible
+  text** in watched apps (WhatsApp, Telegram, browsers) whenever their window
+  content changes, and checks it **on-device** against a bundled Arabic/English
+  keyword list (based on LDNOOBW, extended for Egyptian Arabic and Franco-Arabic).
+  Matches go through the same pipeline as image detections (cooldown, local review
+  log with a short text snippet, notification, `DetectionBus`). **Detection and
+  logging only.**
 
-Later stages (text detection, lock mechanism, reminder, persistence) are
+Later stages (lock mechanism, reminder, persistence) are
 **intentionally not implemented here** — they will be layered on top in separate
 specs.
 
@@ -67,15 +74,21 @@ app/src/main/java/com/personal/guardian/
 ├── scan/DetectionEvent                Stage 3: DetectionEvent, DetectionListener, DetectionBus (for later stages)
 ├── scan/DetectionStore                Stage 3: local thumbnails + detections.jsonl
 ├── scan/DetectionNotifier             Stage 3: temporary stub reaction (local notification)
+├── text/TextNormalizer                Stage 4: text → normalised tokens (Arabic/Latin, leetspeak…) (pure)
+├── text/KeywordMatcher                Stage 4: KeywordList (asset parser) + matcher + snippets (pure)
+├── text/TextScan                      Stage 4: node-tree text extraction, trigger/debounce, fingerprints (pure)
 ├── boot/BootReceiver                  Restart service + filtering on boot
 └── util/GuardianLog                   Append-only local event log (timestamps)
 
 app/src/main/res/xml/device_admin_policies.xml        Stage 1: device-admin policy declaration
 app/src/main/res/xml/accessibility_service_config.xml Stage 3: accessibility service declaration
 app/src/main/assets/models/nsfw_mobilenet_v2_140_224.tflite  Stage 3: bundled 5-class NSFW model (see below)
+app/src/main/assets/text/keywords.txt                  Stage 4: bundled keyword/phrase list (generated, editable)
 app/src/test/...                                       Unit tests (pure JVM)
 tools/verify_nsfw_model.py                             Stage 3: re-verifies the bundled model + preprocessing
 third_party/nsfw_model/                                Stage 3: model licenses + class labels
+tools/build_keyword_list.py                            Stage 4: builds keywords.txt from LDNOOBW + additions
+third_party/ldnoobw/                                   Stage 4: LDNOOBW license (CC BY 4.0)
 ```
 
 The single local event log lives on-device at
@@ -300,6 +313,130 @@ these in order (from the spec):
 
 ---
 
+## Stage 4 — Text scanning (conversation context)
+
+No extra setup: it uses the same Accessibility permission as Stage 3 (the service
+now also requests window-content-changed events). The main screen shows
+**Text scanning: Active**, the number of list entries, text checks, the last check
+time and how many were flagged or suppressed.
+
+### How it works
+
+- **Trigger (event-driven only):** a `TYPE_WINDOW_CONTENT_CHANGED` (or window-state)
+  event from a package in `ScanConfig.WATCHED_PACKAGES` — the same list as image
+  scanning. Bursts of events (typing, scrolling, incoming messages) are coalesced:
+  the first schedules one check `TEXT_CHECK_DEBOUNCE_MS` (0.75 s) later and the rest
+  are absorbed. No timer. Events from other apps are ignored, and the check also
+  verifies the active window still belongs to a watched app.
+- **Extraction:** the active window's node tree (`rootInActiveWindow`), text and
+  content description of every node visible to the user — no OCR, no screenshot.
+  Capped at 2,000 nodes / 50,000 characters per check. Works on every Android
+  version the app supports (image scanning still needs Android 11+).
+- **Matching:** `KeywordMatcher` (pure Kotlin, on-device, no network):
+  - text is normalised — Unicode compatibility forms, case, Latin accents, Arabic
+    harakat and tatweel removed, letter variants unified (أ/إ/آ→ا, ة→ه, ى→ي),
+    invisible characters dropped;
+  - matching is on **whole words** (so "Essex", "cocktail", "كسر", "زبادي",
+    "زبون" don't match), with tolerance for **leetspeak** (p0rn, s3x, $ex),
+    **repeated letters** (sexxx, boooobs, سكسسس), **spaced-out letters**
+    (s e x, s.e.x, س ك س), English inflections, Franco-Arabic pronoun endings
+    (kos-ak, neek-ny), and Arabic prefixes/suffixes (و/ف/ال/ب/ه/ح/ي…, ي/ك/ها/هم/ات…);
+    1–2 letter Arabic entries (e.g. كس) only take a short, safe affix set;
+  - multi-word phrases match word by word; `!exception` lines in the list veto
+    innocent words (Nikon نيكون, customer زبون, Isaac اسحاق, zebra زبرة, cocky…).
+- **On a match** — the same pipeline as image detections:
+  - **cooldown**: one fingerprint per (app, matched term), `TEXT_COOLDOWN_MS` = 60 s
+    like images; a detection is reported only if at least one term is new for that
+    app within the cooldown. A lingering open conversation keeps matching the same
+    terms and is suppressed; a new term, or another app, is reported. (The snippet
+    itself isn't hashed: it changes with every keystroke and scroll.)
+  - **review log**: a line in `files/detections/detections.jsonl` with
+    `"kind":"text"`, the matched terms, and a short **snippet** (±40 characters of
+    context) instead of a thumbnail — local only, never uploaded;
+  - **GuardianLog**: `CONFIRMED text detection: terms=[…] app=…` (the snippet stays
+    in the review log);
+  - **notification**: the same "Guardian: flagged content detected" notification
+    (text: "Flagged words on screen · app · time"), still alerting only once until
+    dismissed;
+  - **event**: a `DetectionEvent` with `kind = TEXT` on the same `DetectionBus` the
+    lock stage will subscribe to. No lock action.
+
+### Keyword list: source and methodology
+
+- **Base:** [LDNOOBW](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words)
+  ("List of Dirty, Naughty, Obscene, and Otherwise Bad Words"), `en` and `ar` lists
+  at commit `5faf2ba42d7b1c0977169ec3611df25a3c08eb13` — an established,
+  open-source filter list, used the way Stage 2 uses oisd. License **CC BY 4.0**
+  (© LDNOOBW contributors; `third_party/ldnoobw/`). **Changes made:** filtered and
+  extended as below.
+- **Filtering to sexual/explicit content.** LDNOOBW is a general "bad words" list;
+  this detector looks for sexual conversations, not rudeness. Removed, with the
+  reason for each recorded in `tools/build_keyword_list.py`: slurs and hate terms,
+  generic swearing/insults, violence and crime-news terms, medical-only terms, and
+  words with a common innocent meaning ("suck", "tied up", "tit", "cornhole",
+  Arabic فرج — a name and "relief", جماع — clashes with "يا جماعة", حلمة —
+  normalises to "his dream"…). Kept: 284 of 403 English and 14 of 38 Arabic entries.
+- **Additions** (89 Arabic/Franco-Arabic, 35 English): Egyptian Arabic sexual slang
+  and its common verb forms; Franco-Arabic (Arabizi) spellings using digits for
+  letters (2 = ء/ق, 3 = ع, 5 = خ, 7 = ح — e.g. a7ba, e2la3y); sexting phrases;
+  adult-site names; and evasion spellings the matcher can't derive by rule (pr0n).
+  Generic evasions (leetspeak, repeated/spaced letters, diacritics, tatweel) are
+  handled by the matcher, so the list doesn't need every variant.
+- **False-positive check.** Besides unit tests with ordinary chat in English,
+  Egyptian Arabic and Franco-Arabic, the list was run over ~350,000 words of
+  ordinary text: ~206,000 words of Egyptian-Arabic conversations
+  (`kokojake/oasst2_egyptian_arabic_convs`), 892 everyday Egyptian/English sentence
+  pairs (`HeshamHaroon/Egyptian_English_parallel`), BBC Arabic headlines and
+  *Pride and Prejudice*. That check found and removed real false positives —
+  e.g. سحاق inside إسحاق (Isaac), قضيب "rod", نيك = "Nick", زبرة "zebra", حزبي
+  "partisan", بورن "Bourne/Dragonborn", نودز "network nodes", "XXX" chapter
+  numbers, "social intercourse", "SMD" — each now covered by a regression test.
+  What remains are genuine uses (porn-site names, كس as a word) and "sex" in the
+  sense of gender in classic literature (accepted).
+- **Editing:** edit `tools/build_keyword_list.py` and run it (or edit
+  `app/src/main/assets/text/keywords.txt` directly) and rebuild the APK. The
+  format is one word/phrase per line, `#` comments, `!word` exceptions; no code
+  changes are needed.
+
+### Known limitations
+
+- **View-once media with no text at all** is not helped by this stage (accepted;
+  only the OS's screenshot protection governs that).
+- Only text exposed through accessibility is seen; apps that draw text as images
+  or in custom canvases (some games, some web content) show nothing.
+- A keyword list can't judge context: explicit words quoted in news or health
+  pages in a watched browser will match; innocent new slang won't.
+- The list covers English, Arabic script (MSA + Egyptian) and Franco-Arabic; other
+  languages, and look-alike letters from other scripts (e.g. Cyrillic "ѕ"), aren't
+  handled.
+
+### Stage 4 — Definition of Done → how it's met
+
+- **Runs only within watched apps, on content-changed events** — `TextScanTrigger`
+  accepts only content/state-change events from `WATCHED_PACKAGES`, and the check
+  re-verifies the active window's package; the accessibility config requests
+  `typeWindowContentChanged` (tests: `TextScanTest`).
+- **Matching fully on-device, zero network calls** — bundled list + pure-Kotlin
+  matcher; `DetectionEventTest` statically checks the `scan` and `text` packages
+  use no networking APIs.
+- **A match produces a notification, a GuardianLog entry and a saved snippet** —
+  `GuardianAccessibilityService.onTextMatched` (notification + `CONFIRMED text
+  detection` log line + `detections.jsonl` line with `snippet`; JSON format tested
+  in `DetectionEventTest`).
+- **Lingering conversation suppressed by a cooldown, like images** —
+  `DetectionCooldown.shouldReportAny` with per-(app, term) fingerprints and the same
+  60 s period (tests: `DetectionCooldownTest`, and an end-to-end lingering-chat
+  simulation in `TextScanTest`).
+- **Keyword list is a separate bundled asset** — `assets/text/keywords.txt`, parsed
+  at runtime by `KeywordList`; no code change needed to edit it.
+- **Matcher unit-testable with plain strings** — `KeywordMatcherTest` (17 tests).
+- **No obvious false matches on ordinary conversation** —
+  `ordinaryConversationHasNoFalseMatches` (English, Egyptian Arabic, Franco-Arabic,
+  news text, and every false positive found by the corpus check) plus the corpus
+  check above.
+
+---
+
 ## Testing individual components
 
 - **Blocklist parsing & matching:** `BlocklistManagerTest` (pure JVM), including a
@@ -310,6 +447,9 @@ these in order (from the spec):
   `CaptureSchedulerTest`, `NsfwPreprocessorTest`, `DetectionEventTest`,
   `ScanLogTest` (pure JVM).
 - **Log retention:** `LogFilesTest` (diagnostics survive main-log rotation).
+- **Text scanning:** `KeywordMatcherTest` (matcher + real list + ordinary-text
+  spot-check), `TextScanTest` (extraction, trigger/debounce, fingerprints,
+  lingering-chat simulation) (pure JVM).
 - **Screen scanning on a device:** enable the accessibility service, open WhatsApp
   or a browser and watch the event log for "fast capture ON/OFF"; the main screen
   shows frames scanned and the last score.
@@ -320,6 +460,7 @@ these in order (from the spec):
 
 ## Scope note
 
-This repository contains **Stages 1–3**. Stage 3 stops at detect → log → notify;
-the lock stage will subscribe to `DetectionBus`. The core service keeps its single
+This repository contains **Stages 1–4**. Stages 3 and 4 stop at detect → log →
+notify; the lock stage will subscribe to `DetectionBus` (one event type for both,
+told apart by `DetectionEvent.kind`). The core service keeps its single
 `onServiceReady()` extension point for later stages.
