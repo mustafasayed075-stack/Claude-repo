@@ -87,7 +87,8 @@ app/src/main/assets/text/keywords.txt                  Stage 4: bundled keyword/
 app/src/test/...                                       Unit tests (pure JVM)
 tools/verify_nsfw_model.py                             Stage 3: re-verifies the bundled model + preprocessing
 third_party/nsfw_model/                                Stage 3: model licenses + class labels
-tools/build_keyword_list.py                            Stage 4: builds keywords.txt from LDNOOBW + additions
+tools/build_keyword_list.py                            Stage 4: builds keywords.txt from LDNOOBW + additions,
+                                                       context rules, noun-mode terms, roots, exceptions
 third_party/ldnoobw/                                   Stage 4: LDNOOBW license (CC BY 4.0)
 ```
 
@@ -338,10 +339,11 @@ time and how many were flagged or suppressed.
     invisible characters dropped;
   - matching is on **whole words** (so "Essex", "cocktail", "كسر", "زبادي",
     "زبون" don't match), with tolerance for **leetspeak** (p0rn, s3x, $ex),
-    **repeated letters** (sexxx, boooobs, سكسسس), **spaced-out letters**
-    (s e x, s.e.x, س ك س), English inflections, Franco-Arabic pronoun endings
-    (kos-ak, neek-ny), and Arabic prefixes/suffixes (و/ف/ال/ب/ه/ح/ي…, ي/ك/ها/هم/ات…);
-    1–2 letter Arabic entries (e.g. كس) only take a short, safe affix set;
+    **stretched letters** (sexxx, boooobs, سكسسس), **spaced-out letters**
+    (s e x, s.e.x, س ك س), **masked letters** (p*rn, s*xy), systematic **English
+    and Arabic morphology** (inflections, prefixes/suffixes, verb-root derivations)
+    and **context rules** for terms that also have an innocent meaning — all
+    detailed in *Matching rules in detail* below;
   - multi-word phrases match word by word; `!exception` lines in the list veto
     innocent words (Nikon نيكون, customer زبون, Isaac اسحاق, zebra زبرة, cocky…).
 - **On a match** — the same pipeline as image detections:
@@ -370,33 +372,250 @@ time and how many were flagged or suppressed.
   (© LDNOOBW contributors; `third_party/ldnoobw/`). **Changes made:** filtered and
   extended as below.
 - **Filtering to sexual/explicit content.** LDNOOBW is a general "bad words" list;
-  this detector looks for sexual conversations, not rudeness. Removed, with the
-  reason for each recorded in `tools/build_keyword_list.py`: slurs and hate terms,
-  generic swearing/insults, violence and crime-news terms, medical-only terms, and
-  words with a common innocent meaning ("suck", "tied up", "tit", "cornhole",
-  Arabic فرج — a name and "relief", جماع — clashes with "يا جماعة", حلمة —
-  normalises to "his dream"…). Kept: 284 of 403 English and 14 of 38 Arabic entries.
-- **Additions** (89 Arabic/Franco-Arabic, 35 English): Egyptian Arabic sexual slang
-  and its common verb forms; Franco-Arabic (Arabizi) spellings using digits for
+  this detector looks for sexual conversations, not rudeness. **Excluded** (never
+  matched), with the reason for each in `tools/build_keyword_list.py`: slurs and
+  hate terms, generic swearing/insults, and violence/crime-news terms (e.g. rape,
+  اغتصاب). Words with a common **innocent or technical meaning** ("suck", "tit",
+  "escort", فرج, جماع, قضيب…) and medical terms are **kept with context rules**
+  instead of being excluded (see below). Kept: 334 of 403 English and 33 of 38
+  Arabic entries.
+- **Additions** (73 Arabic/Franco-Arabic entries plus 4 verb roots, 35 English):
+  Egyptian Arabic sexual slang (verb forms generated from roots — see below); Franco-Arabic (Arabizi) spellings using digits for
   letters (2 = ء/ق, 3 = ع, 5 = خ, 7 = ح — e.g. a7ba, e2la3y); sexting phrases;
   adult-site names; and evasion spellings the matcher can't derive by rule (pr0n).
   Generic evasions (leetspeak, repeated/spaced letters, diacritics, tatweel) are
   handled by the matcher, so the list doesn't need every variant.
-- **False-positive check.** Besides unit tests with ordinary chat in English,
-  Egyptian Arabic and Franco-Arabic, the list was run over ~350,000 words of
-  ordinary text: ~206,000 words of Egyptian-Arabic conversations
-  (`kokojake/oasst2_egyptian_arabic_convs`), 892 everyday Egyptian/English sentence
-  pairs (`HeshamHaroon/Egyptian_English_parallel`), BBC Arabic headlines and
-  *Pride and Prejudice*. That check found and removed real false positives —
-  e.g. سحاق inside إسحاق (Isaac), قضيب "rod", نيك = "Nick", زبرة "zebra", حزبي
-  "partisan", بورن "Bourne/Dragonborn", نودز "network nodes", "XXX" chapter
-  numbers, "social intercourse", "SMD" — each now covered by a regression test.
-  What remains are genuine uses (porn-site names, كس as a word) and "sex" in the
-  sense of gender in classic literature (accepted).
+- **False-positive check:** see *Validation on ordinary-text corpora* below.
 - **Editing:** edit `tools/build_keyword_list.py` and run it (or edit
-  `app/src/main/assets/text/keywords.txt` directly) and rebuild the APK. The
-  format is one word/phrase per line, `#` comments, `!word` exceptions; no code
-  changes are needed.
+  `app/src/main/assets/text/keywords.txt` directly) and rebuild the APK; no code
+  changes are needed. File format, one directive per line (`#` = comment):
+
+  | Line | Meaning |
+  |---|---|
+  | `word` / `a phrase` | an entry |
+  | `word ~ c1 c2 "c 3"` | entry with a **context rule** (innocent-context companions) |
+  | `?word` | **corroboration-only** entry |
+  | `=word` | Arabic **noun-mode** entry (noun affixes only) — combinable: `?=word ~ …` |
+  | `@root ن ي ك` (`~ …` optional) | Arabic **verb root**: derived forms are generated |
+  | `!word` | **exception**: never matches (also behind an Arabic prefix) |
+
+### Matching rules in detail
+
+#### 1. Bare "نيك" and other over-restricted terms
+
+"نيك" on its own never matched because the first false-positive cleanup **removed
+it from the list** (it also transliterates "Nick", e.g. نيك فيوري) and kept only its
+unambiguous verb forms — it was not an exception entry. It is now back as an entry
+with a context rule: it matches on its own ("نيك", "نيييك", "ضحكت نيك"), and is
+suppressed only when a name context is nearby (فيوري, جوناس, كيريوس, ممثل, لاعب,
+رائد فضاء, ناسا, الأمريكي …). The exceptions for the *names* نيكو/نيكي/نيكول/نيكولا
+(distinct words) and نيكون (Nikon) stay.
+
+The same pass over every restriction from the first cleanup:
+
+| Restriction | Verdict | Now |
+|---|---|---|
+| نيك removed (Nick) | too broad | restored + context rule |
+| سحاق removed (إسحاق Isaac) | too broad | restored; `!اسحاق` exception is enough |
+| زبر removed (زبرة zebra) | too broad | restored (زبري/زبرك/زبرها…); `!زبره` exception + context rule |
+| بورن removed (Bourne, Dragonborn) | too broad | restored + context rule |
+| نودز only in fixed phrases (network nodes) | too broad | bare نودز restored + context rule |
+| عاريه only in fixed phrases (bare fibres) | too broad | restored + context rule |
+| قضيب removed (rod) | too broad | restored + context rule |
+| xxx, intercourse removed | too broad | restored + context rules |
+| s&m removed (matched "SMD") | too broad — the real bug was affixes on 2-letter entries | restored; 1–2 letter Latin entries match exactly |
+| 2-letter Latin entries exact-only | genuine fix | kept |
+| 1–2 letter Arabic entries: short affix set (زب+ون = زبون) | genuine fix | kept |
+| standalone زبي removed (took ح → حزبي) | genuine fix (covered by زب + ي) | kept |
+| exceptions behind Arabic prefixes (ونيكي) | genuine fix | kept |
+
+#### 2. Context rules (innocent-context disambiguation)
+
+A term with a context rule is **suppressed** when one of its companion words (or
+phrases) appears **in the same sentence within 12 words** of it — companions
+themselves match with affixes (حديد → الحديد, حديدي). Otherwise it matches normally:
+alone, or — even with a companion nearby — whenever an **unambiguous explicit term**
+(one without a context rule) is elsewhere in the same sentence ("قضيب حديد و طيز"
+matches). Ambiguous terms never vouch for each other. Sentences end at . ! ? ؟ ؛ ; …
+or a line break.
+
+Two stronger variants, used only where the data showed companions can't work:
+- **corroboration-only** (`?word`): the innocent sense is a name or everyday usage
+  no companion list captures — the term counts only alongside an unambiguous
+  explicit term in the same sentence. Used for: فرج (common first name, "relief"),
+  مبادل (Mubadala fund, "exchange"), حلمة (حلمه = "his dream"), شاذ ("anomalous"),
+  بيضان (slang "lame"), suck/sucks ("that sucks"), xx (maths, placeholders).
+- **noun mode** (`=word`): Arabic nouns whose letters are also a productive verb/
+  adjective stem take only noun affixes (article/prepositions + pronoun endings):
+  فرج (اتفرج "watch", افرج "release"), جماع (اجماع "consensus", جماعي
+  "collective"), ثدي, شرج, مبادل, شهوة, لبوة, حلمة, بيضان, خنثي, قضيب, نودز, عاريه,
+  عاريات, بورن, زبر.
+
+Every term-specific rule (generated from the list file):
+
+<details><summary>Context rules — term → innocent-context companions</summary>
+
+| Term | Suppressed near |
+|---|---|
+| anus | cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy |
+| ball kicking | football soccer match practice drill kids players goal |
+| big black | dog car cat bag box hole cloud eyes hat suv truck bird bear coat jacket boots door horse |
+| butt | kick kicked kicking cigarette cigarettes rifle gun joke jokes heads head |
+| cialis | doctor pharmacy prescription medicine drug pill dose heart pressure pfizer generic |
+| circlejerk | reddit thread sub subreddit forum echo |
+| cornhole | game board bags tournament toss backyard yard |
+| domination | world market military global economic team game league political sports empire |
+| escort | police vessel ship ships convoy security guard guards military troops soldiers car ford mission motorcade |
+| eunuch | palace court emperor dynasty ottoman china historical ancient servant |
+| fecal | matter sample samples test bacteria transplant contamination coliform occult water |
+| fingering | guitar piano violin chord chords notes scale bass flute instrument technique taste execution play playing |
+| girl on | phone team bike bus train street screen stage instagram tv show left right cover fire |
+| hard core | fans fan music punk rock band gamer gamers gaming workout training supporter supporters mode player players |
+| hardcore | development developer fans fan music punk rock band gamer gamers gaming workout training supporter supporters mode player players |
+| huge fat | cat pay bonus raise salary paycheck lie mistake check |
+| intercourse | social friendly familiar daily commercial trade business polite pleasant conversation society family human cultural intellectual frequent constant delightful gaieties renewed acquaintance friends |
+| jelly donut | bakery coffee breakfast dunkin shop sugar glazed |
+| lolita | nabokov novel book fashion film kubrick style dress gothic |
+| make me come | over back home down up with early late again to here there |
+| octopussy | bond film movie 007 moore |
+| pissing | rain raining down off contest about around |
+| rectum | cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy |
+| santorum | rick senator campaign republican gop pennsylvania election candidate |
+| scat | singing jazz sing singer singers music animal droppings wildlife |
+| sex | opposite same gender other bias assault offender offenders offence offense discrimination education trafficking |
+| sexual | harassment assault abuse violence health education orientation identity reproductive transmitted crimes crime misconduct allegations rights minorities humiliation |
+| sexually | harassed assaulted abused transmitted active explicit |
+| sexuality | education identity orientation gender rights human |
+| shrimping | boat boats shrimp fishing season net nets gulf trawler |
+| skeet | shooting shoot shooter clay trap range gun olympic |
+| snatch | thief thieves bag purse phone victory win defeat jaws weightlifting grab stole gold title medal application memory |
+| snowballing | effect debt costs problem problems crisis rolling quickly fast snow |
+| spunk | courage spirit determination character plucky |
+| suck (corroboration-only) | — |
+| sucks (corroboration-only) | — |
+| tainted love | song "soft cell" cover band album |
+| taste my | food cake soup recipe dish sauce pie cookies dinner coffee tea drink cooking |
+| tea bagging | game gaming halo players online match kill |
+| tied up | work busy meeting meetings traffic phone call boat dog "loose ends" office moment |
+| tight white | shirt jeans pants dress top sneakers socks |
+| tit | tat bird birds blue great coal |
+| tongue in a | cheek |
+| tushy | baby diaper rash bidet |
+| twinkie | snack hostess cake cream box lunch defense |
+| viagra | doctor pharmacy prescription medicine drug pill dose heart pressure pfizer generic |
+| xx (corroboration-only) | — |
+| xxx | chapter part vol volume phone number format price dollars dollar bowl olympiad pounds code name اسم اسمي رقم هاتف سعر دولار |
+| شرج (noun mode) | طبيب دكتور جراحه عمليه بواسير ناسور شرخ مستشفي علاج مرض قولون فتحه منظار |
+| لعق | ملعقه عسل "ايس كريم" اصابع طعام قطه كلب جرح |
+| لحس | جزم جزمه اقدام رجلين حذاء بياده كلامه كلام وعده وعوده مخه دماغه عقله "ايس كريم" جيلاتي بسكوت شيكولاته ملعقه صحن طبق كلب قطه القطه الكلب اصابع صوابع عسل مربي |
+| مص | قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس |
+| تمص | قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس |
+| بيضان (corroboration-only · noun mode) | — |
+| ثدي (noun mode) | غرسات سرطان الكشف فحص اشعه ماموجرام طبيب دكتور مستشفي رضاعه رضيع طبي اورام اكتشاف مبكر توعيه زراعه تجميل |
+| حلمة (corroboration-only · noun mode) | — |
+| فرج (corroboration-only · noun mode) | — |
+| شهوة (noun mode) | الله رمضان صيام نفس النفس دين عباده تقوي الدنيا المال الطعام الاكل السلطه الحكم |
+| شاذ (corroboration-only) | — |
+| مبادل (corroboration-only · noun mode) | — |
+| جماع (noun mode) | حكم كفاره صيام رمضان نهار الصوم فقه فتوي شرعا الحج الاحرام |
+| قضيب (noun mode) | حديد معدن معدني خرساني صلب تسليح نحاس المونيوم سكه قطار حديديه تنظيف محور مكبس توصيل فوهه اسطواني برغي ميكانيكي مغناطيس كهرباء كهربائي تحكم وقود نووي سلك بندقيه صيد ستاره |
+| خنثي (noun mode) | طبي حاله جراحه فقه حكم مولود طفل هرمونات |
+| احتلام | بلوغ غسل الغسل حكم صيام رمضان فقه طهاره مراهق مراهقه |
+| نيك | مارفل ممثل مغني لاعب تنس مدرب شخصيه النجم فيوري جوناس كارتر كيرجيوس كيريوس نولتي كيج رائد فضاء ناسا الامريكي الاميركي الامريكيان الاميركيان |
+| لبوة (noun mode) | اسد اسود غابه حديقه حيوان حيوانات سفاري صيد شبل اشبال |
+| نايك | كوتشي كوتش حذاء جزمه شوز سنيكرز اديداس بوما ماركه ماركات براند تيشيرت رياضي تريننج شنطه لوجو محل متجر جوردن شركه شركات كوكاكولا فيتون ابل |
+| زبر (noun mode) | حيوان حمار وحشي مخطط مخططه حديقه غابه اسد زرافه سافاري خطوط عبور مشاه زرار كباسين جيب جيوب |
+| بورن (noun mode) | جيسون دراجون ديمون مات برشلونه حي كاتالونيا كوميديا موسيقي اغاني فكاهه ساخره |
+| بورنو | ولايه نيجيريا مايدوغوري يوب بوكو حرام |
+| عاريه (noun mode) | تماما الصحه الياف سلك اسلاك ايد ايدي يد بيد العين بالعين عين الحقيقه حقيقه جدران جدار حيطان ارض اقدام قدم صخور جبال اشجار فروع اغصان شجر |
+| عاريات (noun mode) | الياف سلك اسلاك جدران اشجار فروع اغصان |
+| نودز (noun mode) | شبكه كلاستر سيرفر سيرفرات خوادم بلوك بلوكتشين بلوكشين عقد عقده جراف شجره كود برمجه خوارزميه كمبيوتر حواسيب داتا بيانات بايثون جافا وصل بيتوصلوا ببعض خلايا عصبيه استيراد اورج رسومي |
+| kos | theta sin cos tan |
+| root ن ي ك | — (no rule) |
+| root ش ر م ط | — (no rule) |
+| root ل ح س | جزم جزمه اقدام رجلين حذاء بياده كلامه كلام وعده وعوده مخه دماغه عقله "ايس كريم" جيلاتي بسكوت شيكولاته ملعقه صحن طبق كلب قطه القطه الكلب اصابع صوابع عسل مربي |
+| root م ص ص | قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس |
+
+</details>
+
+#### 3. Morphology
+
+**Arabic** (on normalised text):
+- **Prefixes** on entries of 3+ letters: conjunction و/ف × article/preposition/verb
+  prefix (ال لل بال ب ل, future ه/ح, and the imperfect/progressive بي بت بن هي هت هن
+  حي حت حن ي ت ن ا).
+- **Suffixes**: pronoun and plural endings ي ك ه ها هم هن كم كو نا ني ات ين يه, verb
+  endings و وا ت تي تني تو (+ object pronouns تك ته تها وه وها وهم وني وك), and the
+  **ة → ت** change before a suffix (شرموطة → شرموطتك, متناكة → متناكتك).
+- **Verb roots** (`@root`): the standard stems are generated, then take the affixes
+  above — sound (ل ح س): لحس لاحس ملحوس اتلحس متلحس تلحس لحاس; hollow (ن ي ك): نيك ناك
+  نايك منيوك اتناك متناك تناك نياك; doubled (م ص ص): مص مصاص ممصوص اتمص متمص + imperfect
+  stems يمص بيمص هيمص…; four-letter (ش ر م ط): شرمط شرموط اتشرمط متشرمط تشرمط شراميط.
+  So بيتناك, هينيكها, اتشرمطت, بيمص, متناكتك all match without being listed. Roots in
+  the list: ن ي ك, ش ر م ط, ل ح س (context rule), م ص ص (context rule).
+- 1–2 letter entries (كس, زب, بز) keep the short, safe affix set (ال/وال; ي ك ه ها هم كم
+  نا ات).
+
+**English / Franco-Arabic** (Latin entries of 3+ letters): plurals (-s -es -z,
+y → -ies), -ed/-d, -er/-ers, -ing and informal -in (4+ letters), e-dropping
+(grope → groping), consonant doubling with -ing/-ed/-y/-ie (cum → cumming,
+slut → slutty), diminutives -y/-ie/-ies (boob → boobie/boobies), Arabizi endings
+(-ak -ek -ik -ha -i -ny -ni); **spelling variants** ph→f, ck→k, z→s (puzzy, kok,
+boobz); **masked** letters (p*rn, s*xy: same length, '*' for any letter, at least
+half the letters kept). Leetspeak and stretched letters come from normalisation.
+
+**Tried and rejected on the corpus** (each produced ordinary-word matches):
+c→k spelling (success ~ sucks, skates ~ scat), collapsing every double letter
+(seeks ~ seks, cookie ~ cock, pony ~ poon), doubling with -er (scatter, titter),
+collapsed spellings with affixes (بتتفرج → بت + فرج), leetspeak on digit-only or
+1–2 character tokens (717 ~ tit, 5M ~ sm), Egyptian attached datives لي/لك/لها
+(العقلي "mental" = ا + لعق + لي, بناكلها "we eat it" = ب + ناك + لها), and the root
+ه ي ج (هيجي/هاجي "will come" everywhere).
+
+### Validation on ordinary-text corpora
+
+No explicit content is used: the check measures **false positives** on ordinary
+text. `CorpusEvaluationTest` (skipped unless `GUARDIAN_CORPUS_DIR` is set) runs the
+bundled list over a directory of text files and writes every match, active or
+context-suppressed, to `matches.tsv`.
+
+| Corpus (public, Hugging Face / Project Gutenberg / BBC) | Kind | Words |
+|---|---|---|
+| `Elfsong/egyptian-tweets` (sample) | Egyptian everyday social text | 301k |
+| `Qanadil/ASTD_Arabic_Sentiment_Tweets_Dataset` | Egyptian-dialect tweets | 53k |
+| `arbml/Arabic_News` (sample) | Arabic news | 258k |
+| `kokojake/oasst2_egyptian_arabic_convs` | Egyptian-Arabic conversations, incl. technical | 947k |
+| `HeshamHaroon/Egyptian_English_parallel` | everyday Egyptian / English sentences | 22k |
+| `pixelsandpointers/better_daily_dialog` | English everyday conversation | 55k |
+| `fancyzhx/ag_news` (sample) | English news | 157k |
+| *Pride and Prejudice*, BBC Arabic headlines | literature / news | 131k |
+
+(About 1.9 M words. The Stage 4 README's "~206,000 words" for the conversations
+corpus was a word-count error; it is ~947k.)
+
+**Method.** Every corpus was split by line hash into a **dev** half (used to choose
+companions, exceptions and the rules above) and a held-out **test** half (only
+measured). Each match was then read and labelled by hand as innocent (false
+positive) or a genuine sexual/explicit use.
+
+**Results on the held-out test half:**
+- *Context rules* (frozen before looking at the test half): of the 151 matches of
+  context-ruled terms, 128 were innocent. With the rules, 75 remained active
+  (52 innocent, 23 genuine) — **false positives −59%, no genuine match lost**; all
+  76 suppressed matches were innocent (breast cancer, CHAPTER XXX, sex
+  discrimination, same-sex, "فرج الله قريب", حي البورن, "that sucks"…).
+- The remaining clusters (xx in maths, ثديي "a mammal", غرسات الثدي, زبرة zebra, بزي
+  مدني "in civilian clothes", ولاية بورنو Nigeria, astronaut Nick Hague, Alexei) were
+  then fixed; those fixes were informed by the test half, so the following numbers
+  are no longer unbiased: context-ruled terms ≈ 19 innocent / 23 genuine active.
+- *Whole list vs. the Stage 4 version, same test half:* 135 → 130 active matches.
+  Removed: 35 matches, all innocent ("seeks" ×12, "sex" as gender/discrimination
+  ×12, بزي مدني ×3, Borno ×3, تناكة "snobbery" ×3, Alexei, garbled text). Added: 13
+  genuine (bare نيك, نودز, بورن هب, escorts…) and 17 innocent — 7 of them tweets
+  truncated mid-word (مص… for مصر) or typos (ولحس), 4 Viagra marketing news.
+- Known remaining false positives: "sex" meaning gender in classic literature,
+  كس as a maths variable in machine-translated code, names like "Dick", tech uses
+  of نودز in a different sentence from the tech words, Viagra/Playboy news.
 
 ### Known limitations
 
@@ -429,7 +648,8 @@ time and how many were flagged or suppressed.
   simulation in `TextScanTest`).
 - **Keyword list is a separate bundled asset** — `assets/text/keywords.txt`, parsed
   at runtime by `KeywordList`; no code change needed to edit it.
-- **Matcher unit-testable with plain strings** — `KeywordMatcherTest` (17 tests).
+- **Matcher unit-testable with plain strings** — `KeywordMatcherTest` (17 tests)
+  and `KeywordRulesTest` (22 tests: context rules, restored terms, morphology).
 - **No obvious false matches on ordinary conversation** —
   `ordinaryConversationHasNoFalseMatches` (English, Egyptian Arabic, Franco-Arabic,
   news text, and every false positive found by the corpus check) plus the corpus
@@ -448,8 +668,11 @@ time and how many were flagged or suppressed.
   `ScanLogTest` (pure JVM).
 - **Log retention:** `LogFilesTest` (diagnostics survive main-log rotation).
 - **Text scanning:** `KeywordMatcherTest` (matcher + real list + ordinary-text
-  spot-check), `TextScanTest` (extraction, trigger/debounce, fingerprints,
-  lingering-chat simulation) (pure JVM).
+  spot-check), `KeywordRulesTest` (context rules, restored terms, Arabic/English
+  morphology — triggered and still-suppressed cases), `TextScanTest` (extraction,
+  trigger/debounce, fingerprints, lingering-chat simulation) (pure JVM).
+- **Corpus evaluation:** `GUARDIAN_CORPUS_DIR=/path/to/corpora ./gradlew
+  testDebugUnitTest --tests '*CorpusEvaluationTest'` → `matches.tsv`.
 - **Screen scanning on a device:** enable the accessibility service, open WhatsApp
   or a browser and watch the event log for "fast capture ON/OFF"; the main screen
   shows frames scanned and the last score.

@@ -3,10 +3,13 @@
 # Base: LDNOOBW en + ar lists @ 5faf2ba42d7b1c0977169ec3611df25a3c08eb13 (CC BY 4.0),
 #   filtered to sexual/explicit terms; see README 'Stage 4' for methodology.
 # Format: one word or phrase per line; '#' starts a comment; '!token' is an
-#   exception (a token that must never match). Case, diacritics, letter forms,
-#   leetspeak, repeated and spaced-out letters are handled by the matcher.
+#   exception (a token that must never match); 'term ~ w1 w2 "w 3"' is a context
+#   rule (suppressed when a companion word is near it in the same sentence);
+#   '@root ن ي ك' generates the root's derived forms. Case, diacritics, letter
+#   forms, leetspeak, repeated/spaced/masked letters and affixes are handled by
+#   the matcher.
 
-# --- LDNOOBW en (kept 284 of 403) ---
+# --- LDNOOBW en (kept 334 of 403; 50 with context rules) ---
 2g1c
 2 girls 1 cup
 acrotomophilia
@@ -14,6 +17,7 @@ alabama hot pocket
 alaskan pipeline
 anal
 anilingus
+anus ~ cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy
 auto erotic
 autoerotic
 babeland
@@ -21,6 +25,7 @@ baby batter
 baby juice
 ball gag
 ball gravy
+ball kicking ~ football soccer match practice drill kids players goal
 ball licking
 ball sack
 ball sucking
@@ -35,6 +40,7 @@ beaver cleaver
 beaver lips
 beastiality
 bestiality
+big black ~ dog car cat bag box hole cloud eyes hat suv truck bird bear coat jacket boots door horse
 big breasts
 big knockers
 big tits
@@ -60,6 +66,7 @@ bullet vibe
 bung hole
 bunghole
 busty
+butt ~ kick kicked kicking cigarette cigarettes rifle gun joke jokes heads head
 buttcheeks
 butthole
 camel toe
@@ -67,6 +74,8 @@ camgirl
 camslut
 camwhore
 chocolate rosebuds
+cialis ~ doctor pharmacy prescription medicine drug pill dose heart pressure pfizer generic
+circlejerk ~ reddit thread sub subreddit forum echo
 cleveland steamer
 clit
 clitoris
@@ -75,6 +84,7 @@ cock
 cocks
 coprolagnia
 coprophilia
+cornhole ~ game board bags tournament toss backyard yard
 creampie
 cum
 cumming
@@ -87,6 +97,8 @@ deepthroat
 dendrophilia
 dick
 dildo
+dingleberry  # context rule: none (always matches)
+dingleberries  # context rule: none (always matches)
 dirty pillows
 dirty sanchez
 doggie style
@@ -95,6 +107,7 @@ doggy style
 doggystyle
 dog style
 dolcett
+domination ~ world market military global economic team game league political sports empire
 dominatrix
 dommes
 donkey punch
@@ -108,6 +121,9 @@ ecchi
 ejaculation
 erotic
 erotism
+escort ~ police vessel ship ships convoy security guard guards military troops soldiers car ford mission motorcade
+eunuch ~ palace court emperor dynasty ottoman china historical ancient servant
+fecal ~ matter sample samples test bacteria transplant contamination coliform occult water
 felch
 fellatio
 feltch
@@ -115,6 +131,7 @@ female squirting
 femdom
 figging
 fingerbang
+fingering ~ guitar piano violin chord chords notes scale bass flute instrument technique taste execution play playing
 fisting
 foot fetish
 footjob
@@ -125,6 +142,7 @@ gang bang
 gay sex
 genitals
 giant cock
+girl on ~ phone team bike bus train street screen stage instagram tv show left right cover fire
 girl on top
 girls gone wild
 goatcx
@@ -140,17 +158,22 @@ g-spot
 guro
 hand job
 handjob
+hard core ~ fans fan music punk rock band gamer gamers gaming workout training supporter supporters mode player players
+hardcore ~ development developer fans fan music punk rock band gamer gamers gaming workout training supporter supporters mode player players
 hentai
 homoerotic
 hooker
 horny
 hot carl
 hot chick
+huge fat ~ cat pay bonus raise salary paycheck lie mistake check
 humping
 incest
+intercourse ~ social friendly familiar daily commercial trade business polite pleasant conversation society family human cultural intellectual frequent constant delightful gaieties renewed acquaintance friends
 jack off
 jail bait
 jailbait
+jelly donut ~ bakery coffee breakfast dunkin shop sugar glazed
 jerk off
 jizz
 juggs
@@ -162,7 +185,9 @@ leather restraint
 leather straight jacket
 lemon party
 livesex
+lolita ~ nabokov novel book fashion film kubrick style dress gothic
 lovemaking
+make me come ~ over back home down up with early late again to here there
 male squirting
 masturbate
 masturbating
@@ -186,6 +211,7 @@ nudity
 nutten
 nympho
 nymphomania
+octopussy ~ bond film movie 007 moore
 omorashi
 one cup two girls
 one guy one jar
@@ -199,6 +225,7 @@ pedophile
 pegging
 penis
 phone sex
+pissing ~ rain raining down off contest about around
 piss pig
 pisspig
 playboy
@@ -221,6 +248,7 @@ queaf
 queef
 quim
 raging boner
+rectum ~ cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy
 reverse cowgirl
 rimjob
 rimming
@@ -228,45 +256,67 @@ rosy palm
 rosy palm and her 5 sisters
 rusty trombone
 sadism
+santorum ~ rick senator campaign republican gop pennsylvania election candidate
+scat ~ singing jazz sing singer singers music animal droppings wildlife
 schlong
 scissoring
 semen
-sex
+sex ~ opposite same gender other bias assault offender offenders offence offense discrimination education trafficking
 sexcam
 sexo
 sexy
+sexual ~ harassment assault abuse violence health education orientation identity reproductive transmitted crimes crime misconduct allegations rights minorities humiliation
+sexually ~ harassed assaulted abused transmitted active explicit
+sexuality ~ education identity orientation gender rights human
 shaved beaver
 shaved pussy
 shemale
 shibari
 shota
+shrimping ~ boat boats shrimp fishing season net nets gulf trawler
+skeet ~ shooting shoot shooter clay trap range gun olympic
 slut
+s&m
 smut
+snatch ~ thief thieves bag purse phone victory win defeat jaws weightlifting grab stole gold title medal application memory
+snowballing ~ effect debt costs problem problems crisis rolling quickly fast snow
 sodomize
 sodomy
 splooge
 splooge moose
 spooge
 spread legs
+spunk ~ courage spirit determination character plucky
 strap on
 strapon
 strip club
 style doggy
+?suck
+?sucks
 suicide girls
 sultry women
 swinger
+tainted love ~ song "soft cell" cover band album
+taste my ~ food cake soup recipe dish sauce pie cookies dinner coffee tea drink cooking
+tea bagging ~ game gaming halo players online match kill
 threesome
 throating
 thumbzilla
+tied up ~ work busy meeting meetings traffic phone call boat dog "loose ends" office moment
+tight white ~ shirt jeans pants dress top sneakers socks
+tit ~ tat bird birds blue great coal
 tits
 titties
 titty
+tongue in a ~ cheek
 topless
 tribadism
 tub girl
 tubgirl
+tushy ~ baby diaper rash bidet
 twat
 twink
+twinkie ~ snack hostess cake cream box lunch defense
 two girls one cup
 undressing
 upskirt
@@ -274,6 +324,7 @@ urethra play
 urophilia
 vagina
 venus mound
+viagra ~ doctor pharmacy prescription medicine drug pill dose heart pressure pfizer generic
 vibrator
 violet wand
 vorarephilia
@@ -287,26 +338,47 @@ whore
 worldsex
 wrapping men
 wrinkled starfish
+?xx
+xxx ~ chapter part vol volume phone number format price dollars dollar bowl olympiad pounds code name اسم اسمي رقم هاتف سعر دولار
 yaoi
 yellow showers
 yiffy
 zoophilia
 
-# --- LDNOOBW ar (kept 14 of 38) ---
+# --- LDNOOBW ar (kept 33 of 38; 18 with context rules) ---
 سكس
 طيز
+=شرج ~ طبيب دكتور جراحه عمليه بواسير ناسور شرخ مستشفي علاج مرض قولون فتحه منظار
+لعق ~ ملعقه عسل "ايس كريم" اصابع طعام قطه كلب جرح
+لحس ~ جزم جزمه اقدام رجلين حذاء بياده كلامه كلام وعده وعوده مخه دماغه عقله "ايس كريم" جيلاتي بسكوت شيكولاته ملعقه صحن طبق كلب قطه القطه الكلب اصابع صوابع عسل مربي
+مص ~ قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس
+تمص ~ قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس
+?=بيضان
+=ثدي ~ غرسات سرطان الكشف فحص اشعه ماموجرام طبيب دكتور مستشفي رضاعه رضيع طبي اورام اكتشاف مبكر توعيه زراعه تجميل
 بز
 بزاز
+?=حلمة
 مفلقسة
 بظر
 كس
+?=فرج
+=شهوة ~ الله رمضان صيام نفس النفس دين عباده تقوي الدنيا المال الطعام الاكل السلطه الحكم
+?شاذ
+?=مبادل
 عاهرة
+=جماع ~ حكم كفاره صيام رمضان نهار الصوم فقه فتوي شرعا الحج الاحرام
+=قضيب ~ حديد معدن معدني خرساني صلب تسليح نحاس المونيوم سكه قطار حديديه تنظيف محور مكبس توصيل فوهه اسطواني برغي ميكانيكي مغناطيس كهرباء كهربائي تحكم وقود نووي سلك بندقيه صيد ستاره
 زب
+سحاق
 سحاقية
+=خنثي ~ طبي حاله جراحه فقه حكم مولود طفل هرمونات
+احتلام ~ بلوغ غسل الغسل حكم صيام رمضان فقه طهاره مراهق مراهقه
+نيك ~ مارفل ممثل مغني لاعب تنس مدرب شخصيه النجم فيوري جوناس كارتر كيرجيوس كيريوس نولتي كيج رائد فضاء ناسا الامريكي الاميركي الامريكيان الاميركيان
 متناك
 متناكة
 شرموطة
 قحبة
+=لبوة ~ اسد اسود غابه حديقه حيوان حيوانات سفاري صيد شبل اشبال
 
 # --- Additions: English slang / sites / evasion spellings (35) ---
 nudes
@@ -345,46 +417,30 @@ pr0n
 p0rno
 s3xy
 
-# --- Additions: Egyptian Arabic + Franco-Arabic (89) ---
-ينيك
-تنيك
-هنيك
-بنيك
+# --- Additions: Egyptian Arabic + Franco-Arabic (73) ---
 انيكك
 نيكني
 نيكها
-النيك
-نياكه
-متناكه
-اتناك
-تناك
-منيوك
-منيوكه
+نايك ~ كوتشي كوتش حذاء جزمه شوز سنيكرز اديداس بوما ماركه ماركات براند تيشيرت رياضي تريننج شنطه لوجو محل متجر جوردن شركه شركات كوكاكولا فيتون ابل
+=زبر ~ حيوان حمار وحشي مخطط مخططه حديقه غابه اسد زرافه سافاري خطوط عبور مشاه زرار كباسين جيب جيوب
 زبري
-شرموط
-شرموطه
-شراميط
 قحبه
 قحاب
 عاهر
 عاهره
 مومس
 دعاره
-بورنو
+=بورن ~ جيسون دراجون ديمون مات برشلونه حي كاتالونيا كوميديا موسيقي اغاني فكاهه ساخره
+بورنو ~ ولايه نيجيريا مايدوغوري يوب بوكو حرام
 بورن هب
 بورنهب
 اباحي
 اباحيه
 افلام اباحيه
 عريانه
-صور عاريه
-بنات عاريات
-ابعتلي نودز
-ابعتيلي نودز
-ابعت نودز
-ابعتي نودز
-صور نودز
-هايج
+=عاريه ~ تماما الصحه الياف سلك اسلاك ايد ايدي يد بيد العين بالعين عين الحقيقه حقيقه جدران جدار حيطان ارض اقدام قدم صخور جبال اشجار فروع اغصان شجر
+=عاريات ~ الياف سلك اسلاك جدران اشجار فروع اغصان
+=نودز ~ شبكه كلاستر سيرفر سيرفرات خوادم بلوك بلوكتشين بلوكشين عقد عقده جراف شجره كود برمجه خوارزميه كمبيوتر حواسيب داتا بيانات بايثون جافا وصل بيتوصلوا ببعض خلايا عصبيه استيراد اورج رسومي
 هايجه
 اقلعي
 قلعي
@@ -423,7 +479,7 @@ zobr
 teez
 bezaz
 bzaz
-kos
+kos ~ theta sin cos tan
 koss
 kuss
 hayga
@@ -436,7 +492,13 @@ e2la3i
 seks
 seksy
 
-# --- Exceptions (17) ---
+# --- Arabic roots (4): derived forms generated by the matcher ---
+@root ن ي ك
+@root ش ر م ط
+@root ل ح س ~ جزم جزمه اقدام رجلين حذاء بياده كلامه كلام وعده وعوده مخه دماغه عقله "ايس كريم" جيلاتي بسكوت شيكولاته ملعقه صحن طبق كلب قطه القطه الكلب اصابع صوابع عسل مربي
+@root م ص ص ~ قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس
+
+# --- Exceptions (45) ---
 !cocky
 !cocker
 !cockers
@@ -451,6 +513,34 @@ seksy
 !زباين
 !كسكسي
 !اسحاق
-!زبره
-!زبرة
 !حزبي
+!هناك
+!جماعه
+!جماعات
+!جماعتي
+!جماعتك
+!جماعتنا
+!جماعتهم
+!مصاصه
+!الحسين
+!حسين
+!الحس
+!الحسي
+!الحسيه
+!الحسيات
+!تناكه
+!بناك
+!ثدييات
+!ثديات
+!ثديي
+!الحسني
+!جماعي
+!جماعيه
+!جماعيا
+!فرجه
+!الحاسه
+!اناك
+!زبره
+!بزي
+!الكسي
+!جماعك
