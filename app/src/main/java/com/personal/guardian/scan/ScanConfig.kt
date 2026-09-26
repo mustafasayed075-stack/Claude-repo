@@ -120,6 +120,54 @@ object ScanConfig {
     /** Keep at most this many review thumbnails on disk (oldest deleted first). */
     const val MAX_SAVED_THUMBNAILS = 100
 
+    // ---- Stage 3: region scanning (README "Stage 3 — region scanning") ----
+
+    /**
+     * Second detection path alongside the whole-screen pass: image-bearing elements
+     * found in the accessibility node tree are cropped out of the same screenshot and
+     * classified at their own resolution.
+     */
+    const val REGION_SCAN_ENABLED = true
+
+    /**
+     * Threshold on a region's signal. Same as [NSFW_THRESHOLD] by default, so an image
+     * counts the same whether it fills the screen or sits in a chat bubble. Measured
+     * on 400 everyday COCO photos of people shown as a chat image: 54 (13.5%) reach
+     * 0.3 as regions (vs 3 in the whole-screen pass) — the model scores some sports
+     * and family photos high, which a full-screen view already triggers today.
+     * Raise this (0.5: 42, 0.7: 24, 0.9: 14 of 400) to trade sensitivity for fewer
+     * alerts on ordinary photos.
+     */
+    const val REGION_THRESHOLD = NSFW_THRESHOLD
+
+    /** At most this many regions classified per capture: the largest qualifying ones. */
+    const val REGION_MAX_PER_CAPTURE = 3
+
+    /** Regions whose shorter side is below this (dp) are skipped: avatars, icons, emoji. */
+    const val REGION_MIN_SIDE_DP = 64
+
+    /** Regions covering more than this fraction of the screen are left to the whole-screen pass. */
+    const val REGION_MAX_SCREEN_FRACTION = 0.6f
+
+    /** Regions longer than this ratio (long side / short side) are skipped: banners, strips. */
+    const val REGION_MAX_ASPECT = 3f
+
+    /** Upper bound on nodes visited per capture while looking for regions. */
+    const val REGION_MAX_NODES = 1_500
+
+    /**
+     * Per-capture time budget for region work: once exceeded, the remaining regions
+     * of that capture are skipped (logged in the cost summary), so a slow device
+     * can't fall behind the capture interval ([FAST_INTERVAL_MS]).
+     */
+    const val REGION_TIME_BUDGET_MS = 400L
+
+    /** Recently classified regions remembered by content (unchanged stickers aren't re-classified). */
+    const val REGION_CACHE_SIZE = 32
+
+    /** A pipeline-cost summary line (whole vs region time, cache hits) is logged every this many captures. */
+    const val COST_LOG_EVERY_CAPTURES = 200
+
     // ---- Stage 4: text scanning ----
 
     /** Bundled keyword/phrase list (see README "Stage 4"); editable without code changes. */

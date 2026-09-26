@@ -48,7 +48,12 @@ data class DetectionEvent(
     /** Text detections: the list terms that matched. */
     val matchedTerms: List<String> = emptyList(),
     /** Text detections: a short excerpt around the first match (local review log only). */
-    val textSnippet: String? = null
+    val textSnippet: String? = null,
+    /**
+     * Image detections from region scanning: the on-screen element that scored
+     * (e.g. `image 540x540@480,900 (ImageView)`); null when the whole screen did.
+     */
+    val region: String? = null
 ) {
     /** One JSON object per line for the local review log (no Android JSON dependency). */
     fun toJsonLine(): String = buildString {
@@ -63,6 +68,7 @@ data class DetectionEvent(
             append(",\"terms\":[").append(matchedTerms.joinToString(",") { jsonString(it) }).append(']')
             append(",\"snippet\":").append(jsonString(textSnippet))
         }
+        region?.let { append(",\"region\":").append(jsonString(it)) }
         classScores?.let { s ->
             append(",\"classes\":{")
             append("\"sexy\":").append(num(s.sexy))

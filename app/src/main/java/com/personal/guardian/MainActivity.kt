@@ -212,7 +212,9 @@ class MainActivity : AppCompatActivity() {
             last,
             ScanStatus.confirmedCount,
             ScanStatus.suppressedCount,
-            DetectionStore.thumbnailCount(this)
+            DetectionStore.thumbnailCount(this),
+            ScanStatus.regionsClassified,
+            ScanStatus.regionCacheHits
         )
 
         // Stage 4: text scanning status.

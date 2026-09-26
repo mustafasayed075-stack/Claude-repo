@@ -45,7 +45,7 @@
     <string name="status_scan_enabled_not_running">Screen scanning: Enabled, service not running yet</string>
     <string name="status_scan_off">Screen scanning: Off — enable in Settings → Accessibility → Installed apps → Guardian</string>
     <string name="status_scan_unsupported">Screen scanning: Unsupported (needs Android 11+, this device is API %1$d)</string>
-    <string name="status_scan_details">Mode: %1$s · frames scanned: %2$d · last: %3$s · confirmed: %4$d · same-content repeats suppressed: %5$d · saved thumbnails: %6$d</string>
+    <string name="status_scan_details">Mode: %1$s · frames scanned: %2$d · last: %3$s · confirmed: %4$d · same-content repeats suppressed: %5$d · saved thumbnails: %6$d · image regions classified: %7$d (from cache: %8$d)</string>
     <string name="status_scan_mode_fast">fast (%1$s)</string>
     <string name="status_scan_mode_baseline">baseline</string>
     <string name="status_scan_last_frame">%1$s (%2$s, score %3$.2f)</string>

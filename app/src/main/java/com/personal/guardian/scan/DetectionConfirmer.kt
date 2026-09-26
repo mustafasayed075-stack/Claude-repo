@@ -51,14 +51,16 @@ class DetectionConfirmer(
     /**
      * Feeds one classified frame. [atMs] must come from a monotonic clock (e.g.
      * `SystemClock.elapsedRealtime()`). Returns a [Confirmation] when this frame
-     * completes the rule, otherwise null.
+     * completes the rule, otherwise null. [positive] defaults to the [threshold] rule;
+     * callers that judged the frame themselves (a region over its own threshold, see
+     * [FrameVerdict]) pass it explicitly.
      */
-    fun onFrame(score: Float, atMs: Long, source: TriggerSource): Confirmation? {
+    fun onFrame(score: Float, atMs: Long, source: TriggerSource, positive: Boolean = isPositive(score)): Confirmation? {
         // Age out positives older than the window, relative to this frame.
         while (positives.isNotEmpty() && atMs - positives.first().atMs > windowMs) {
             positives.removeFirst()
         }
-        if (!isPositive(score)) return null
+        if (!positive) return null
 
         positives.addLast(Frame(atMs, score, source))
         if (positives.size < requiredPositives) return null

@@ -247,7 +247,8 @@ these in order (from the spec):
   - a thumbnail (longest side 256 px, JPEG) is saved to
     `files/detections/detection-<timestamp>.jpg` (newest 100 kept) and a metadata
     line (timestamp, signal as `confidence`, per-class scores, trigger
-    `periodic`/`event`, foreground app, thumbnail name) is appended to
+    `periodic`/`event`, foreground app, thumbnail name, and `region` when a region
+    scored — the thumbnail is then that region's crop) is appended to
     `files/detections/detections.jsonl`;
   - a `CONFIRMED screen detection …` entry is written to the event log;
   - a `DetectionEvent` is published on `DetectionBus` — the later lock stage
@@ -262,6 +263,111 @@ these in order (from the spec):
   `DetectionBus` event. Different content is reported immediately; the same content
   is reported again after 60 s. The number suppressed is shown on the main screen
   and in the next `CONFIRMED` log line.
+
+### Region scanning (second detection path)
+
+The whole-screen pass squashes a 1080×2400 screen into one 224×224 input. A
+480×480 WhatsApp sticker then covers about 100×45 input pixels, and a
+non-fullscreen player a narrow strip, so most of their signal is gone. Region
+scanning adds a second path on **the same screenshot**. The whole-screen pass is
+unchanged and still runs on every capture.
+
+1. **Find image-bearing elements** (`ImageRegionFinder`, walked on each capture
+   over the active window's accessibility node tree, which the service can already
+   read):
+   - **image:** class name `…ImageView` (including AppCompat and Fresco subclasses,
+     which report as `android.widget.ImageView`), `ImageButton`, or web `<img>`
+     (`android.widget.Image`);
+   - **video:** `VideoView`, `SurfaceView`, `TextureView`, `…PlayerView`;
+   - **media hint:** any other view whose resource id or content description names
+     media — sticker, photo, image, gif, video, thumb, preview, player, صورة, ملصق,
+     فيديو. This covers apps that draw media in custom views (e.g. Telegram).
+     Containers (layouts, lists, WebView) never count themselves; their children
+     are walked.
+2. **Filter:**
+   - visible nodes only, clipped to the screen;
+   - shorter side ≥ `REGION_MIN_SIDE_DP` = **64 dp** (skips avatars, icons, emoji);
+   - ≤ `REGION_MAX_SCREEN_FRACTION` = **60%** of the screen (the whole-screen pass
+     already sees full-screen media well);
+   - aspect ratio ≤ **3:1** (skips banners and strips);
+   - duplicates merged: the same box reported twice, or a media container around its
+     own image, where the tighter image box wins.
+3. **Cap:** the `REGION_MAX_PER_CAPTURE` = **3** largest regions, at most
+   `REGION_MAX_NODES` = 1,500 nodes walked, and a per-capture
+   `REGION_TIME_BUDGET_MS` = **400 ms**. Once region work passes the budget, the
+   remaining regions of that capture are skipped and counted, so a slow phone can't
+   fall behind the 1.5 s fast-mode interval.
+4. **Crop and classify** each region at its own resolution: the element's exact
+   bounds from the screenshot, through the same halving downscale (or upscale) to
+   224×224. The crop isn't padded to a square, because the model was trained on
+   squashed whole images.
+5. **Cache:** the score of each crop is remembered by its 64-bit dHash plus size
+   (`REGION_CACHE_SIZE` = 32, LRU, exact match only). A sticker or photo that stays
+   on screen across captures is classified once, not every 1.5 s.
+6. **Verdict** (`FrameVerdict`): a frame is positive if the whole screen reaches
+   `NSFW_THRESHOLD` **or** any region reaches `REGION_THRESHOLD`. Confirmation
+   (2 positives within 7 s), cooldown and reactions are unchanged. When a region
+   decided the verdict:
+   - the review thumbnail is the region crop, not the whole screen;
+   - the metadata line gets `"region":"image 480x480@560,900 (ImageView)"`;
+   - the `CONFIRMED` log line says `scored=<region>`;
+   - the same-content cooldown uses the region's own fingerprint, so scrolling a
+     chat doesn't re-report the same sticker.
+   The per-frame calibration log appends
+   `regions=2 [0.912 image 480x480@560,900 (ImageView)*, …]` (`*` = cached).
+   The main screen shows regions classified and cache hits.
+
+**Validation with the real model** (bundled `.tflite` via LiteRT on a 4-core x86
+dev machine, 2 threads). The preprocessing mirrors the app. The test images were
+400 everyday COCO-2017 photos with people, shown as a chat image (700 or 450 px
+wide) on a 1080×2400 chat-like screen. No explicit images were used.
+
+- **Signal retention:** a region scores almost exactly like the photo shown
+  full-screen (median |difference| 0.002–0.003). The whole-screen pass drifts
+  0.022–0.028 and dilutes: 60 photos reach 0.3 full-screen, but only 10 (700 px) or
+  3 (450 px) do when they're a chat image in the whole-screen pass. That dilution is
+  the gap region scanning closes.
+- **False-positive cost — an important tradeoff:** the model scores some ordinary
+  photos high. Tennis players, baseball and children at home reached 0.9–1.0,
+  driven by *porn* and *sexy*. So with `REGION_THRESHOLD` = 0.3 (same as
+  full-screen), **54 of 400 (13.5%)** everyday people photos seen as a chat image
+  make a frame positive, against 3 of 400 via the whole-screen pass. A photo that
+  stays on screen for two captures then confirms. These photos already alert today
+  when opened full-screen; region scanning makes small ones behave the same.
+  - At higher region thresholds: 0.5 → 42, 0.7 → 24, 0.9 → 14 of 400.
+  - `REGION_THRESHOLD` is separate from `NSFW_THRESHOLD` so you can raise it
+    without touching the whole-screen pass.
+  - The earlier "max 0.18 on ordinary content" figure (below) came from a much
+    smaller sample.
+
+**Performance** (same machine, 40 captures = one minute of fast mode; region cost
+includes crop, fingerprint, cache and inference):
+
+| Scenario | Whole-screen ms/capture | Region ms/capture | Region inferences / 40 captures | Overhead |
+|---|---|---|---|---|
+| text chat, no media | 31.3 | 0 | 0 | +0% |
+| chat with 2 stickers + a photo, unchanged | 32.5 | 4.0 | 3 | +12% |
+| scrolling chat, 1 new image per capture | 33.7 | 14.4 | 41 | +43% |
+| small video player (1 changing region) | 30.8 | 11.0 | 40 | +36% |
+| worst case: 3 changing regions every capture | 32.2 | 33.1 | 120 | +103% |
+
+Reading the numbers:
+- One inference took 5.7 ms here. The whole-screen downscale (20 ms in PIL) is most
+  of the whole-screen cost, while a region crop plus scale is under 1 ms.
+- The node walk is about 3 ms at the 1,500-node limit on the JVM
+  (`ImageRegionsTest` benchmark). On a device, fetching nodes over binder adds to
+  that.
+- On a phone, inference is a larger share, so each *new* region can cost relatively
+  more: up to about one extra whole-screen inference.
+- Static content is nearly free thanks to the cache. The cap (3) and the 400 ms
+  budget bound the worst case: about 4 inferences per 1.5 s capture, versus 1 before.
+- Battery impact scales with how much *new* media is on screen, not with time spent
+  in an app.
+- To confirm on your phone, the service writes a cost line every 200 captures, also
+  to the diagnostics log: `Scan cost (last 200 captures): whole-screen X ms avg,
+  regions Y ms avg (… classified, … cached, … skipped by time budget)`.
+- To turn the path off, set `REGION_SCAN_ENABLED = false`. To make it cheaper, lower
+  `REGION_MAX_PER_CAPTURE`.
 
 ### Model: source and license
 
@@ -280,8 +386,15 @@ these in order (from the spec):
   and Telegram view-once media, some banking apps) cannot be captured — accepted
   per spec. These frames are skipped and logged (rate-limited) as "secure window".
 - The **whole screen** is squashed into one 224×224 input, so a small image inside
-  a larger page (e.g. a thumbnail in a chat list) may score low until opened
-  full-screen.
+  a larger page scores low. **Region scanning** (above) now classifies image, video
+  and sticker elements separately. It still misses images that aren't separate
+  accessibility nodes and have no media hint, such as some games or canvas-drawn
+  web content, as well as regions under 64 dp and more than 3 per capture.
+- Region scanning makes small ordinary photos count like full-screen ones, including
+  the model's false positives on some sports and family photos (13.5% of a COCO
+  people sample at 0.3). Tune `REGION_THRESHOLD`.
+- Region bounds come from the node tree slightly after the screenshot is taken. A
+  fast scroll in between can shift a crop a little.
 - Accuracy on real content can only be judged on-device; the threshold (0.3) is a
   starting point to tune with the per-frame (per-class) score log.
 - The model is a MobileNet: fast and small, but less accurate than large models.
@@ -311,6 +424,10 @@ these in order (from the spec):
 - **Confirmation-window and threshold logic unit-testable without Android** —
   `DetectionConfirmer` / `CaptureScheduler` / `NsfwPreprocessor` are pure Kotlin
   with injected timestamps.
+- **Region scanning (added):** region detection, filtering, de-duplication, the cap,
+  crop mapping, the score cache, the per-capture time budget and the combined
+  verdict are pure Kotlin (`ImageRegions.kt`) and covered by `ImageRegionsTest`,
+  including a walk benchmark at the node limit.
 
 ---
 
@@ -972,7 +1089,11 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
 - **Concurrent DNS forwarding:** `DnsForwarderTest` (pure JVM, fake local resolver).
 - **Screen-scan logic:** `DetectionConfirmerTest`, `DetectionCooldownTest`,
   `CaptureSchedulerTest`, `NsfwPreprocessorTest`, `DetectionEventTest`,
-  `ScanLogTest` (pure JVM).
+  `ScanLogTest`, `ImageRegionsTest` (region scanning, pure JVM).
+- **Region-scanning validation with the real model** (optional, off-device):
+  `tools/region_scan_benchmark.py <dir of everyday .jpg photos>` (needs
+  `ai-edge-litert`, Pillow, numpy) prints the false-positive table and the
+  per-scenario cost table from *Region scanning*.
 - **Log retention:** `LogFilesTest` (diagnostics survive main-log rotation).
 - **Text scanning:** `KeywordMatcherTest` (matcher + real list + ordinary-text
   spot-check), `KeywordRulesTest` (context rules, restored terms, Arabic/English

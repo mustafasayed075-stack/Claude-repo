@@ -39,8 +39,14 @@ import java.util.concurrent.atomic.AtomicInteger
  *  - switches to [ScanConfig.FAST_INTERVAL_MS] as soon as a watched app
  *    ([ScanConfig.WATCHED_PACKAGES]) comes to the foreground, and back to the
  *    baseline when it leaves (event trigger);
- *  - classifies each frame on-device ([NsfwClassifier]) and feeds the score to
- *    [DetectionConfirmer]; confirmed detections are saved locally
+ *  - classifies each frame on-device ([NsfwClassifier]) twice over: the whole
+ *    downscaled screen, and — region scanning — up to
+ *    [ScanConfig.REGION_MAX_PER_CAPTURE] image-bearing elements from the active
+ *    window's node tree (image/video/sticker views, [ImageRegionFinder]) cropped out
+ *    of the same screenshot at their own resolution, so a sticker or a small player
+ *    isn't squashed to a few pixels; the frame counts as positive if either path
+ *    does ([FrameVerdict]), and that score feeds [DetectionConfirmer];
+ *  - confirmed detections are saved locally
  *    ([DetectionStore]), logged ([GuardianLog]), shown as a notification
  *    ([DetectionNotifier]) and published on [DetectionBus] for later stages.
  *
@@ -67,6 +73,10 @@ class GuardianAccessibilityService : AccessibilityService() {
     private val confirmer = DetectionConfirmer()
     private val cooldown = DetectionCooldown()
     private val fingerprintPixels = IntArray(ScreenFingerprint.WIDTH * ScreenFingerprint.HEIGHT)
+    // Region scanning (worker thread).
+    private val regionCache = RegionScoreCache()
+    private val regionScorer = RegionScorer(regionCache) { SystemClock.elapsedRealtime() }
+    private val costStats = ScanCostStats()
     private var classifier: NsfwClassifier? = null
     private var captureInFlight = false
     private val lastFailureLogAt = HashMap<String, Long>()
@@ -257,44 +267,101 @@ class GuardianAccessibilityService : AccessibilityService() {
             }
         }
         try {
-            val scores = model.classify(frame)
-            val score = scores.signal
-            ScanStatus.onFrame(System.currentTimeMillis(), score, source)
-            val confirmation = confirmer.onFrame(score, SystemClock.elapsedRealtime(), source)
+            // Path 1: the whole (downscaled) screen, as before.
+            val t0 = SystemClock.elapsedRealtime()
+            val whole = model.classify(frame)
+            val t1 = SystemClock.elapsedRealtime()
+            // Path 2: image-bearing elements cropped out of the same frame.
+            val regions = if (ScanConfig.REGION_SCAN_ENABLED) scoreRegions(model, frame) else RegionScorer.Pass.NONE
+            val t2 = SystemClock.elapsedRealtime()
+            costStats.record(t1 - t0, t2 - t1, regions.found, regions.classified, regions.cacheHits, regions.budgetSkips)
+                ?.let { GuardianLog.i(applicationContext, it, diagnostic = true) }
+
+            val verdict = FrameVerdict.combine(whole, regions.scores)
+            ScanStatus.onFrame(System.currentTimeMillis(), verdict.score, source)
+            val confirmation = confirmer.onFrame(verdict.score, SystemClock.elapsedRealtime(), source, verdict.positive)
             if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
                 // TEMPORARY calibration logging (see ScanConfig.LOG_EVERY_FRAME_SCORE).
                 val positives = if (confirmation != null) confirmer.requiredPositives else confirmer.pendingPositives
                 GuardianLog.i(
                     applicationContext,
                     ScanLog.frameLine(
-                        scores, confirmer.threshold, source, scheduler.foregroundPackage,
-                        positives, confirmer.requiredPositives
+                        verdict.scores,
+                        if (verdict.region != null) ScanConfig.REGION_THRESHOLD else confirmer.threshold,
+                        source, scheduler.foregroundPackage, positives, confirmer.requiredPositives,
+                        if (ScanConfig.REGION_SCAN_ENABLED) ScanLog.regionSummary(regions.scores) else null
                     )
                 )
             }
-            if (confirmation != null) onConfirmed(confirmation, frame, scores)
+            if (confirmation != null) onConfirmed(confirmation, frame, verdict)
         } finally {
             frame.recycle()
         }
     }
 
-    private fun onConfirmed(confirmation: DetectionConfirmer.Confirmation, frame: Bitmap, scores: NsfwScores) {
+    /**
+     * Finds image-bearing elements in the active window ([ImageRegionFinder]) and
+     * scores each one cropped out of [frame] at its own resolution ([RegionScorer]:
+     * at most [ScanConfig.REGION_MAX_PER_CAPTURE], within
+     * [ScanConfig.REGION_TIME_BUDGET_MS], unchanged content served from the cache).
+     */
+    private fun scoreRegions(model: NsfwClassifier, frame: Bitmap): RegionScorer.Pass {
+        val root = runCatching { rootInActiveWindow }.getOrNull() ?: return RegionScorer.Pass.NONE
+        val minSidePx = (ScanConfig.REGION_MIN_SIDE_DP * resources.displayMetrics.density).toInt()
+        val regions = try {
+            ImageRegionFinder.collect(
+                AccessibilityRegionNode(root), Box(0, 0, frame.width, frame.height), ImageRegionFinder.Limits(minSidePx)
+            )
+        } catch (t: Throwable) {
+            logFailureRateLimited("regions", "Screen scan: region lookup failed.", t)
+            emptyList()
+        } finally {
+            releaseNode(root)
+        }
+        if (regions.isEmpty()) return RegionScorer.Pass.NONE
+        val pass = regionScorer.score(
+            regions, frame.width, frame.height, minSidePx,
+            crop = { c -> Bitmap.createBitmap(frame, c.left, c.top, c.width, c.height) },
+            fingerprint = { fingerprint(it) },
+            classify = { model.classify(it) },
+            release = { if (it !== frame) it.recycle() }
+        )
+        ScanStatus.regionsClassified += pass.classified
+        ScanStatus.regionCacheHits += pass.cacheHits
+        return pass
+    }
+
+    private fun onConfirmed(confirmation: DetectionConfirmer.Confirmation, frame: Bitmap, verdict: FrameVerdict.Result) {
         val ctx = applicationContext
-        if (!cooldown.shouldReport(SystemClock.elapsedRealtime(), fingerprint(frame))) {
+        val region = verdict.region
+        val scores = verdict.scores
+        // Same-content check on what scored: the region's own fingerprint (so scrolling a
+        // chat doesn't re-report the same sticker), or the whole screen's.
+        if (!cooldown.shouldReport(SystemClock.elapsedRealtime(), region?.fingerprint ?: fingerprint(frame))) {
             // Same content as a detection reported within the cooldown: no reaction.
             ScanStatus.suppressedCount++
             return
         }
         val now = System.currentTimeMillis()
         val latest = confirmation.latest
-        val thumbnail = DetectionStore.saveThumbnail(ctx, frame, now)
+        // The review thumbnail shows what scored: the region itself, else the screen.
+        val thumbnail = if (region == null) DetectionStore.saveThumbnail(ctx, frame, now) else {
+            val c = region.crop
+            val crop = Bitmap.createBitmap(frame, c.left, c.top, c.width, c.height)
+            try {
+                DetectionStore.saveThumbnail(ctx, crop, now)
+            } finally {
+                if (crop !== frame) crop.recycle()
+            }
+        }
         val event = DetectionEvent(
             timestampMs = now,
             confidence = latest.score,
             source = latest.source,
             foregroundPackage = scheduler.foregroundPackage,
             thumbnailFile = thumbnail,
-            classScores = scores
+            classScores = scores,
+            region = region?.region?.label
         )
         runCatching { DetectionStore.appendMetadata(ctx, event) }
             .onFailure { GuardianLog.e(ctx, "Screen scan: failed to write detection metadata.", it) }
@@ -304,7 +371,8 @@ class GuardianAccessibilityService : AccessibilityService() {
         GuardianLog.w(
             ctx,
             "CONFIRMED screen detection: signal=${"%.3f".format(latest.score)} (${scores.breakdown()}) trigger=${latest.source.label} " +
-                "app=${event.foregroundPackage ?: "unknown"} frames=[$frameSignals] thumbnail=${thumbnail ?: "not saved"} " +
+                "app=${event.foregroundPackage ?: "unknown"} scored=${region?.region?.label ?: "whole screen"} " +
+                "frames=[$frameSignals] thumbnail=${thumbnail ?: "not saved"} " +
                 "(same-content repeats suppressed since last report: ${cooldown.suppressedSinceLastReport})"
         )
         cooldown.resetSuppressedCount()
@@ -410,6 +478,19 @@ class GuardianAccessibilityService : AccessibilityService() {
         override fun release() = releaseNode(node)
     }
 
+    /** [RegionNode] over a live accessibility node (children are fetched lazily). */
+    private class AccessibilityRegionNode(private val node: AccessibilityNodeInfo) : RegionNode {
+        override val className: CharSequence? get() = node.className
+        override val viewId: String? get() = node.viewIdResourceName
+        override val contentDescription: CharSequence? get() = node.contentDescription
+        override val isVisibleToUser: Boolean get() = node.isVisibleToUser
+        override val boundsInScreen: Box
+            get() = android.graphics.Rect().also { node.getBoundsInScreen(it) }.let { Box(it.left, it.top, it.right, it.bottom) }
+        override val childCount: Int get() = node.childCount
+        override fun child(index: Int): RegionNode? = node.getChild(index)?.let { AccessibilityRegionNode(it) }
+        override fun release() = releaseNode(node)
+    }
+
     // ---- helpers ----
 
     private fun fingerprint(frame: Bitmap): Long {
@@ -434,6 +515,7 @@ class GuardianAccessibilityService : AccessibilityService() {
             classifier?.close()
             classifier = null
             keywordMatcher = null
+            regionCache.clear()
         }
         workerThread?.quitSafely()
         workerThread = null
@@ -523,6 +605,9 @@ object ScanStatus {
         private set
     @Volatile var confirmedCount = 0
     @Volatile var suppressedCount = 0
+    /** Region scanning: regions run through the model, and regions whose score came from the cache. */
+    @Volatile var regionsClassified = 0L
+    @Volatile var regionCacheHits = 0L
 
     // Stage 4: text scanning
     @Volatile var textEntries = 0
