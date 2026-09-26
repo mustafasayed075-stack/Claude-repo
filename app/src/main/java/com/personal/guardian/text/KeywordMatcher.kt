@@ -15,6 +15,10 @@ import java.io.BufferedReader
  *    entries ([ArabicMorphology.derive]). A root line may carry `~ companions` too,
  *    which then apply to every generated form. Forms also listed explicitly keep the
  *    explicit line's context rule.
+ *  - `@fuse كس طيز > ام م اخت` — **glued compounds**: every front written directly
+ *    before every back becomes an entry (كسم, كسخت, طيزم…), which then takes the usual
+ *    affixes (كسمك, كسختك, وكسمين). One line generalises a whole family of fused
+ *    insults instead of listing each spelling; `~ companions` may follow.
  *  - `=word` — an Arabic **noun-mode** entry: only noun affixes (و ف ب ل ال بال…
  *    prefixes and pronoun endings ي ك ه ها هم نا كم), no verb prefixes/endings —
  *    for nouns whose letters are also a common verb root (فرج: اتفرج "watch").
@@ -65,6 +69,19 @@ class KeywordList private constructor(
                 when {
                     line.startsWith("!") ->
                         TextNormalizer.tokenize(line.substring(1)).forEach { exceptions += it.raw }
+                    line.startsWith("@fuse") -> {
+                        val (head, companions) = splitContext(line.removePrefix("@fuse"))
+                        val sides = head.split('>')
+                        require(sides.size == 2) { "@fuse needs 'fronts > backs': $rawLine" }
+                        fun words(side: String) = side.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                            .map { w -> TextNormalizer.tokenize(w).joinToString("") { it.raw } }.filter { it.isNotEmpty() }
+                        val fronts = words(sides[0])
+                        val backs = words(sides[1])
+                        for (form in fuse(fronts, backs)) {
+                            val tokens = listOf(form)
+                            if (tokens !in generated) generated[tokens] = Entry(form, tokens, companions, "fuse " + sides[0].trim())
+                        }
+                    }
                     line.startsWith("@root") -> {
                         val (head, companions) = splitContext(line.removePrefix("@root"))
                         // Letters one by one: tokenize() would join "ن ي ك" into one token.
@@ -91,6 +108,15 @@ class KeywordList private constructor(
             val entries = explicit.values + generated.filterKeys { it !in explicit }.values
             return KeywordList(entries.toList(), exceptions)
         }
+
+        /**
+         * Glued compounds for `@fuse`: every front written directly before every back
+         * (كس + م = كسم, cock + sucker = cocksucker). The results are ordinary entries,
+         * so affixes and inflections come from the usual morphology (كسم + ك = كسمك,
+         * cocksucker + s). Contracted spellings (ام → م) are listed as backs explicitly.
+         */
+        fun fuse(fronts: List<String>, backs: List<String>): List<String> =
+            fronts.flatMap { f -> backs.map { b -> f + b } }.distinct()
 
         /** Splits `head ~ c1 c2 "c 3"` into the head and its normalised companions. */
         private fun splitContext(line: String): Pair<String, List<List<String>>> {
@@ -395,7 +421,13 @@ object ArabicMorphology {
             val rest = word.substring(p.length)
             if (rest.length < 2) continue
             out += rest
-            for (sfx in SUFFIXES) if (rest.endsWith(sfx) && rest.length - sfx.length >= 2) out += rest.dropLast(sfx.length)
+            for (sfx in SUFFIXES) {
+                if (!rest.endsWith(sfx) || rest.length - sfx.length < 2) continue
+                val stem = rest.dropLast(sfx.length)
+                out += stem
+                // ة (normalised ه) is written ت before a suffix: قحبتك → قحبه, موخرتها → موخره.
+                if (stem.length >= 3 && stem.endsWith("ت")) out += stem.dropLast(1) + "ه"
+            }
         }
         return out
     }

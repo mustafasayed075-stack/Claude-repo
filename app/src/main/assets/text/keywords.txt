@@ -5,19 +5,21 @@
 # Format: one word or phrase per line; '#' starts a comment; '!token' is an
 #   exception (a token that must never match); 'term ~ w1 w2 "w 3"' is a context
 #   rule (suppressed when a companion word is near it in the same sentence);
-#   '@root ن ي ك' generates the root's derived forms. Case, diacritics, letter
+#   '@root ن ي ك' generates the root's derived forms; '@fuse A B > C D' generates
+#   glued compounds (AC AD BC BD); '?term' is corroboration-only; '=term' is
+#   Arabic noun mode. Case, diacritics, letter
 #   forms, leetspeak, repeated/spaced/masked letters and affixes are handled by
 #   the matcher.
 
-# --- LDNOOBW en (kept 334 of 403; 50 with context rules) ---
+# --- LDNOOBW en (kept 334 of 403; 65 with context rules) ---
 2g1c
 2 girls 1 cup
 acrotomophilia
 alabama hot pocket
 alaskan pipeline
-anal
+anal ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient fissure fissures fistula canal gland glands sphincter hemorrhoids piles retentive colorectal stool stools
 anilingus
-anus ~ cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy
+anus ~ cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 auto erotic
 autoerotic
 babeland
@@ -56,8 +58,8 @@ blue waffle
 blumpkin
 bondage
 boner
-boob
-boobs
+boob ~ dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
+boobs ~ dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 booty call
 brown showers
 brunette action
@@ -66,7 +68,7 @@ bullet vibe
 bung hole
 bunghole
 busty
-butt ~ kick kicked kicking cigarette cigarettes rifle gun joke jokes heads head
+butt ~ kick kicked kicking cigarette cigarettes rifle gun joke jokes heads head dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 buttcheeks
 butthole
 camel toe
@@ -78,7 +80,7 @@ cialis ~ doctor pharmacy prescription medicine drug pill dose heart pressure pfi
 circlejerk ~ reddit thread sub subreddit forum echo
 cleveland steamer
 clit
-clitoris
+clitoris ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 clover clamps
 cock
 cocks
@@ -140,7 +142,7 @@ futanari
 gangbang
 gang bang
 gay sex
-genitals
+genitals ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 giant cock
 girl on ~ phone team bike bus train street screen stage instagram tv show left right cover fire
 girl on top
@@ -202,11 +204,11 @@ muffdiving
 nambla
 nawashi
 nimphomania
-nipple
-nipples
+nipple ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model breastfeeding feeding baby latch bottle pacifier
+nipples ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model breastfeeding feeding baby latch bottle pacifier
 nsfw
 nsfw images
-nude
+nude ~ dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model heels pumps lipstick tone beige lining neutral hosiery tights nail polish palette
 nudity
 nutten
 nympho
@@ -218,12 +220,12 @@ one guy one jar
 orgasm
 orgy
 paedophile
-panties
-panty
+panties ~ dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model liner liners
+panty ~ dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model liner liners
 pedobear
 pedophile
 pegging
-penis
+penis ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 phone sex
 pissing ~ rain raining down off contest about around
 piss pig
@@ -248,7 +250,7 @@ queaf
 queef
 quim
 raging boner
-rectum ~ cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy
+rectum ~ cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 reverse cowgirl
 rimjob
 rimming
@@ -276,9 +278,9 @@ shota
 shrimping ~ boat boats shrimp fishing season net nets gulf trawler
 skeet ~ shooting shoot shooter clay trap range gun olympic
 slut
-s&m
+s&m ~ size sizes small medium large xs xl fit fits ordered order petite
 smut
-snatch ~ thief thieves bag purse phone victory win defeat jaws weightlifting grab stole gold title medal application memory
+snatch ~ thief thieves bag purse phone victory win defeat jaws weightlifting grab stole gold title medal application memory up
 snowballing ~ effect debt costs problem problems crisis rolling quickly fast snow
 sodomize
 sodomy
@@ -322,16 +324,16 @@ undressing
 upskirt
 urethra play
 urophilia
-vagina
+vagina ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 venus mound
 viagra ~ doctor pharmacy prescription medicine drug pill dose heart pressure pfizer generic
-vibrator
+vibrator ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient phone phones motor motors haptic concrete massage massager
 violet wand
 vorarephilia
 voyeur
 voyeurweb
 voyuer
-vulva
+vulva ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 wank
 wet dream
 whore
@@ -345,21 +347,21 @@ yellow showers
 yiffy
 zoophilia
 
-# --- LDNOOBW ar (kept 33 of 38; 18 with context rules) ---
+# --- LDNOOBW ar (kept 33 of 38; 19 with context rules) ---
 سكس
 طيز
-=شرج ~ طبيب دكتور جراحه عمليه بواسير ناسور شرخ مستشفي علاج مرض قولون فتحه منظار
+=شرج ~ طبيب دكتور جراحه عمليه بواسير ناسور شرخ مستشفي علاج مرض قولون فتحه منظار طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض
 لعق ~ ملعقه عسل "ايس كريم" اصابع طعام قطه كلب جرح
 لحس ~ جزم جزمه اقدام رجلين حذاء بياده كلامه كلام وعده وعوده مخه دماغه عقله "ايس كريم" جيلاتي بسكوت شيكولاته ملعقه صحن طبق كلب قطه القطه الكلب اصابع صوابع عسل مربي
 مص ~ قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس
 تمص ~ قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس
 ?=بيضان
-=ثدي ~ غرسات سرطان الكشف فحص اشعه ماموجرام طبيب دكتور مستشفي رضاعه رضيع طبي اورام اكتشاف مبكر توعيه زراعه تجميل
+=ثدي ~ غرسات سرطان الكشف فحص اشعه ماموجرام طبيب دكتور مستشفي رضاعه رضيع طبي اورام اكتشاف مبكر توعيه زراعه تجميل طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض
 بز
 بزاز
 ?=حلمة
 مفلقسة
-بظر
+بظر ~ طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض الاناث
 كس
 ?=فرج
 =شهوة ~ الله رمضان صيام نفس النفس دين عباده تقوي الدنيا المال الطعام الاكل السلطه الحكم
@@ -367,7 +369,7 @@ zoophilia
 ?=مبادل
 عاهرة
 =جماع ~ حكم كفاره صيام رمضان نهار الصوم فقه فتوي شرعا الحج الاحرام
-=قضيب ~ حديد معدن معدني خرساني صلب تسليح نحاس المونيوم سكه قطار حديديه تنظيف محور مكبس توصيل فوهه اسطواني برغي ميكانيكي مغناطيس كهرباء كهربائي تحكم وقود نووي سلك بندقيه صيد ستاره
+=قضيب ~ حديد معدن معدني خرساني صلب تسليح نحاس المونيوم سكه قطار حديديه تنظيف محور مكبس توصيل فوهه اسطواني برغي ميكانيكي مغناطيس كهرباء كهربائي تحكم وقود نووي سلك بندقيه صيد ستاره طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض
 زب
 سحاق
 سحاقية
@@ -492,13 +494,182 @@ e2la3i
 seks
 seksy
 
+
+# --- English: genitals / private areas (28) ---
+?vaginal
+?testicle
+?scrotum
+?labia
+?foreskin
+?genitalia
+?glans
+?areola
+?private parts
+?pubic
+breasts ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model chest armpit armpits sweat sweating veins tender tenderness nursing cramps cramping cup cups exposed large heavy heaviness chicken turkey duck grilled roasted recipe breastfeeding feeding milk pump implants implant mammogram screening
+buttocks ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model injection injections muscle muscles exercise squats glutes
+cameltoe
+nutsack
+ballsack
+coochie
+vajayjay
+punani
+poonani
+minge
+pecker ~ wood woodpecker bird birds keep
+knob ~ door doors drawer drawers volume radio stove oven cabinet handle turn turned button gear dial
+muff ~ ear earmuff earmuffs hand hands fur winter warm warmer
+cooter ~ turtle turtles river
+hooters ~ restaurant restaurants wings owl owls bar waitress
+?booty
+knockers ~ door doors brass iron
+family jewels ~ grandmother grandma mother heirloom inherited ring rings necklace diamond diamonds stolen gold
+
+# --- Arabic: genitals / private areas (34) ---
+?=مهبل
+?العضو الذكري
+?عضو ذكري
+?عضوي الذكري
+?عضوه الذكري
+?عضوك الذكري
+?العضو التناسلي
+?عضو تناسلي
+?عضوي التناسلي
+?عضوه التناسلي
+?الاعضاء التناسليه
+?اعضاء تناسليه
+?اعضائي التناسليه
+?الاعضاء الحميمه
+?المنطقه الحميمه
+?منطقه حميمه
+?المناطق الحميمه
+?المنطقه الحساسه
+?خصيه
+?خصيتان
+?كيس الصفن
+?=حشفه
+=اثداء ~ طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض
+?=قلفه
+?=عانه
+=موخره ~ طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض سياره السياره عربيه طائره الطائره قطار سفينه حافله اتوبيس الصف الطابور الجيش القافله الموكب الترتيب جدول الدوري المركز الفريق المنتخب الملعب القائمه الركب الراس الجمجمه الدماغ الشاحنه المركبه حقنه العضل المسرح القاعه الطائرات القوات راس الصداره حلاقه الابط الابطين الدبوس حلت احتلت جاءت تذيلت الدول الترتيب الاكواع الركب الفخذين
+نهدها
+نهديها
+نهداها
+نهودها
+=نهود ~ السودان كردفان مدينه ولايه
+طياز
+ازبار
+خصاوي
+
+# --- English: adult clothing (20) ---
+crotchless
+edible underwear
+edible panties
+peekaboo bra
+open cup bra
+cupless bra
+nipple tassels
+nipple pasties
+bodystocking
+body stocking
+latex catsuit
+gimp suit
+gimp mask
+fetish wear
+fetish outfit
+fetish gear
+bondage gear
+assless chaps
+stripper heels
+stripper outfit
+
+# --- Arabic: adult clothing (14) ---
+ملابس داخليه مثيره
+ملابس داخليه شفافه
+ملابس نوم مثيره
+قميص نوم مثير
+قميص نوم شفاف
+قمصان نوم مثيره
+لانجري مثير
+ملابس اغراء
+لبس اغراء
+بدله اغراء
+قميص اغراء
+ملابس فتيش
+=فتيش
+ملابس مثيره ~ للجدل الجدل جدل للاهتمام للسخريه للانتباه للاعجاب للدهشه
+
+# --- English: sex toys / sexual aids (34) ---
+sex toy
+sextoy
+butt plug
+anal beads
+anal plug
+fleshlight
+cock ring
+penis ring
+penis extender
+love egg
+vibrating egg
+rabbit vibrator
+bullet vibrator
+wand vibrator
+sex doll
+love doll
+blow up doll
+blowup doll
+realdoll
+masturbator
+pocket pussy
+ben wa balls
+nipple clamps
+clit clamp
+chastity cage
+cock cage
+sex swing
+sex machine
+fucking machine
+fuck machine
+penis pump ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient erectile dysfunction ed
+prostate massager ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
+kegel balls ~ doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient pelvic floor postpartum physiotherapy physio exercise exercises incontinence
+adult toys ~ lego puzzle puzzles board game games collectible collectibles figures action figure
+
+# --- Arabic: sex toys / sexual aids (20) ---
+العاب جنسيه
+لعبه جنسيه
+لعب جنسيه
+ادوات جنسيه
+اداه جنسيه
+قضيب صناعي
+زب صناعي
+زبر صناعي
+كس صناعي
+دميه جنسيه
+دمي جنسيه
+ديلدو
+فايبريتور
+فيبريتور
+فلشلايت
+هزاز جنسي
+مهبل صناعي ~ طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض ترميم تجميل
+منشط جنسي ~ طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض القذف اضرار اضراره ضبط مصادره مغشوشه مجهوله المصدر هيئه الدواء وزاره
+منشطات جنسيه ~ طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض القذف اضرار اضراره ضبط مصادره مغشوشه مجهوله المصدر هيئه الدواء وزاره
+?=هزاز
+
+# --- Glued compounds (4 rules): every front + back is an entry (then affixes) ---
+@fuse كس طيز > ام م اخت خت خالت عمت مرات ست اهل ابو دين عرض
+@fuse يا ابنال بنتال يابنال يابنتال > متناك متناكه شرموط شرموطه منيوك منيوكه قحبه عاهر عاهره مومس لبوه
+@fuse kos koss kus kuss > om omm um omk umk okht o5t ekht e5t ukht ahl
+@fuse cum cock dick pussy cunt tit tits boob boobs slut whore porn sex jizz twat clit anal butt > head heads face hole holes sucker sucking licker licking lover slut whore fuck fucker fucking bag dump dumpster bucket rag stain shot star slave doll toy tape cam chat pic pics vid video site plug ring pump cage machine swing shop
+
 # --- Arabic roots (4): derived forms generated by the matcher ---
 @root ن ي ك
 @root ش ر م ط
 @root ل ح س ~ جزم جزمه اقدام رجلين حذاء بياده كلامه كلام وعده وعوده مخه دماغه عقله "ايس كريم" جيلاتي بسكوت شيكولاته ملعقه صحن طبق كلب قطه القطه الكلب اصابع صوابع عسل مربي
 @root م ص ص ~ قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس
 
-# --- Exceptions (45) ---
+# --- Exceptions (53) ---
 !cocky
 !cocker
 !cockers
@@ -544,3 +715,11 @@ seksy
 !بزي
 !الكسي
 !جماعك
+!booties
+!bootie
+!muffin
+!muffins
+!knobby
+!kusum
+!tees
+!butthead

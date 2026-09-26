@@ -385,6 +385,9 @@ time and how many were flagged or suppressed.
   adult-site names; and evasion spellings the matcher can't derive by rule (pr0n).
   Generic evasions (leetspeak, repeated/spaced letters, diacritics, tatweel) are
   handled by the matcher, so the list doesn't need every variant.
+- **Coverage expansion** (glued compounds, genitals / private areas, adult
+  clothing, sex toys): see *Coverage expansion* below, including borderline terms
+  left out for your decision.
 - **False-positive check:** see *Validation on ordinary-text corpora* below.
 - **Editing:** edit `tools/build_keyword_list.py` and run it (or edit
   `app/src/main/assets/text/keywords.txt` directly) and rebuild the APK; no code
@@ -397,6 +400,7 @@ time and how many were flagged or suppressed.
   | `?word` | **corroboration-only** entry |
   | `=word` | Arabic **noun-mode** entry (noun affixes only) — combinable: `?=word ~ …` |
   | `@root ن ي ك` (`~ …` optional) | Arabic **verb root**: derived forms are generated |
+  | `@fuse كس طيز > ام م اخت` (`~ …` optional) | **glued compounds**: every front + back is an entry (كسم → كسمك) |
   | `!word` | **exception**: never matches (also behind an Arabic prefix) |
 
 ### Matching rules in detail
@@ -444,7 +448,9 @@ Two stronger variants, used only where the data showed companions can't work:
   no companion list captures — the term counts only alongside an unambiguous
   explicit term in the same sentence. Used for: فرج (common first name, "relief"),
   مبادل (Mubadala fund, "exchange"), حلمة (حلمه = "his dream"), شاذ ("anomalous"),
-  بيضان (slang "lame"), suck/sucks ("that sucks"), xx (maths, placeholders).
+  بيضان (slang "lame"), suck/sucks ("that sucks"), xx (maths, placeholders) — and,
+  in the coverage expansion, formal clinical vocabulary (testicle, خصية, مهبل…),
+  هزاز (phone vibrate mode) and booty.
 - **noun mode** (`=word`): Arabic nouns whose letters are also a productive verb/
   adjective stem take only noun affixes (article/prepositions + pronoun endings):
   فرج (اتفرج "watch", افرج "release"), جماع (اجماع "consensus", جماعي
@@ -455,40 +461,77 @@ Every term-specific rule (generated from the list file):
 
 <details><summary>Context rules — term → innocent-context companions</summary>
 
+Shared companion sets, written once: **[clinical]** = doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient; **[clinical-ar]** = طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض; **[clothing]** = dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model.
+
 | Term | Suppressed near |
 |---|---|
-| anus | cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy |
+| adult toys | lego puzzle puzzles board game games collectible collectibles figures action figure |
+| anal | [clinical] fissure fissures fistula canal gland glands sphincter hemorrhoids piles retentive colorectal stool stools |
+| anus | cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy [clinical] |
+| areola (corroboration-only) | — |
 | ball kicking | football soccer match practice drill kids players goal |
 | big black | dog car cat bag box hole cloud eyes hat suv truck bird bear coat jacket boots door horse |
-| butt | kick kicked kicking cigarette cigarettes rifle gun joke jokes heads head |
+| boob | [clothing] [clinical] |
+| boobs | [clothing] [clinical] |
+| booty (corroboration-only) | — |
+| breasts | [clinical] [clothing] chest armpit armpits sweat sweating veins tender tenderness nursing cramps cramping cup cups exposed large heavy heaviness chicken turkey duck grilled roasted recipe breastfeeding feeding milk pump implants implant mammogram screening |
+| butt | kick kicked kicking cigarette cigarettes rifle gun joke jokes heads head [clothing] [clinical] |
+| buttocks | [clinical] [clothing] injection injections muscle muscles exercise squats glutes |
 | cialis | doctor pharmacy prescription medicine drug pill dose heart pressure pfizer generic |
 | circlejerk | reddit thread sub subreddit forum echo |
+| clitoris | [clinical] |
+| cooter | turtle turtles river |
 | cornhole | game board bags tournament toss backyard yard |
 | domination | world market military global economic team game league political sports empire |
 | escort | police vessel ship ships convoy security guard guards military troops soldiers car ford mission motorcade |
 | eunuch | palace court emperor dynasty ottoman china historical ancient servant |
+| family jewels | grandmother grandma mother heirloom inherited ring rings necklace diamond diamonds stolen gold |
 | fecal | matter sample samples test bacteria transplant contamination coliform occult water |
 | fingering | guitar piano violin chord chords notes scale bass flute instrument technique taste execution play playing |
+| foreskin (corroboration-only) | — |
+| genitalia (corroboration-only) | — |
+| genitals | [clinical] |
 | girl on | phone team bike bus train street screen stage instagram tv show left right cover fire |
+| glans (corroboration-only) | — |
 | hard core | fans fan music punk rock band gamer gamers gaming workout training supporter supporters mode player players |
 | hardcore | development developer fans fan music punk rock band gamer gamers gaming workout training supporter supporters mode player players |
+| hooters | restaurant restaurants wings owl owls bar waitress |
 | huge fat | cat pay bonus raise salary paycheck lie mistake check |
 | intercourse | social friendly familiar daily commercial trade business polite pleasant conversation society family human cultural intellectual frequent constant delightful gaieties renewed acquaintance friends |
 | jelly donut | bakery coffee breakfast dunkin shop sugar glazed |
+| kegel balls | [clinical] pelvic floor postpartum physiotherapy physio exercise exercises incontinence |
+| knob | door doors drawer drawers volume radio stove oven cabinet handle turn turned button gear dial |
+| knockers | door doors brass iron |
+| kos | theta sin cos tan |
+| labia (corroboration-only) | — |
 | lolita | nabokov novel book fashion film kubrick style dress gothic |
 | make me come | over back home down up with early late again to here there |
+| muff | ear earmuff earmuffs hand hands fur winter warm warmer |
+| nipple | [clinical] [clothing] breastfeeding feeding baby latch bottle pacifier |
+| nipples | [clinical] [clothing] breastfeeding feeding baby latch bottle pacifier |
+| nude | [clothing] heels pumps lipstick tone beige lining neutral hosiery tights nail polish palette |
 | octopussy | bond film movie 007 moore |
+| panties | [clothing] liner liners |
+| panty | [clothing] liner liners |
+| pecker | wood woodpecker bird birds keep |
+| penis | [clinical] |
+| penis pump | [clinical] erectile dysfunction ed |
 | pissing | rain raining down off contest about around |
-| rectum | cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy |
+| private parts (corroboration-only) | — |
+| prostate massager | [clinical] |
+| pubic (corroboration-only) | — |
+| rectum | cancer surgery doctor hospital medical colon bowel anatomy disease patient fissure hemorrhoids colorectal biopsy [clinical] |
+| s&m | size sizes small medium large xs xl fit fits ordered order petite |
 | santorum | rick senator campaign republican gop pennsylvania election candidate |
 | scat | singing jazz sing singer singers music animal droppings wildlife |
+| scrotum (corroboration-only) | — |
 | sex | opposite same gender other bias assault offender offenders offence offense discrimination education trafficking |
 | sexual | harassment assault abuse violence health education orientation identity reproductive transmitted crimes crime misconduct allegations rights minorities humiliation |
-| sexually | harassed assaulted abused transmitted active explicit |
 | sexuality | education identity orientation gender rights human |
+| sexually | harassed assaulted abused transmitted active explicit |
 | shrimping | boat boats shrimp fishing season net nets gulf trawler |
 | skeet | shooting shoot shooter clay trap range gun olympic |
-| snatch | thief thieves bag purse phone victory win defeat jaws weightlifting grab stole gold title medal application memory |
+| snatch | thief thieves bag purse phone victory win defeat jaws weightlifting grab stole gold title medal application memory up |
 | snowballing | effect debt costs problem problems crisis rolling quickly fast snow |
 | spunk | courage spirit determination character plucky |
 | suck (corroboration-only) | — |
@@ -496,29 +539,35 @@ Every term-specific rule (generated from the list file):
 | tainted love | song "soft cell" cover band album |
 | taste my | food cake soup recipe dish sauce pie cookies dinner coffee tea drink cooking |
 | tea bagging | game gaming halo players online match kill |
+| testicle (corroboration-only) | — |
 | tied up | work busy meeting meetings traffic phone call boat dog "loose ends" office moment |
 | tight white | shirt jeans pants dress top sneakers socks |
 | tit | tat bird birds blue great coal |
 | tongue in a | cheek |
 | tushy | baby diaper rash bidet |
 | twinkie | snack hostess cake cream box lunch defense |
+| vagina | [clinical] |
+| vaginal (corroboration-only) | — |
 | viagra | doctor pharmacy prescription medicine drug pill dose heart pressure pfizer generic |
+| vibrator | [clinical] phone phones motor motors haptic concrete massage massager |
+| vulva | [clinical] |
 | xx (corroboration-only) | — |
 | xxx | chapter part vol volume phone number format price dollars dollar bowl olympiad pounds code name اسم اسمي رقم هاتف سعر دولار |
-| شرج (noun mode) | طبيب دكتور جراحه عمليه بواسير ناسور شرخ مستشفي علاج مرض قولون فتحه منظار |
+| شرج (noun mode) | طبيب دكتور جراحه عمليه بواسير ناسور شرخ مستشفي علاج مرض قولون فتحه منظار [clinical-ar] |
 | لعق | ملعقه عسل "ايس كريم" اصابع طعام قطه كلب جرح |
 | لحس | جزم جزمه اقدام رجلين حذاء بياده كلامه كلام وعده وعوده مخه دماغه عقله "ايس كريم" جيلاتي بسكوت شيكولاته ملعقه صحن طبق كلب قطه القطه الكلب اصابع صوابع عسل مربي |
 | مص | قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس |
 | تمص | قصب عصير شفاطه دم دماء سيجاره شيشه ليمون مانجا مصاصه بونبوني حلويات اصابع صوابع ابهام صباع الشعب فلوس |
 | بيضان (corroboration-only · noun mode) | — |
-| ثدي (noun mode) | غرسات سرطان الكشف فحص اشعه ماموجرام طبيب دكتور مستشفي رضاعه رضيع طبي اورام اكتشاف مبكر توعيه زراعه تجميل |
+| ثدي (noun mode) | غرسات سرطان الكشف فحص اشعه ماموجرام طبيب دكتور مستشفي رضاعه رضيع طبي اورام اكتشاف مبكر توعيه زراعه تجميل [clinical-ar] |
 | حلمة (corroboration-only · noun mode) | — |
+| بظر | [clinical-ar] الاناث |
 | فرج (corroboration-only · noun mode) | — |
 | شهوة (noun mode) | الله رمضان صيام نفس النفس دين عباده تقوي الدنيا المال الطعام الاكل السلطه الحكم |
 | شاذ (corroboration-only) | — |
 | مبادل (corroboration-only · noun mode) | — |
 | جماع (noun mode) | حكم كفاره صيام رمضان نهار الصوم فقه فتوي شرعا الحج الاحرام |
-| قضيب (noun mode) | حديد معدن معدني خرساني صلب تسليح نحاس المونيوم سكه قطار حديديه تنظيف محور مكبس توصيل فوهه اسطواني برغي ميكانيكي مغناطيس كهرباء كهربائي تحكم وقود نووي سلك بندقيه صيد ستاره |
+| قضيب (noun mode) | حديد معدن معدني خرساني صلب تسليح نحاس المونيوم سكه قطار حديديه تنظيف محور مكبس توصيل فوهه اسطواني برغي ميكانيكي مغناطيس كهرباء كهربائي تحكم وقود نووي سلك بندقيه صيد ستاره [clinical-ar] |
 | خنثي (noun mode) | طبي حاله جراحه فقه حكم مولود طفل هرمونات |
 | احتلام | بلوغ غسل الغسل حكم صيام رمضان فقه طهاره مراهق مراهقه |
 | نيك | مارفل ممثل مغني لاعب تنس مدرب شخصيه النجم فيوري جوناس كارتر كيرجيوس كيريوس نولتي كيج رائد فضاء ناسا الامريكي الاميركي الامريكيان الاميركيان |
@@ -530,7 +579,38 @@ Every term-specific rule (generated from the list file):
 | عاريه (noun mode) | تماما الصحه الياف سلك اسلاك ايد ايدي يد بيد العين بالعين عين الحقيقه حقيقه جدران جدار حيطان ارض اقدام قدم صخور جبال اشجار فروع اغصان شجر |
 | عاريات (noun mode) | الياف سلك اسلاك جدران اشجار فروع اغصان |
 | نودز (noun mode) | شبكه كلاستر سيرفر سيرفرات خوادم بلوك بلوكتشين بلوكشين عقد عقده جراف شجره كود برمجه خوارزميه كمبيوتر حواسيب داتا بيانات بايثون جافا وصل بيتوصلوا ببعض خلايا عصبيه استيراد اورج رسومي |
-| kos | theta sin cos tan |
+| مهبل (corroboration-only · noun mode) | — |
+| العضو الذكري (corroboration-only) | — |
+| عضو ذكري (corroboration-only) | — |
+| عضوي الذكري (corroboration-only) | — |
+| عضوه الذكري (corroboration-only) | — |
+| عضوك الذكري (corroboration-only) | — |
+| العضو التناسلي (corroboration-only) | — |
+| عضو تناسلي (corroboration-only) | — |
+| عضوي التناسلي (corroboration-only) | — |
+| عضوه التناسلي (corroboration-only) | — |
+| الاعضاء التناسليه (corroboration-only) | — |
+| اعضاء تناسليه (corroboration-only) | — |
+| اعضائي التناسليه (corroboration-only) | — |
+| الاعضاء الحميمه (corroboration-only) | — |
+| المنطقه الحميمه (corroboration-only) | — |
+| منطقه حميمه (corroboration-only) | — |
+| المناطق الحميمه (corroboration-only) | — |
+| المنطقه الحساسه (corroboration-only) | — |
+| خصيه (corroboration-only) | — |
+| خصيتان (corroboration-only) | — |
+| كيس الصفن (corroboration-only) | — |
+| حشفه (corroboration-only · noun mode) | — |
+| اثداء (noun mode) | [clinical-ar] |
+| قلفه (corroboration-only · noun mode) | — |
+| عانه (corroboration-only · noun mode) | — |
+| موخره (noun mode) | [clinical-ar] سياره السياره عربيه طائره الطائره قطار سفينه حافله اتوبيس الصف الطابور الجيش القافله الموكب الترتيب جدول الدوري المركز الفريق المنتخب الملعب القائمه الركب الراس الجمجمه الدماغ الشاحنه المركبه حقنه العضل المسرح القاعه الطائرات القوات راس الصداره حلاقه الابط الابطين الدبوس حلت احتلت جاءت تذيلت الدول الترتيب الاكواع الركب الفخذين |
+| نهود (noun mode) | السودان كردفان مدينه ولايه |
+| ملابس مثيره | للجدل الجدل جدل للاهتمام للسخريه للانتباه للاعجاب للدهشه |
+| مهبل صناعي | [clinical-ar] ترميم تجميل |
+| منشط جنسي | [clinical-ar] القذف اضرار اضراره ضبط مصادره مغشوشه مجهوله المصدر هيئه الدواء وزاره |
+| منشطات جنسيه | [clinical-ar] القذف اضرار اضراره ضبط مصادره مغشوشه مجهوله المصدر هيئه الدواء وزاره |
+| هزاز (corroboration-only · noun mode) | — |
 | root ن ي ك | — (no rule) |
 | root ش ر م ط | — (no rule) |
 | root ل ح س | جزم جزمه اقدام رجلين حذاء بياده كلامه كلام وعده وعوده مخه دماغه عقله "ايس كريم" جيلاتي بسكوت شيكولاته ملعقه صحن طبق كلب قطه القطه الكلب اصابع صوابع عسل مربي |
@@ -571,6 +651,147 @@ collapsed spellings with affixes (بتتفرج → بت + فرج), leetspeak on 
 1–2 character tokens (717 ~ tit, 5M ~ sm), Egyptian attached datives لي/لك/لها
 (العقلي "mental" = ا + لعق + لي, بناكلها "we eat it" = ب + ناك + لها), and the root
 ه ي ج (هيجي/هاجي "will come" everywhere).
+
+### Coverage expansion: glued compounds, anatomy, adult clothing, sex toys
+
+Four additions on top of the same machinery (context rules, morphology, corpus
+validation). Everything is generated by `tools/build_keyword_list.py`; exact
+term lists and companions are in the list file and in the table above.
+
+#### 1. Glued compounds (`@fuse`)
+
+"كسمك" never matched: كس is a 2-letter entry, which only takes the short, safe
+suffix set, and no compound entry existed. Rather than listing spellings one by
+one, a new directive generates whole families:
+
+```
+@fuse كس طيز > ام م اخت خت خالت عمت مرات ست اهل ابو دين عرض
+@fuse يا ابنال بنتال يابنال يابنتال > متناك متناكه شرموط شرموطه منيوك منيوكه قحبه عاهر عاهره مومس لبوه
+@fuse kos koss kus kuss > om omm um omk umk okht o5t ekht e5t ukht ahl
+@fuse cum cock dick pussy cunt tit tits boob boobs slut whore porn sex jizz twat clit anal butt > head face hole sucker licker lover slut whore fuck bag dump rag stain shot star slave doll toy tape cam chat pic vid video site plug ring pump cage machine swing shop …
+```
+
+Every front + back becomes an ordinary entry, so the usual morphology then applies:
+كسم → كسم, كسمك, كسمها, وكسمين; كسخت → كسختك; كسام → كسامك; كسعرض; يامتناكه;
+ابنالمتناكه; kosom → kosomak; kossokht → kossokhtak; cocksucker(s), cumslut,
+dickhead, pornstar, sextape, buttplug (also leetspeak: c0cksucker).
+- Contractions are listed as explicit backs (ام → م, اخت → خت). The ا is **never**
+  dropped from اب/ابو/اهل: كس + ب = كسب "gain".
+- The vocative يا is glued only onto a closed list of insult nouns. It is not a
+  general prefix, because يا + نيك = يانيك (the footballer Yannick Carrasco).
+- English and Franco-Arabic products were checked against a 370k-word English
+  dictionary (dwyl/english-words). Only kusum (a name and a tree) collided and is an
+  exception. cockhead and cockshot (archaic or technical words) were left in.
+- On the 1.9M-word original corpora the rule added 17 matches (كسم, كسمك, كسمها in
+  Egyptian tweets), all genuine fused insults.
+
+**Bug fixed on the way:** entries ending in ة were not found when a suffix turns
+ة into ت (قحبتك, عاهرتك, مؤخرتها). The affix rule allowed them, but the index
+lookup never mapped ت back to ة. `ArabicMorphology.stems` now does.
+
+#### 2. Genitals and private areas
+
+| Group | Terms | Rule |
+|---|---|---|
+| English slang, no innocent sense | cameltoe, nutsack, ballsack, coochie, vajayjay, punani, poonani, minge (+ existing cock, dick, pussy, cunt, twat, clit, tits, titties, schlong, quim…) | always match |
+| English slang with a homonym | pecker, knob, muff, cooter, hooters, knockers, "family jewels"; booty | context rule (woodpecker; door/volume knob; ear muff; turtle; restaurant/owls; door knockers; heirloom jewellery); booty is corroboration-only (fit talk in clothing reviews, pirate booty) |
+| English formal / body words | breasts, buttocks (new); penis, vagina, vulva, clitoris, genitals, nipple(s), anal, anus, rectum, boob(s), butt (existing, now ruled) | **clinical** companions (doctor, symptoms, infection, pain, rash, discharge…); body/clothing words also get **clothing** companions (bra, fit, size, jeans…) |
+| English clinical vocabulary | testicle, scrotum, foreskin, glans, labia, genitalia, vaginal, areola, pubic, "private parts" | **corroboration-only** (`?`) |
+| Arabic slang | طياز, ازبار, خصاوي, نهدها, نهديها, نهداها, نهودها, نهود (+ existing كس, زب, زبر, طيز, بز, بزاز) | always match (نهود: Sudanese town En Nahud context) |
+| Arabic formal | مؤخرة (noun mode), أثداء; قضيب, شرج, ثدي, بظر (existing, now with clinical companions) | clinical companions; مؤخرة also rankings (في المؤخرة, الترتيب), vehicles, the back of the head |
+| Arabic clinical vocabulary | مهبل, خصية, خصيتان, كيس الصفن, حشفة, قلفة, عانة, العضو الذكري/التناسلي (+ possessive forms), الأعضاء التناسلية, المنطقة الحميمة/الحساسة | **corroboration-only** |
+
+Why corroboration-only for clinical vocabulary: on the medical corpora these
+words are overwhelmingly clinical, and often with no clinical *word* nearby ("حجم
+الخصية اليسرى أكبر من اليمنى", "testicle pain"). Explicit text almost always uses
+slang. When a formal word does appear in explicit text, it usually has an
+unambiguous term in the same sentence, so it still counts ("كسها ومهبلها").
+
+**Tried and dropped, or not added** (an everyday sense dominates):
+
+| Term | Reason |
+|---|---|
+| dong | Chinese/Vietnamese name (Zheng Yu Dong) and a currency |
+| fanny | first name (Fanny Price in the literature corpus); "fanny pack" |
+| jugs | ordinary containers ("ritual jugs") |
+| اير (Levantine) | ف + اير = فاير "fire"; إير in names (Air France, AirPods, "ذا إير" restaurant) |
+| عير (Levantine) | typo of غير ("تويتر عير فيسبوك"); Egyptian عيرة "fake" |
+| bare نهد | نهدى/نهدي "we gift / calm down"; only possessive forms kept |
+| wang, johnson, member, package, junk, tool, rod, meat, wiener, balls, nuts, rack, melons, bush | everyday words or names |
+| prick, arse, bum | generic insults (excluded like "asshole") |
+| taint, gooch, shaft, beaver, manhood, hymen, penile, perineum | ordinary or purely clinical words |
+| بتاعي/بتاعك, صدرها | "my thing" and "her chest": far too generic |
+| شفرات (labia) | "blades"; covered by المهبل in "شفرات المهبل" |
+
+#### 3. Adult and sexual clothing
+
+Only items and phrasing specific to a sexual context are added:
+- **English:** crotchless, edible underwear/panties, peekaboo / open cup / cupless
+  bra, nipple tassels/pasties, bodystocking, latex catsuit, gimp suit/mask, fetish
+  wear/outfit/gear, bondage gear, assless chaps, stripper heels/outfit.
+- **Arabic:** ملابس داخلية مثيرة/شفافة, ملابس/قمصان نوم مثيرة, قميص نوم مثير/شفاف,
+  لانجري مثير, ملابس/لبس/بدلة/قميص إغراء, فتيش and ملابس فتيش.
+- **Rules:** فتيش is in noun mode, so ت + فتيش = تفتيش "inspection" is not matched.
+  ملابس مثيرة has a context rule for "مثيرة للجدل" (controversial clothing in news).
+
+**Borderline — not added, for you to decide:**
+
+| Term | Why it is borderline |
+|---|---|
+| lingerie | sold in ordinary shops; fashion and retail news |
+| thong, g-string | ordinary underwear styles; a G string is also a violin or guitar string; thong = flip-flop |
+| garter, garter belt, suspenders | wedding garter; suspenders = braces (US) |
+| babydoll, negligee, chemise, teddy | sleepwear and dress styles ("babydoll dress"); teddy bear |
+| corset, bustier, bralette | mainstream fashion; a corset is also a medical back brace |
+| fishnets, stockings, sheer, see-through | hosiery and fabric words in clothing reviews |
+| micro bikini | swimwear; revealing but not specific to a sexual context |
+| لانجري | ordinary lingerie-shop vocabulary |
+| قميص نوم, بيبي دول | everyday sleepwear (also bridal trousseau talk) |
+| كلوت فتلة, اندر فتلة | thong-cut underwear, an ordinary style |
+| بدلة رقص | belly-dance costume: performances, weddings, classes |
+| ملابس فاضحة | "indecent clothing", mostly in news and dress-code debates |
+
+Existing generic underwear and colour words exposed by the clothing-review
+corpus now have clothing/laundry companions: panty, panties, nude (a colour),
+s&m (sizes "S & M"). Other shopping fixes: "tees" was matching Arabizi teez
+through the spelling key, and booties (ankle boots), muffin ("muffin top") and
+knobby are now exceptions.
+
+#### 4. Sex toys and sexual aids
+
+- **English:** sex toy, sextoy, butt/anal plug, anal beads, fleshlight, cock/penis
+  ring, penis extender, love/vibrating egg, rabbit/bullet/wand vibrator, sex/love
+  doll, blow up doll, realdoll, masturbator, pocket pussy, ben wa balls, nipple
+  clamps, clit clamp, chastity/cock cage, sex swing, sex/fucking machine (+ existing
+  dildo, vibrator, strap on, ball gag, bullet vibe).
+- **Arabic:** ألعاب/لعبة/أدوات جنسية, قضيب/زب/زبر/كس صناعي, دمية/دمى جنسية, ديلدو,
+  فايبريتور, فلشلايت, هزاز جنسي, منشط جنسي, منشطات جنسية.
+- **Context rules:**
+  - vibrator: phone/haptic motor, concrete vibrator, clinical.
+  - penis pump: erectile dysfunction, clinical.
+  - prostate massager, kegel balls: pelvic floor, physiotherapy, clinical.
+  - adult toys: LEGO, board games, collectibles.
+  - مهبل صناعي: reconstructive surgery.
+  - منشط جنسي: seizure and counterfeit-drug news, clinical.
+  - هزاز alone is corroboration-only (a phone's vibrate mode, كرسي هزاز "rocking
+    chair"); the phrase هزاز جنسي always matches.
+- **Borderline — not added:**
+  - lube, lubricant, مزلق, جل مزلق: bike and car lubricant, medical dryness;
+    Egyptian مزلقان = level crossing.
+  - magic wand: a toy wand, or a massager sold for muscles.
+  - aphrodisiac, spanish fly: food and folklore writing.
+
+#### Decisions for you (measured, not applied)
+
+- **Activity words in health text.** Most remaining alerts on the medical corpora
+  come from sex, intercourse, sexual, semen, masturbation, ejaculation, جماع,
+  احتلام and شهوة. These are activity words, outside the anatomy scope of this change.
+  Giving them the same clinical companions would cut alerting lines in the medical
+  samples: Arabic 536 → 294, English 3,368 → 2,368. It is a policy call, because
+  reading sexual-health Q&A about masturbation may be exactly what you want to know
+  about.
+- **"sexy" (83) and "busty" (46) in clothing reviews** ("a sexy strapless dress",
+  "great for busty women"). These are existing entries and are unchanged.
 
 ### Validation on ordinary-text corpora
 
@@ -617,6 +838,54 @@ positive) or a genuine sexual/explicit use.
   كس as a maths variable in machine-translated code, names like "Dick", tech uses
   of نودز in a different sentence from the tech words, Viagra/Playboy news.
 
+**Coverage expansion: validation.** The same check was re-run on the corpora above
+and on about 1.4M words of new text chosen where the new terms have innocent uses:
+
+| Corpus (Hugging Face) | Kind | Words |
+|---|---|---|
+| `Ahmed-Selem/Shifaa_Arabic_Medical_Consultations` (sample; targeted: reproductive and sexual health, gynaecology, plus other specialties) | Arabic medical Q&A | 382k |
+| `lavita/ChatDoctor-HealthCareMagic-100k` (sample; targeted: questions naming genital, breast or anal anatomy, plus others) | English medical Q&A | 420k |
+| `saattrupdan/womens-clothing-ecommerce-reviews` (all intimates, sleep, lounge, swim and legwear, plus a sample) | English clothing reviews | 283k |
+| `Ruqiya/Arabic_Reviews_of_SHEIN` | Arabic clothing-shop reviews | 22k |
+| `IbrahimAmin/egyptian-arabic-fake-reviews` (translated reviews, sample) | Egyptian-Arabic reviews | 150k |
+| `arbml/arabic_100k_reviews` (sample) | Arabic hotel, book and product reviews | 150k |
+
+- **Original 1.9M words:** 20 matches added, none removed. 18 are genuine: 17 fused
+  insults (كسم/كسمك/كسمها) and the insult مؤخرتك. 2 are innocent: a joke about breast
+  milk (بنهودي) and the idiom "إخفاء مؤخرته".
+- **Medical and shopping text, lines that alert, before → after:**
+
+  | Corpus | Lines | Before | After |
+  |---|---|---|---|
+  | Arabic medical | 12,432 | 798 | 536 |
+  | English medical | 4,474 consultations | 3,858 | 3,368 |
+  | English clothing reviews | 5,399 | 284 | 165 |
+  | Arabic shopping (SHEIN) | 2,414 | 0 | 0 |
+  | Arabic reviews | 2,683 | 25 | 25 |
+  | Egyptian reviews | 1,959 | 8 | 9 |
+
+  The one new Egyptian-review line is "شهوته لساندويتش" ("his craving for a
+  sandwich"), found through the ة→ت fix.
+- **Anatomy terms in the medical samples, active matches before → after:**
+  - English: penis 614 → 377, vagina 200 → 113, nipple(s) 112 → 27, anal 81 → 20,
+    anus 80 → 34.
+  - Arabic: قضيب 263 → 73, شرج 75 → 12.
+  - The remaining ones are mostly in sentences that also contain an unambiguous
+    explicit term (masturbation, anal sex…), which overrides suppression. The
+    activity words themselves are unchanged (see *Decisions for you*).
+- **Across the new corpora:** 945 active matches removed, all clinical or shopping
+  uses. 74 added:
+  - corroboration-only clinical words next to an explicit term (vaginal, testicle,
+    foreskin…);
+  - "breasts" in symptom descriptions with no clinical word nearby (16);
+  - a few Arabic مؤخرة and خصية uses.
+- **Clothing and toy terms:** no matches on about 600k words of shopping and review
+  text, so no false positives. That text has no genuine uses either, so recall rests
+  on the unit tests.
+- **Caveat:** for these additions the matches of both halves were read while tuning,
+  so these numbers are not held-out. The dev/test split files are kept, so reruns
+  are reproducible.
+
 ### Known limitations
 
 - **View-once media with no text at all** is not helped by this stage (accepted;
@@ -648,8 +917,10 @@ positive) or a genuine sexual/explicit use.
   simulation in `TextScanTest`).
 - **Keyword list is a separate bundled asset** — `assets/text/keywords.txt`, parsed
   at runtime by `KeywordList`; no code change needed to edit it.
-- **Matcher unit-testable with plain strings** — `KeywordMatcherTest` (17 tests)
-  and `KeywordRulesTest` (22 tests: context rules, restored terms, morphology).
+- **Matcher unit-testable with plain strings** — `KeywordMatcherTest` (17 tests),
+  `KeywordRulesTest` (22 tests: context rules, restored terms, morphology) and
+  `KeywordCoverageTest` (14 tests: glued compounds, anatomy, adult clothing, sex
+  toys — matched and correctly-excluded cases).
 - **No obvious false matches on ordinary conversation** —
   `ordinaryConversationHasNoFalseMatches` (English, Egyptian Arabic, Franco-Arabic,
   news text, and every false positive found by the corpus check) plus the corpus
@@ -669,7 +940,8 @@ positive) or a genuine sexual/explicit use.
 - **Log retention:** `LogFilesTest` (diagnostics survive main-log rotation).
 - **Text scanning:** `KeywordMatcherTest` (matcher + real list + ordinary-text
   spot-check), `KeywordRulesTest` (context rules, restored terms, Arabic/English
-  morphology — triggered and still-suppressed cases), `TextScanTest` (extraction,
+  morphology — triggered and still-suppressed cases), `KeywordCoverageTest` (glued
+  compounds, anatomy, adult clothing, sex toys), `TextScanTest` (extraction,
   trigger/debounce, fingerprints, lingering-chat simulation) (pure JVM).
 - **Corpus evaluation:** `GUARDIAN_CORPUS_DIR=/path/to/corpora ./gradlew
   testDebugUnitTest --tests '*CorpusEvaluationTest'` → `matches.tsv`.

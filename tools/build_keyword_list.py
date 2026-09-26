@@ -168,7 +168,9 @@ WEAK = {"فرج", "مبادل", "حلمة", "suck", "sucks",
         "xx", "شاذ", "بيضان"}
 
 AR_NOUN_MODE = {"فرج", "جماع", "ثدي", "شرج", "مبادل", "شهوة", "لبوة", "حلمة", "بيضان", "خنثي",
-                "قضيب", "نودز", "عاريه", "عاريات", "بورن", "زبر"}
+                "قضيب", "نودز", "عاريه", "عاريات", "بورن", "زبر",
+                # coverage expansion: nouns whose letters also form verbs/other words
+                "مهبل", "حشفه", "اثداء", "قلفه", "عانه", "موخره", "نهود", "فتيش", "هزاز"}
 
 AR_CONTEXT["kos"] = "theta sin cos tan"
 AR_CONTEXT["بورنو"] = "ولايه نيجيريا مايدوغوري يوب بوكو حرام"  # Borno state, Nigeria  # Arabizi كس; also a variable name in maths code
@@ -236,6 +238,211 @@ EXCEPTIONS = [
 ]
 
 
+# =====================================================================================
+# Coverage expansion (README "Stage 4 — coverage expansion"): fused compounds,
+# genital / private-area terms, adult clothing, sex toys. Validated on the earlier
+# ordinary-text corpora plus medical consultations and clothing/shopping reviews.
+# =====================================================================================
+
+# ---- Innocent-context companion sets shared by several terms ----
+# Clinical / health discussion (a patient describing symptoms, a doctor answering).
+MED_EN = ("doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic "
+          "hospital medical medically medicine medication medications meds treatment treatments treat treated "
+          "ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis "
+          "hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump "
+          "lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested "
+          "scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical "
+          "circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge "
+          "bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis "
+          "balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney "
+          "prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods "
+          "menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient")
+MED_AR = ("طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل "
+          "اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات "
+          "افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض "
+          "امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض "
+          "الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان "
+          "الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض")
+# Clothing / shopping / laundry (fit and coverage talk in product reviews).
+CLOTH_EN = ("dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits "
+            "fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash "
+            "washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist "
+            "waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms "
+            "flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding "
+            "padded lined support strapless thong thighs sagging photo model")
+
+# ---- 1. Glued compounds (`@fuse fronts > backs`): every front + every back is an entry,
+# then the usual affixes apply (كسم + ك = كسمك). Contracted spellings are explicit backs
+# (ام → م, اخت → خت); ا is never dropped from اب/ابو/اهل (كس + ب = كسب "gain").
+FUSE = [
+    # كس/طيز + kin / honour words: كس امك, كسمك, كسم, كسمين, كسختك, كسامك, كسعرض…
+    "كس طيز > ام م اخت خت خالت عمت مرات ست اهل ابو دين عرض",
+    # vocative يا and ابن/بنت + ال glued onto an explicit noun: يامتناكه, ياشرموطه, ابنالمتناكه…
+    "يا ابنال بنتال يابنال يابنتال > متناك متناكه شرموط شرموطه منيوك منيوكه قحبه عاهر عاهره مومس لبوه",
+    # Franco-Arabic: kosomak, kossomak, kosokhtak, kuss ommak…
+    "kos koss kus kuss > om omm um omk umk okht o5t ekht e5t ukht ahl",
+    # English: explicit core + a noun (cumslut, cocksucker, dickhead, pornstar, sextape, buttplug…)
+    "cum cock dick pussy cunt tit tits boob boobs slut whore porn sex jizz twat clit anal butt > "
+    "head heads face hole holes sucker sucking licker licking lover slut whore fuck fucker fucking bag dump "
+    "dumpster bucket rag stain shot star slave doll toy tape cam chat pic pics vid video site plug ring pump "
+    "cage machine swing shop",
+]
+
+# ---- 2. Genitals / private areas ----
+# Formal / anatomical terms get the clinical companions (so a health question doesn't
+# alert); slang has no innocent sense and matches unconditionally.
+EN_ANATOMY = {
+    # formal (clinical rule)
+    "vaginal": MED_EN, "testicle": MED_EN, "scrotum": MED_EN, "labia": MED_EN, "foreskin": MED_EN,
+    "genitalia": MED_EN, "glans": MED_EN, "areola": MED_EN + " breastfeeding feeding baby latch",
+    "private parts": MED_EN,
+    "pubic": MED_EN + " shave shaving shaved wax waxing trim trimming laser removal lice bone",
+    "breasts": MED_EN + " " + CLOTH_EN + " chest armpit armpits sweat sweating veins tender tenderness nursing cramps cramping cup cups exposed large heavy heaviness chicken turkey duck grilled roasted recipe breastfeeding feeding "
+               "milk pump implants implant mammogram screening",
+    "buttocks": MED_EN + " " + CLOTH_EN + " injection injections muscle muscles exercise squats glutes",
+    # slang
+    "cameltoe": "", "nutsack": "", "ballsack": "", "coochie": "", "vajayjay": "", "punani": "",
+    "poonani": "", "minge": "",
+    # slang with an everyday homonym
+    "pecker": "wood woodpecker bird birds keep",
+    "knob": "door doors drawer drawers volume radio stove oven cabinet handle turn turned button gear dial",
+    "muff": "ear earmuff earmuffs hand hands fur winter warm warmer",
+    "cooter": "turtle turtles river",
+    "hooters": "restaurant restaurants wings owl owls bar waitress",
+    "booty": "pirate pirates treasure loot war plunder captain ship " + CLOTH_EN,
+    "knockers": "door doors brass iron",
+    "family jewels": "grandmother grandma mother heirloom inherited ring rings necklace diamond diamonds stolen gold",
+}
+AR_ANATOMY = {
+    # formal (clinical rule)
+    "مهبل": MED_AR, "العضو الذكري": MED_AR, "عضو ذكري": MED_AR, "عضوي الذكري": MED_AR,
+    "عضوه الذكري": MED_AR, "عضوك الذكري": MED_AR, "العضو التناسلي": MED_AR, "عضو تناسلي": MED_AR,
+    "عضوي التناسلي": MED_AR, "عضوه التناسلي": MED_AR, "الاعضاء التناسليه": MED_AR,
+    "اعضاء تناسليه": MED_AR, "اعضائي التناسليه": MED_AR, "الاعضاء الحميمه": MED_AR,
+    "المنطقه الحميمه": MED_AR, "منطقه حميمه": MED_AR, "المناطق الحميمه": MED_AR,
+    "المنطقه الحساسه": MED_AR + " عسكريه امنيه حدود حدوديه سياسيه الشرق استراتيجيه نزاع جيش الجيش مياه اقليم دوليه",
+    "خصيه": MED_AR, "خصيتان": MED_AR, "كيس الصفن": MED_AR, "حشفه": MED_AR, "اثداء": MED_AR,
+    "قلفه": MED_AR,
+    "عانه": MED_AR + " حلق ازاله سنه الفطره نتف ليزر حكم الابط شعر عظم",
+    "موخره": MED_AR + " سياره السياره عربيه طائره الطائره قطار سفينه حافله اتوبيس الصف الطابور الجيش "
+             "القافله الموكب الترتيب جدول الدوري المركز الفريق المنتخب الملعب القائمه الركب الراس الجمجمه "
+             "الدماغ الشاحنه المركبه حقنه العضل المسرح القاعه الطائرات القوات راس الصداره حلاقه الابط الابطين "
+             "الدبوس حلت احتلت جاءت تذيلت الدول الترتيب الاكواع الركب الفخذين",
+    "نهدها": "", "نهديها": "", "نهداها": "", "نهودها": "", "نهود": "السودان كردفان مدينه ولايه",
+    # Egyptian / Levantine slang
+    "طياز": "", "ازبار": "", "خصاوي": "",
+}
+
+# ---- 3. Adult / sexual clothing (only items and phrasing specific to that context) ----
+EN_CLOTHING = {
+    "crotchless": "", "edible underwear": "", "edible panties": "", "peekaboo bra": "", "open cup bra": "",
+    "cupless bra": "", "nipple tassels": "", "nipple pasties": "", "bodystocking": "", "body stocking": "",
+    "latex catsuit": "", "gimp suit": "", "gimp mask": "", "fetish wear": "", "fetish outfit": "",
+    "fetish gear": "", "bondage gear": "", "assless chaps": "", "stripper heels": "", "stripper outfit": "",
+}
+AR_CLOTHING = {
+    "ملابس داخليه مثيره": "", "ملابس داخليه شفافه": "", "ملابس نوم مثيره": "", "قميص نوم مثير": "",
+    "قميص نوم شفاف": "", "قمصان نوم مثيره": "", "لانجري مثير": "", "ملابس اغراء": "", "لبس اغراء": "",
+    "بدله اغراء": "", "قميص اغراء": "", "ملابس فتيش": "", "فتيش": "",
+    "ملابس مثيره": "للجدل الجدل جدل للاهتمام للسخريه للانتباه للاعجاب للدهشه",
+}
+# Borderline — NOT added; listed in the README for the owner to decide. Everyday
+# fashion / underwear vocabulary or with a strong non-sexual sense.
+BORDERLINE_CLOTHING = {
+    "lingerie": "sold in ordinary shops; fashion news (e.g. store/brand reports)",
+    "thong / g-string": "ordinary underwear styles; 'G string' is also a violin/guitar string; thong = flip-flop",
+    "garter / garter belt / suspenders": "wedding garter; suspenders = braces (US)",
+    "babydoll / negligee / chemise / teddy": "sleepwear and dress styles ('babydoll dress'); teddy = teddy bear",
+    "corset / bustier / bralette": "mainstream fashion; corset is also a medical back brace",
+    "fishnet(s) / stockings / sheer / see-through": "hosiery and fabric descriptions in clothing reviews",
+    "micro bikini": "swimwear; revealing but not specific to sexual context",
+    "لانجري": "ordinary lingerie-shop vocabulary in Arabic shopping text",
+    "قميص نوم / بيبي دول": "nightgown / babydoll: everyday sleepwear (also bridal trousseau talk)",
+    "كلوت فتله / اندر فتله": "thong-cut underwear: ordinary underwear style",
+    "بدله رقص": "belly-dance costume: performances, weddings, dance classes",
+    "ملابس فاضحه": "'indecent clothing' mostly in news/morality debates about dress codes",
+}
+
+# ---- 4. Sex toys / sexual aids ----
+EN_TOYS = {
+    "sex toy": "", "sextoy": "", "butt plug": "", "anal beads": "", "anal plug": "", "fleshlight": "",
+    "cock ring": "", "penis ring": "", "penis extender": "", "love egg": "", "vibrating egg": "",
+    "rabbit vibrator": "", "bullet vibrator": "", "wand vibrator": "", "sex doll": "", "love doll": "",
+    "blow up doll": "", "blowup doll": "", "realdoll": "", "masturbator": "", "pocket pussy": "",
+    "ben wa balls": "", "nipple clamps": "", "clit clamp": "", "chastity cage": "", "cock cage": "",
+    "sex swing": "", "sex machine": "", "fucking machine": "", "fuck machine": "",
+    "penis pump": MED_EN + " erectile dysfunction ed",
+    "prostate massager": MED_EN,
+    "kegel balls": MED_EN + " pelvic floor postpartum physiotherapy physio exercise exercises incontinence",
+    "adult toys": "lego puzzle puzzles board game games collectible collectibles figures action figure",
+    "vibrator": MED_EN + " phone phones motor motors haptic concrete massage massager",
+}
+AR_TOYS = {
+    "العاب جنسيه": "", "لعبه جنسيه": "", "لعب جنسيه": "", "ادوات جنسيه": "", "اداه جنسيه": "",
+    "قضيب صناعي": "", "زب صناعي": "", "زبر صناعي": "", "كس صناعي": "", "دميه جنسيه": "", "دمي جنسيه": "",
+    "ديلدو": "", "فايبريتور": "", "فيبريتور": "", "فلشلايت": "", "هزاز جنسي": "",
+    "مهبل صناعي": MED_AR + " ترميم تجميل",
+    "منشط جنسي": MED_AR + " القذف اضرار اضراره ضبط مصادره مغشوشه مجهوله المصدر هيئه الدواء وزاره",
+    "منشطات جنسيه": MED_AR + " القذف اضرار اضراره ضبط مصادره مغشوشه مجهوله المصدر هيئه الدواء وزاره",
+}
+AR_TOYS_WEAK = {"هزاز"}
+EN_WEAK_SLANG = {"booty"}  # mostly body/fit talk in clothing reviews ("hung below my booty")  # also a phone's vibrate mode and a rocking chair (كرسي هزاز)
+BORDERLINE_TOYS = {
+    "lube / lubricant / مزلق / جل مزلق": "bike/car lubricant; medical (dryness) use; مزلق = railway crossing",
+    "magic wand": "fairy/magician wand; the massager of that name is also sold for muscles",
+    "aphrodisiac / spanish fly": "food and news writing (oysters, folklore)",
+}
+
+# Existing terms that now take clinical / clothing context rules (anatomy with a
+# common health or shopping sense). Activity words (sex, intercourse, masturbation,
+# ejaculation, semen, جماع, احتلام) are unchanged: see README "decisions for the owner".
+ANATOMY_CONTEXT_EN = {
+    "penis": MED_EN, "vagina": MED_EN, "vulva": MED_EN, "clitoris": MED_EN, "genitals": MED_EN,
+    "nipple": MED_EN + " " + CLOTH_EN + " breastfeeding feeding baby latch bottle pacifier",
+    "nipples": MED_EN + " " + CLOTH_EN + " breastfeeding feeding baby latch bottle pacifier",
+    "anal": MED_EN + " fissure fissures fistula canal gland glands sphincter hemorrhoids piles "
+            "retentive colorectal stool stools",
+    "boob": CLOTH_EN + " " + MED_EN, "boobs": CLOTH_EN + " " + MED_EN,
+    # generic underwear / colour words exposed by the clothing-review corpus
+    "panty": CLOTH_EN + " liner liners", "panties": CLOTH_EN + " liner liners",
+    "nude": CLOTH_EN + " heels pumps lipstick tone beige lining neutral hosiery tights nail polish palette",
+    "s&m": "size sizes small medium large xs xl fit fits ordered order petite",
+}
+# Formal clinical vocabulary: on the medical corpora its uses are overwhelmingly clinical
+# and often have no clinical *word* nearby ("حجم الخصية اليسرى أكبر من اليمنى"), so these
+# are corroboration-only (`?`): they count alongside an unambiguous explicit term.
+WEAK_CLINICAL = {"testicle", "scrotum", "foreskin", "glans", "labia", "genitalia", "vaginal", "areola", "pubic",
+                 "private parts", "خصيه", "خصيتان", "كيس الصفن", "حشفه", "قلفه", "عانه", "مهبل",
+                 "العضو الذكري", "عضو ذكري", "عضوي الذكري", "عضوه الذكري", "عضوك الذكري", "العضو التناسلي",
+                 "عضو تناسلي", "عضوي التناسلي", "عضوه التناسلي", "الاعضاء التناسليه", "اعضاء تناسليه",
+                 "اعضائي التناسليه", "الاعضاء الحميمه", "المنطقه الحميمه", "منطقه حميمه", "المناطق الحميمه",
+                 "المنطقه الحساسه"}
+# Tried and dropped on the corpora (README): an everyday sense dominates.
+REJECTED_ANATOMY = {
+    "dong": "Chinese/Vietnamese name (Zheng Yu Dong) and currency",
+    "fanny": "first name (Fanny Price in the literature corpus); 'fanny pack'",
+    "jugs": "ordinary containers ('ritual jugs')",
+    "اير (Levantine)": "ف + اير = فاير 'fire'; إير in restaurant/airline names (Air France, AirPods)",
+    "عير (Levantine)": "typo of غير ('تويتر عير فيسبوك'); Egyptian عيرة 'fake'",
+    "نهد (bare)": "نهدي 'we gift / calm down' (normalised ى→ي); only نهدها/نهديها/نهداها/نهودها kept",
+    "wang / johnson / member / package / junk / tool / rod / meat / wiener / balls / nuts / rack / melons / bush":
+        "everyday words or names; the sexual sense is a minority use",
+    "prick / arse / bum": "generic insults (excluded like 'asshole')",
+    "taint / gooch / shaft / beaver / manhood / hymen / penile / perineum": "ordinary or purely clinical words",
+    "بتاعي / بتاعك / صدرها": "Egyptian 'my thing' and 'her chest' — far too generic",
+    "شفرات (labia)": "'blades' (razor blades); covered by المهبل in 'شفرات المهبل'",
+}
+ANATOMY_CONTEXT_AR = {"قضيب": MED_AR, "شرج": MED_AR, "ثدي": MED_AR, "بظر": MED_AR + " الاناث"}
+EXCEPTIONS += [
+    "booties", "bootie",     # ankle boots (booty + ies)
+    "muffin", "muffins",
+    "knobby",                # "knobby knees" (knob + y)
+    "kusum",                 # a name / tree (kus + um, Franco-Arabic fuse)     # muff + in ("muffin top" in clothing reviews)
+    "tees",      # t-shirts: spelling key of Arabizi "teez" (طيز)
+    "butthead",  # Beavis and Butt-Head (butt + head)
+]
+
+
 def fetch(name: str):
     with urllib.request.urlopen(f"{BASE}/{name}") as r:
         return [l.strip() for l in r.read().decode("utf-8").splitlines() if l.strip()]
@@ -268,8 +475,39 @@ def main():
         if w not in seen:
             seen.add(w)
             ar_extra.append(w)
-    missing = [t for t in EN_CONTEXT if t not in en_kept + en_extra] + \
-              [t for t in AR_CONTEXT if t not in ar_kept + ar_extra]
+    # Coverage expansion: new sections, and context rules for existing anatomy terms.
+    def extend(rules, term, more):
+        rules[term] = (rules.get(term, "") + " " + more).strip()
+    for t, c in ANATOMY_CONTEXT_EN.items():
+        extend(EN_CONTEXT, t, c)
+    for t in ("anus", "rectum"):
+        extend(EN_CONTEXT, t, MED_EN)
+    extend(EN_CONTEXT, "butt", CLOTH_EN + " " + MED_EN)
+    extend(EN_CONTEXT, "snatch", "up")  # "snatched it up" (bought quickly) in shopping reviews
+    for t, c in ANATOMY_CONTEXT_AR.items():
+        extend(AR_CONTEXT, t, c)
+    sections = []
+    listed = set(en_kept + en_extra + ar_kept + ar_extra)
+    for title, rules in [("English: genitals / private areas", EN_ANATOMY),
+                         ("Arabic: genitals / private areas", AR_ANATOMY),
+                         ("English: adult clothing", EN_CLOTHING),
+                         ("Arabic: adult clothing", AR_CLOTHING),
+                         ("English: sex toys / sexual aids", EN_TOYS),
+                         ("Arabic: sex toys / sexual aids", AR_TOYS)]:
+        target = EN_CONTEXT if not any("\u0600" <= ch <= "\u06ff" for ch in title + "".join(rules)) else AR_CONTEXT
+        terms = []
+        for t, c in rules.items():
+            if c:
+                extend(target, t, c)
+            if t not in listed:
+                listed.add(t)
+                terms.append(t)
+        sections.append((title, terms, target))
+    for t in AR_TOYS_WEAK | WEAK_CLINICAL | EN_WEAK_SLANG:
+        WEAK.add(t)
+    sections[-1][1].extend(sorted(AR_TOYS_WEAK))
+    missing = [t for t in EN_CONTEXT if t not in en_kept + en_extra and not any(t in s[1] for s in sections)] + \
+              [t for t in AR_CONTEXT if t not in ar_kept + ar_extra and not any(t in s[1] for s in sections)]
     assert not missing, f"context rules for terms not in the list: {missing}"
 
     lines = [
@@ -280,7 +518,9 @@ def main():
         "# Format: one word or phrase per line; '#' starts a comment; '!token' is an",
         "#   exception (a token that must never match); 'term ~ w1 w2 \"w 3\"' is a context",
         "#   rule (suppressed when a companion word is near it in the same sentence);",
-        "#   '@root ن ي ك' generates the root's derived forms. Case, diacritics, letter",
+        "#   '@root ن ي ك' generates the root's derived forms; '@fuse A B > C D' generates",
+        "#   glued compounds (AC AD BC BD); '?term' is corroboration-only; '=term' is",
+        "#   Arabic noun mode. Case, diacritics, letter",
         "#   forms, leetspeak, repeated/spaced/masked letters and affixes are handled by",
         "#   the matcher.",
         "",
@@ -296,6 +536,12 @@ def main():
         f"# --- Additions: Egyptian Arabic + Franco-Arabic ({len(ar_extra)}) ---",
         *[ctx(w, AR_CONTEXT) for w in ar_extra],
         "",
+        *[l for title, terms, rules in sections for l in
+          ["", f"# --- {title} ({len(terms)}) ---", *[ctx(w, rules) for w in terms]]],
+        "",
+        f"# --- Glued compounds ({len(FUSE)} rules): every front + back is an entry (then affixes) ---",
+        *[f"@fuse {f}" for f in FUSE],
+        "",
         f"# --- Arabic roots ({len(AR_ROOTS)}): derived forms generated by the matcher ---",
         *[(f"@root {r} ~ {c}" if c else f"@root {r}") for r, c in AR_ROOTS.items()],
         "",
@@ -309,7 +555,8 @@ def main():
     n_ctx = sum(1 for l in lines if " ~ " in l and not l.startswith("@root"))
     print(f"en kept {len(en_kept)}/{len(en)}, ar kept {len(ar_kept)}/{len(ar)}, "
           f"+{len(en_extra)} en, +{len(ar_extra)} ar/arabizi, {len(AR_ROOTS)} roots, "
-          f"{n_ctx} context rules, {len(EXCEPTIONS)} exceptions -> {OUT}")
+          f"{n_ctx} context rules, {len(FUSE)} fuse rules, {len(EXCEPTIONS)} exceptions, "
+          f"new sections {[len(t) for _, t, _ in sections]} -> {OUT}")
 
 
 if __name__ == "__main__":
