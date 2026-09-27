@@ -322,7 +322,8 @@ unchanged and still runs on every capture.
    sticker, photo or placeholder that stays on screen across captures is checked
    once, not every 1.5 s.
 8. **Verdict** (`FrameVerdict`): a frame is positive if the whole screen reaches
-   `NSFW_THRESHOLD` **or** any region reaches `REGION_THRESHOLD`. Confirmation
+   `NSFW_THRESHOLD` (**0.3**) **or** any region reaches `REGION_THRESHOLD` (**0.5**).
+   These are two independent thresholds (see *Region threshold decision*). Confirmation
    (2 positives within 7 s), cooldown and reactions are unchanged. When a region
    decided the verdict:
    - the review thumbnail is the region crop, not the whole screen;
@@ -347,13 +348,14 @@ wide) on a 1080×2400 chat-like screen. No explicit images were used.
   the gap region scanning closes.
 - **False-positive cost — an important tradeoff:** the model scores some ordinary
   photos high. Tennis players, baseball and children at home reached 0.9–1.0,
-  driven by *porn* and *sexy*. So with `REGION_THRESHOLD` = 0.3 (same as
-  full-screen), **54 of 400 (13.5%)** everyday people photos seen as a chat image
-  make a frame positive, against 3 of 400 via the whole-screen pass. A photo that
+  driven by *porn* and *sexy*. In the first version (`REGION_THRESHOLD` = 0.3, same
+  as full-screen), **54 of 400 (13.5%)** everyday people photos seen as a chat image
+  made a frame positive, against 3 of 400 via the whole-screen pass. At the final
+  0.5 it's 42 of 400. A photo that
   stays on screen for two captures then confirms. These photos already alert today
   when opened full-screen; region scanning makes small ones behave the same.
-  - At higher region thresholds: 0.5 → 42, 0.7 → 24, 0.9 → 14 of 400.
-  - `REGION_THRESHOLD` is separate from `NSFW_THRESHOLD` so you can raise it
+  - At other region thresholds: 0.3 → 54, 0.7 → 24, 0.9 → 14 of 400.
+  - `REGION_THRESHOLD` is separate from `NSFW_THRESHOLD`, so it can be changed
     without touching the whole-screen pass.
   - The earlier "max 0.18 on ordinary content" figure (below) came from a much
     smaller sample.
@@ -441,6 +443,38 @@ results are in the table. No explicit images were used.
     and the saved thumbnail show exactly which element or screen scored, if either
     happens again.
 
+#### Region threshold decision
+
+**Final: `REGION_THRESHOLD` = 0.5** (owner decision). The whole-screen
+`NSFW_THRESHOLD` stays unchanged at **0.3**; the two thresholds are independent.
+
+| Region threshold | COCO everyday people photos over it (of 400) | Rico app screens that would alert (of 1,504 with regions) |
+|---|---|---|
+| 0.3 | 54 (13.5%) | 73 |
+| **0.5 (chosen)** | **42 (10.5%)** | **59** |
+| 0.7 | 24 (6%) | 33 |
+| 0.9 | 14 (3.5%) | 21 |
+
+Why 0.5:
+- **The fixable part is fixed.** The app-switch reset, stale-crop (before/after
+  bounds, 1 s settle), blank-crop and UI-graphic fixes removed the false positives
+  that came from pipeline bugs. They are in place before this choice.
+- **What remains is the model.** It rates some ordinary photos of clothed people as
+  suggestive. A region is classified at the photo's own resolution, so it gets that
+  full rate. The whole screen dilutes small images, which is why the two paths need
+  different thresholds.
+- **0.5 is the most sensitive of the measured options** that cuts ordinary-photo
+  alerts: about a fifth fewer COCO photos (54 → 42) and app screens (73 → 59) than
+  0.3. A region counts once *sexy + porn + hentai* together hold at least half the
+  model's probability: suggestive or explicit is more likely than not. That is still
+  well below 0.7–0.9, which would drop about half of the ordinary-looking
+  high scorers along with clearly suggestive ones.
+- **What 0.5 gives up:** on the Rico screens, the cleavage, swimwear, tank-top and
+  shirtless images that ranked high mostly scored 0.5–1.0 and are still caught.
+  A few product shots of ordinary dresses scored 0.33–0.42 and no longer count.
+  On-device, the per-frame log (`regions=[…]`) shows where real content lands if
+  the value needs revisiting.
+
 ### Model: source and license
 
 | | |
@@ -463,9 +497,9 @@ results are in the table. No explicit images were used.
   accessibility nodes and have no media hint, such as some games or canvas-drawn
   web content, as well as regions under 64 dp and more than 3 per capture.
 - Region scanning makes small ordinary photos count like full-screen ones, including
-  the model's false positives on some sports and family photos (13.5% of a COCO
-  people sample at 0.3; not a pipeline bug — see *False-positive investigation*).
-  Tune `REGION_THRESHOLD`.
+  the model's false positives on some sports and family photos: 10.5% of a COCO
+  people sample at the chosen 0.5. This is not a pipeline bug (see *False-positive
+  investigation*); the choice is recorded in *Region threshold decision*.
 - Regions are skipped while the screen is changing: during scrolls (bounds differ
   between the before/after reads) and for 1 s after window changes. The whole-screen
   pass still runs.

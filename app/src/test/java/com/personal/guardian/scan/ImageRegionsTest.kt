@@ -295,8 +295,14 @@ class ImageRegionsTest {
     }
 
     @Test
-    fun defaultRegionThresholdMatchesTheWholeScreenOne() {
-        assertEquals(ScanConfig.NSFW_THRESHOLD, ScanConfig.REGION_THRESHOLD, 0f)
+    fun regionThresholdIsTheChosenIndependentValue() {
+        assertEquals(0.5f, ScanConfig.REGION_THRESHOLD, 0f)
+        // Default verdicts use each path's own threshold: a region at 0.4 is not positive,
+        // while the whole screen at the same signal is (NSFW_THRESHOLD is lower).
+        assertTrue(ScanConfig.NSFW_THRESHOLD < 0.4f)
+        assertFalse(FrameVerdict.combine(scores(0.05f), listOf(regionScore(0.4f))).positive)
+        assertTrue(FrameVerdict.combine(scores(0.05f), listOf(regionScore(0.55f))).positive)
+        assertTrue(FrameVerdict.combine(scores(0.4f), emptyList()).positive)
     }
 
     @Test

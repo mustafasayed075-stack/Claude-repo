@@ -130,15 +130,16 @@ object ScanConfig {
     const val REGION_SCAN_ENABLED = true
 
     /**
-     * Threshold on a region's signal. Same as [NSFW_THRESHOLD] by default, so an image
-     * counts the same whether it fills the screen or sits in a chat bubble. Measured
-     * on 400 everyday COCO photos of people shown as a chat image: 54 (13.5%) reach
-     * 0.3 as regions (vs 3 in the whole-screen pass) — the model scores some sports
-     * and family photos high, which a full-screen view already triggers today.
-     * Raise this (0.5: 42, 0.7: 24, 0.9: 14 of 400) to trade sensitivity for fewer
-     * alerts on ordinary photos.
+     * Threshold on a region's signal — independent of [NSFW_THRESHOLD] (whole screen).
+     * Final choice: **0.5** (owner decision, README "Region threshold decision"),
+     * chosen after the app-switch reset, stale-crop, blank-crop and UI-graphic fixes.
+     * A region is the photo at its own resolution, so it gets the model's full
+     * false-positive rate on ordinary photos. Measured on 400 everyday COCO photos
+     * of people shown as a chat image: 0.3 → 54, **0.5 → 42**, 0.7 → 24, 0.9 → 14
+     * reach the threshold. On real app screens (Rico, 1,504 screens with regions):
+     * 0.3 → 73 screens, **0.5 → 59**, 0.7 → 33, 0.9 → 21.
      */
-    const val REGION_THRESHOLD = NSFW_THRESHOLD
+    const val REGION_THRESHOLD = 0.5f
 
     /** At most this many regions classified per capture: the largest qualifying ones. */
     const val REGION_MAX_PER_CAPTURE = 3
