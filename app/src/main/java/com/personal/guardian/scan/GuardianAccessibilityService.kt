@@ -76,6 +76,8 @@ class GuardianAccessibilityService : AccessibilityService() {
     // Region scanning (worker thread).
     private val regionCache = RegionScoreCache()
     private val regionScorer = RegionScorer(regionCache) { SystemClock.elapsedRealtime() }
+    private val appSwitch = AppSwitchTracker()
+    private val contentPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
     private val costStats = ScanCostStats()
     private var classifier: NsfwClassifier? = null
     private var captureInFlight = false
@@ -192,6 +194,11 @@ class GuardianAccessibilityService : AccessibilityService() {
     // ---- worker thread ----
 
     private fun onForegroundChanged(pkg: String) {
+        // Positives must not combine across apps: a positive frame in the previous app
+        // plus one in the new app's first frames used to confirm a detection there.
+        if (appSwitch.onWindowStateChanged(pkg, SystemClock.elapsedRealtime(), scheduler.overlayPackages)) {
+            confirmer.reset()
+        }
         if (classifier == null) return
         if (!scheduler.onForegroundChanged(pkg)) return
         val handler = worker ?: return
@@ -228,12 +235,15 @@ class GuardianAccessibilityService : AccessibilityService() {
 
         val source = scheduler.currentSource
         scheduler.onCaptured(now)
+        // Region pass: read the node tree before the screenshot too (see RegionStability);
+        // not while a window transition is still settling.
+        val regionsBefore = if (ScanConfig.REGION_SCAN_ENABLED && appSwitch.isSettled(now)) readRegions() else null
         captureInFlight = true
         val onWorker = Executor { handler.post(it) }
         takeScreenshot(Display.DEFAULT_DISPLAY, onWorker, object : TakeScreenshotCallback {
             override fun onSuccess(result: ScreenshotResult) {
                 try {
-                    processScreenshot(result, source)
+                    processScreenshot(result, source, regionsBefore)
                 } catch (t: Throwable) {
                     logFailureRateLimited("processing", "Screen scan: frame processing failed.", t)
                 } finally {
@@ -253,7 +263,7 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
-    private fun processScreenshot(result: ScreenshotResult, source: TriggerSource) {
+    private fun processScreenshot(result: ScreenshotResult, source: TriggerSource, regionsBefore: RegionSnapshot?) {
         val model = classifier ?: run {
             result.hardwareBuffer.close() // shutting down: just release the frame
             return
@@ -272,9 +282,12 @@ class GuardianAccessibilityService : AccessibilityService() {
             val whole = model.classify(frame)
             val t1 = SystemClock.elapsedRealtime()
             // Path 2: image-bearing elements cropped out of the same frame.
-            val regions = if (ScanConfig.REGION_SCAN_ENABLED) scoreRegions(model, frame) else RegionScorer.Pass.NONE
+            val regions = if (regionsBefore != null) scoreRegions(model, frame, regionsBefore) else RegionScorer.Pass.NONE
             val t2 = SystemClock.elapsedRealtime()
-            costStats.record(t1 - t0, t2 - t1, regions.found, regions.classified, regions.cacheHits, regions.budgetSkips)
+            // Region time includes the node-tree read made before the screenshot.
+            costStats.record(
+                t1 - t0, t2 - t1 + (regionsBefore?.readMs ?: 0), regions.found, regions.classified, regions.cacheHits, regions.budgetSkips, regions.blankSkips
+            )
                 ?.let { GuardianLog.i(applicationContext, it, diagnostic = true) }
 
             val verdict = FrameVerdict.combine(whole, regions.scores)
@@ -299,36 +312,88 @@ class GuardianAccessibilityService : AccessibilityService() {
         }
     }
 
-    /**
-     * Finds image-bearing elements in the active window ([ImageRegionFinder]) and
-     * scores each one cropped out of [frame] at its own resolution ([RegionScorer]:
-     * at most [ScanConfig.REGION_MAX_PER_CAPTURE], within
-     * [ScanConfig.REGION_TIME_BUDGET_MS], unchanged content served from the cache).
-     */
-    private fun scoreRegions(model: NsfwClassifier, frame: Bitmap): RegionScorer.Pass {
-        val root = runCatching { rootInActiveWindow }.getOrNull() ?: return RegionScorer.Pass.NONE
-        val minSidePx = (ScanConfig.REGION_MIN_SIDE_DP * resources.displayMetrics.density).toInt()
-        val regions = try {
-            ImageRegionFinder.collect(
-                AccessibilityRegionNode(root), Box(0, 0, frame.width, frame.height), ImageRegionFinder.Limits(minSidePx)
+    /** Image-bearing elements of the active window at one instant, and its package. */
+    private class RegionSnapshot(val packageName: String?, val regions: List<ImageRegion>, val readMs: Long)
+
+    /** Reads the active window's image-bearing elements ([ImageRegionFinder]); null if there is no window. */
+    private fun readRegions(): RegionSnapshot? {
+        val start = SystemClock.elapsedRealtime()
+        val root = runCatching { rootInActiveWindow }.getOrNull() ?: return null
+        return try {
+            val regions = ImageRegionFinder.collect(
+                AccessibilityRegionNode(root), displayBox(), ImageRegionFinder.Limits(minRegionSidePx())
             )
+            RegionSnapshot(root.packageName?.toString(), regions, SystemClock.elapsedRealtime() - start)
         } catch (t: Throwable) {
             logFailureRateLimited("regions", "Screen scan: region lookup failed.", t)
-            emptyList()
+            null
         } finally {
             releaseNode(root)
         }
+    }
+
+    /**
+     * Scores the image-bearing elements of [frame] ([RegionScorer]: at most
+     * [ScanConfig.REGION_MAX_PER_CAPTURE], within [ScanConfig.REGION_TIME_BUDGET_MS],
+     * unchanged content from the cache, blank crops skipped). Only elements whose
+     * bounds are the same in the node tree read before the screenshot ([before]) and
+     * after it, in the same app, are used ([RegionStability]); nothing is used if a
+     * window change happened meanwhile, or if the screenshot's size doesn't match the
+     * display the bounds refer to.
+     */
+    private fun scoreRegions(model: NsfwClassifier, frame: Bitmap, before: RegionSnapshot): RegionScorer.Pass {
+        val display = displayBox()
+        if (display.width != frame.width || display.height != frame.height) {
+            logFailureRateLimited(
+                "region-size",
+                "Screen scan: screenshot ${frame.width}x${frame.height} differs from display ${display.width}x${display.height}; " +
+                    "region pass skipped (bounds wouldn't line up).",
+                null
+            )
+            return RegionScorer.Pass.NONE
+        }
+        val after = readRegions() ?: return RegionScorer.Pass.NONE
+        if (!appSwitch.isSettled(SystemClock.elapsedRealtime())) return RegionScorer.Pass.NONE
+        val regions = RegionStability.stable(before.packageName, before.regions, after.packageName, after.regions)
         if (regions.isEmpty()) return RegionScorer.Pass.NONE
         val pass = regionScorer.score(
-            regions, frame.width, frame.height, minSidePx,
+            regions, frame.width, frame.height, minRegionSidePx(),
             crop = { c -> Bitmap.createBitmap(frame, c.left, c.top, c.width, c.height) },
             fingerprint = { fingerprint(it) },
             classify = { model.classify(it) },
-            release = { if (it !== frame) it.recycle() }
+            release = { if (it !== frame) it.recycle() },
+            content = { regionContent(it) }
         )
         ScanStatus.regionsClassified += pass.classified
         ScanStatus.regionCacheHits += pass.cacheHits
         return pass
+    }
+
+    private fun minRegionSidePx(): Int = (ScanConfig.REGION_MIN_SIDE_DP * resources.displayMetrics.density).toInt()
+
+    /** The default display's full size in its current rotation — the pixel space of node bounds and screenshots. */
+    @Suppress("DEPRECATION")
+    private fun displayBox(): Box {
+        val metrics = android.util.DisplayMetrics()
+        ContextCompat.getSystemService(this, android.hardware.display.DisplayManager::class.java)
+            ?.getDisplay(Display.DEFAULT_DISPLAY)?.getRealMetrics(metrics)
+        return Box(0, 0, metrics.widthPixels, metrics.heightPixels)
+    }
+
+    /** [RegionContent] verdict for a crop, on an area-averaged [RegionContent.GRID]² downsample. */
+    private fun regionContent(crop: Bitmap): RegionContent.Verdict {
+        var current = crop
+        for ((w, h) in NsfwPreprocessor.downscaleSteps(crop.width, crop.height, RegionContent.GRID)) {
+            val next = Bitmap.createScaledBitmap(current, w, h, true)
+            if (current !== crop && current !== next) current.recycle()
+            current = next
+        }
+        try {
+            current.getPixels(contentPixels, 0, RegionContent.GRID, 0, 0, RegionContent.GRID, RegionContent.GRID)
+        } finally {
+            if (current !== crop) current.recycle()
+        }
+        return RegionContent.assess(contentPixels)
     }
 
     private fun onConfirmed(confirmation: DetectionConfirmer.Confirmation, frame: Bitmap, verdict: FrameVerdict.Result) {

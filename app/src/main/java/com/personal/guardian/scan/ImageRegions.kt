@@ -64,9 +64,18 @@ enum class RegionKind(val label: String) {
 }
 
 /** One image-bearing element to classify: where it is and why it was picked. */
-data class ImageRegion(val box: Box, val kind: RegionKind, val className: String) {
-    /** Short label for logs and detection metadata, e.g. `image 540x540@480,900 (ImageView)`. */
-    val label: String get() = "${kind.label} $box (${className.substringAfterLast('.')})"
+data class ImageRegion(
+    val box: Box,
+    val kind: RegionKind,
+    val className: String,
+    /** Resource id without the package (`profile_picture`), if any — for diagnosing reports. */
+    val viewId: String? = null
+) {
+    /**
+     * Short label for logs and detection metadata, e.g.
+     * `image 540x540@480,900 (ImageView #profile_picture)`.
+     */
+    val label: String get() = "${kind.label} $box (${className.substringAfterLast('.')}${viewId?.let { " #$it" } ?: ""})"
 }
 
 object ImageRegionFinder {
@@ -86,27 +95,60 @@ object ImageRegionFinder {
     )
 
     private val VIDEO_CLASSES = listOf("VideoView", "SurfaceView", "TextureView", "PlayerView")
-    private val MEDIA_HINTS = listOf(
-        "image", "img", "photo", "picture", "sticker", "thumb", "media", "video", "gif", "player", "preview",
+
+    /** Whole words in an id or description that mark a media view (matched as words: "gift" ≠ "gif"). */
+    private val MEDIA_HINTS = setOf(
+        "image", "images", "img", "photo", "photos", "picture", "pictures", "pic", "sticker", "stickers",
+        "thumbnail", "thumbnails", "thumb", "media", "video", "videos", "gif", "gifs", "player", "preview", "poster",
         "صورة", "صوره", "ملصق", "فيديو"
     )
+
+    /**
+     * Whole words that mark UI graphics — never photos — on *any* element, image views
+     * included: app/brand logos, icons, splash art, badges, illustrations, emoji,
+     * placeholders, decorative overlays, controls. On RICO app screens these made up
+     * most wrongly picked "image" regions (`icon`, `logo`, `item_icon`, `img_splash_logo`,
+     * `vendorLogoImageView`, `emoji_image`, `record_preview_shutter`…).
+     */
+    private val GRAPHIC_WORDS = setOf(
+        "logo", "logos", "icon", "icons", "ic", "splash", "badge", "badges", "illustration", "illustrations",
+        "placeholder", "emoji", "emoticon", "shutter", "watermark", "divider", "shadow", "gradient", "overlay",
+        "scrim", "btn", "arrow", "chevron", "mascot", "clipart", "vector", "lottie", "animation"
+    )
+
     /** Containers that are never an image themselves (their children are still walked). */
     private val CONTAINER_CLASSES = listOf("WebView", "RecyclerView", "ListView", "ScrollView", "ViewPager", "Layout")
+
+    /** Widgets that aren't media even when their id or text mentions it ("Add photo" buttons, captions). */
+    private val NON_MEDIA_CLASSES = listOf(
+        "TextView", "Button", "EditText", "CheckBox", "Switch", "RadioButton", "Spinner", "ProgressBar",
+        "SeekBar", "RatingBar", "Toolbar"
+    )
+
+    private val WORD = Regex("[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\\d+|[\\p{L}&&[^\\p{IsLatin}]]+")
+
+    /** Lower-cased words of an id or description: `imgSplash_logo2` → img, splash, logo, 2. */
+    internal fun words(text: String?): Set<String> =
+        if (text.isNullOrEmpty()) emptySet()
+        else WORD.findAll(text).map { it.value.lowercase(Locale.ROOT) }.toSet()
 
     /**
      * What kind of image-bearing element a node is, or null. Class names come from
      * `AccessibilityNodeInfo.getClassName` — the platform base class for most custom
      * views (AppCompatImageView, Fresco's DraweeView → `android.widget.ImageView`).
+     * An id or description naming a UI graphic (logo, icon, splash…) excludes the node
+     * whatever its class.
      */
     fun kindOf(className: CharSequence?, viewId: String?, contentDescription: CharSequence?): RegionKind? {
         val cls = className?.toString().orEmpty()
         val simple = cls.substringAfterLast('.')
+        val words = words(viewId?.substringAfter(":id/")) + words(contentDescription?.toString())
+        if (words.any { it in GRAPHIC_WORDS }) return null
         if (simple.endsWith("ImageView") || cls == "android.widget.Image" || simple == "ImageButton") return RegionKind.IMAGE
         if (VIDEO_CLASSES.any { simple.contains(it) }) return RegionKind.VIDEO
         if (CONTAINER_CLASSES.any { simple.contains(it) }) return null
-        val id = viewId?.substringAfter(":id/")?.lowercase(Locale.ROOT).orEmpty()
-        val desc = contentDescription?.toString()?.lowercase(Locale.ROOT).orEmpty()
-        if (MEDIA_HINTS.any { id.contains(it) || desc.contains(it) }) return RegionKind.MEDIA_HINT
+        if (NON_MEDIA_CLASSES.any { simple.endsWith(it) }) return null
+        if (words.any { it in MEDIA_HINTS }) return RegionKind.MEDIA_HINT
         return null
     }
 
@@ -123,7 +165,9 @@ object ImageRegionFinder {
             visited++
             kindOf(node.className, node.viewId, node.contentDescription)?.let { kind ->
                 val box = node.boundsInScreen.intersect(screen)
-                if (!box.isEmpty) candidates += ImageRegion(box, kind, node.className?.toString().orEmpty())
+                if (!box.isEmpty) {
+                    candidates += ImageRegion(box, kind, node.className?.toString().orEmpty(), node.viewId?.substringAfter(":id/"))
+                }
             }
             for (i in 0 until node.childCount) {
                 if (visited >= limits.maxNodes) break
@@ -204,16 +248,26 @@ object RegionCrop {
 class RegionScoreCache(private val capacity: Int = ScanConfig.REGION_CACHE_SIZE) {
     private data class Key(val hash: Long, val width: Int, val height: Int)
 
-    private val map = object : LinkedHashMap<Key, NsfwScores>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, NsfwScores>?) = size > capacity
+    /** A cached outcome: the scores, or null for a crop found blank ([RegionContent]). */
+    class Entry(val scores: NsfwScores?)
+
+    private val map = object : LinkedHashMap<Key, Entry>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, Entry>?) = size > capacity
     }
 
     val size: Int get() = map.size
 
-    fun get(hash: Long, width: Int, height: Int): NsfwScores? = map[Key(hash, width, height)]
+    fun lookup(hash: Long, width: Int, height: Int): Entry? = map[Key(hash, width, height)]
+
+    fun get(hash: Long, width: Int, height: Int): NsfwScores? = lookup(hash, width, height)?.scores
 
     fun put(hash: Long, width: Int, height: Int, scores: NsfwScores) {
-        map[Key(hash, width, height)] = scores
+        map[Key(hash, width, height)] = Entry(scores)
+    }
+
+    /** Remembers that this crop was blank, so an unchanged placeholder isn't re-checked every capture. */
+    fun putBlank(hash: Long, width: Int, height: Int) {
+        map[Key(hash, width, height)] = Entry(null)
     }
 
     fun clear() = map.clear()
@@ -232,10 +286,12 @@ class ScanCostStats(private val reportEvery: Int = ScanConfig.COST_LOG_EVERY_CAP
     private var classified = 0
     private var cacheHits = 0
     private var budgetSkips = 0
+    private var blankSkips = 0
 
     /** Records one capture; returns a summary line every [reportEvery] captures (then resets), else null. */
     fun record(
-        wholeMs: Long, regionMs: Long, regionsFound: Int, classified: Int, cacheHits: Int, budgetSkips: Int
+        wholeMs: Long, regionMs: Long, regionsFound: Int, classified: Int, cacheHits: Int, budgetSkips: Int,
+        blankSkips: Int = 0
     ): String? {
         captures++
         this.wholeMs += wholeMs
@@ -244,14 +300,15 @@ class ScanCostStats(private val reportEvery: Int = ScanConfig.COST_LOG_EVERY_CAP
         this.classified += classified
         this.cacheHits += cacheHits
         this.budgetSkips += budgetSkips
+        this.blankSkips += blankSkips
         if (captures < reportEvery) return null
         val n = captures.toDouble()
         val line = String.format(
             Locale.US,
             "Scan cost (last %d captures): whole-screen %.1f ms avg, regions %.1f ms avg " +
-                "(%.2f regions/capture: %d classified, %d cached, %d skipped by time budget)",
+                "(%.2f regions/capture: %d classified, %d cached, %d blank/flat skipped, %d skipped by time budget)",
             captures, this.wholeMs / n, this.regionMs / n, this.regionsFound / n,
-            this.classified, this.cacheHits, this.budgetSkips
+            this.classified, this.cacheHits, this.blankSkips, this.budgetSkips
         )
         reset()
         return line
@@ -259,6 +316,7 @@ class ScanCostStats(private val reportEvery: Int = ScanConfig.COST_LOG_EVERY_CAP
 
     private fun reset() {
         captures = 0; wholeMs = 0; regionMs = 0; regionsFound = 0; classified = 0; cacheHits = 0; budgetSkips = 0
+        blankSkips = 0
     }
 }
 
@@ -322,7 +380,9 @@ class RegionScorer(
 ) {
     /** Result of one capture's region pass. */
     class Pass(
-        val scores: List<RegionScore>, val found: Int, val classified: Int, val cacheHits: Int, val budgetSkips: Int
+        val scores: List<RegionScore>, val found: Int, val classified: Int, val cacheHits: Int, val budgetSkips: Int,
+        /** Regions not classified because the crop was blank, flat or near-black ([RegionContent]). */
+        val blankSkips: Int = 0
     ) {
         companion object {
             val NONE = Pass(emptyList(), 0, 0, 0, 0)
@@ -337,12 +397,14 @@ class RegionScorer(
         crop: (Box) -> B,
         fingerprint: (B) -> Long,
         classify: (B) -> NsfwScores,
-        release: (B) -> Unit
+        release: (B) -> Unit,
+        content: (B) -> RegionContent.Verdict = { RegionContent.Verdict.OK }
     ): Pass {
         val scores = ArrayList<RegionScore>(regions.size)
         var classified = 0
         var cacheHits = 0
         var skipped = 0
+        var blank = 0
         val start = clock()
         for ((index, region) in regions.withIndex()) {
             if (clock() - start > budgetMs) {
@@ -354,15 +416,143 @@ class RegionScorer(
                 ?: continue
             val image = crop(rect)
             try {
+                // Cache first: an unchanged sticker or placeholder costs only its fingerprint.
                 val hash = fingerprint(image)
-                val cached = cache.get(hash, rect.width, rect.height)
-                val result = cached ?: classify(image).also { cache.put(hash, rect.width, rect.height, it) }
-                if (cached != null) cacheHits++ else classified++
-                scores += RegionScore(region, rect, result, hash, cached = cached != null)
+                val entry = cache.lookup(hash, rect.width, rect.height)
+                if (entry != null) {
+                    cacheHits++
+                    if (entry.scores == null) blank++
+                    else scores += RegionScore(region, rect, entry.scores, hash, cached = true)
+                    continue
+                }
+                if (content(image) != RegionContent.Verdict.OK) {
+                    cache.putBlank(hash, rect.width, rect.height)
+                    blank++
+                    continue
+                }
+                val result = classify(image).also { cache.put(hash, rect.width, rect.height, it) }
+                classified++
+                scores += RegionScore(region, rect, result, hash, cached = false)
             } finally {
                 release(image)
             }
         }
-        return Pass(scores, regions.size, classified, cacheHits, skipped)
+        return Pass(scores, regions.size, classified, cacheHits, skipped, blank)
     }
+}
+
+/**
+ * Pixel check on a region crop before it reaches the photo classifier: skips crops
+ * that carry no image — a blank or placeholder view, a still-loading image, a video
+ * surface that screenshots as black, or a view whose bounds are mostly empty
+ * margin around a small drawable. On RICO app screens such crops produced some of
+ * the highest scores (a mostly white box with a sliver of photo: 1.00 "porn"; a
+ * near-black thumbnail: 0.66). Pure Kotlin on a small [GRID]×[GRID] downsample.
+ */
+object RegionContent {
+
+    const val GRID = 48
+
+    enum class Verdict { OK, FLAT, DARK, MOSTLY_EMPTY }
+
+    /** A row/column counts as empty margin when its luma varies by at most this much. */
+    private const val FLAT_LINE_RANGE = 10
+    /** A pixel is "flat" when it differs from all 4 neighbours by at most this much luma. */
+    private const val FLAT_PIXEL_DIFF = 2
+    /** Skip when at least this fraction of pixels is flat (placeholder, solid block). */
+    const val MAX_FLAT_FRACTION = 0.9f
+    /** Skip when what's left after trimming empty margins covers less than this fraction. */
+    const val MIN_CONTENT_FRACTION = 0.15f
+
+    /** [pixels]: ARGB ints, [GRID]×[GRID], row-major (as from `Bitmap.getPixels` on a scaled crop). */
+    fun assess(pixels: IntArray): Verdict {
+        require(pixels.size == GRID * GRID) { "expected ${GRID}x$GRID pixels" }
+        val l = IntArray(pixels.size) { luma(pixels[it]) }
+        fun at(x: Int, y: Int) = l[y * GRID + x]
+
+        // Near-black: dark mean and no bright detail (e.g. a video surface captured black).
+        val sorted = l.sortedArray()
+        if (l.average() < 16 && sorted[(sorted.size * 95) / 100] < 40) return Verdict.DARK
+
+        // Trim flat border lines from each side.
+        fun rowFlat(y: Int, x0: Int, x1: Int): Boolean {
+            var min = 255; var max = 0
+            for (x in x0 until x1) { val v = at(x, y); if (v < min) min = v; if (v > max) max = v }
+            return x1 <= x0 || max - min <= FLAT_LINE_RANGE
+        }
+        fun colFlat(x: Int, y0: Int, y1: Int): Boolean {
+            var min = 255; var max = 0
+            for (y in y0 until y1) { val v = at(x, y); if (v < min) min = v; if (v > max) max = v }
+            return y1 <= y0 || max - min <= FLAT_LINE_RANGE
+        }
+        var top = 0; var bottom = GRID; var left = 0; var right = GRID
+        while (top < bottom && rowFlat(top, left, right)) top++
+        while (bottom > top && rowFlat(bottom - 1, left, right)) bottom--
+        while (left < right && colFlat(left, top, bottom)) left++
+        while (right > left && colFlat(right - 1, top, bottom)) right--
+        if (top >= bottom || left >= right) return Verdict.FLAT
+
+        var flat = 0
+        for (y in 1 until GRID - 1) for (x in 1 until GRID - 1) {
+            val v = at(x, y)
+            if (Math.abs(v - at(x - 1, y)) <= FLAT_PIXEL_DIFF && Math.abs(v - at(x + 1, y)) <= FLAT_PIXEL_DIFF &&
+                Math.abs(v - at(x, y - 1)) <= FLAT_PIXEL_DIFF && Math.abs(v - at(x, y + 1)) <= FLAT_PIXEL_DIFF) flat++
+        }
+        if (flat >= MAX_FLAT_FRACTION * (GRID - 2) * (GRID - 2)) return Verdict.FLAT
+
+        val content = (bottom - top) * (right - left)
+        if (content < MIN_CONTENT_FRACTION * GRID * GRID) return Verdict.MOSTLY_EMPTY
+        return Verdict.OK
+    }
+
+    private fun luma(p: Int): Int {
+        val r = (p shr 16) and 0xFF
+        val g = (p shr 8) and 0xFF
+        val b = p and 0xFF
+        return (r * 299 + g * 587 + b * 114) / 1000
+    }
+}
+
+/**
+ * The node tree and the screenshot are not read at the same instant. During a
+ * scroll, an animation or an app switch, bounds read after the screenshot can point
+ * at different pixels — crops that cut across UI and whatever was on screen
+ * before (seen on RICO as half-photo/half-UI crops). Only regions whose bounds are
+ * identical in a read **before** the screenshot and one **after** it, in the same
+ * app, are classified. Pure Kotlin.
+ */
+object RegionStability {
+    fun stable(beforePackage: String?, before: List<ImageRegion>, afterPackage: String?, after: List<ImageRegion>): List<ImageRegion> {
+        if (beforePackage == null || beforePackage != afterPackage) return emptyList()
+        val boxes = before.map { it.box }.toHashSet()
+        return after.filter { it.box in boxes }
+    }
+}
+
+/**
+ * Tracks window-state changes for the scanner:
+ *  - the region pass is skipped for [settleMs] after any (non-overlay) window change,
+ *    while activity/app transitions animate and the tree and screenshot disagree;
+ *  - [onWindowStateChanged] returns true when the *app* in front changed, so the
+ *    caller resets the confirmer — two positives must not combine across apps (a
+ *    positive from the previous app plus one transition frame used to confirm a
+ *    detection attributed to the new app).
+ * Pure Kotlin with injected timestamps; not thread-safe (scanner worker thread).
+ */
+class AppSwitchTracker(private val settleMs: Long = ScanConfig.REGION_SETTLE_MS) {
+    var foregroundPackage: String? = null
+        private set
+    private var lastChangeAtMs: Long? = null
+
+    /** Records a window-state change of [pkg] at [nowMs]; returns true if the foreground app changed. */
+    fun onWindowStateChanged(pkg: String?, nowMs: Long, overlayPackages: Set<String>): Boolean {
+        if (pkg.isNullOrEmpty() || pkg in overlayPackages) return false
+        lastChangeAtMs = nowMs
+        val changed = foregroundPackage != null && foregroundPackage != pkg
+        foregroundPackage = pkg
+        return changed
+    }
+
+    /** False within [settleMs] of the last window change. */
+    fun isSettled(nowMs: Long): Boolean = lastChangeAtMs?.let { nowMs - it >= settleMs } ?: true
 }

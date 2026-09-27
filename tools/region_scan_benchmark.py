@@ -70,6 +70,48 @@ def with_photo(photo, box_w, y=700):
     return s, (x, y, x + bw, y + bh)
 
 
+def region_content_ok(crop, grid=48):
+    """Mirror of RegionContent.assess (ImageRegions.kt): False for blank, flat,
+    near-black or mostly-empty crops, which the app skips without classifying."""
+    small = crop
+    w, h = crop.size
+    while w > 2 * grid or h > 2 * grid:
+        if w > 2 * grid:
+            w //= 2
+        if h > 2 * grid:
+            h //= 2
+        small = small.resize((w, h), Image.BILINEAR)
+    small = small.resize((grid, grid), Image.BILINEAR)
+    a = np.asarray(small.convert("RGB"), dtype=np.int32)
+    lum = (a[..., 0] * 299 + a[..., 1] * 587 + a[..., 2] * 114) // 1000
+    if lum.mean() < 16 and np.sort(lum.flatten())[(lum.size * 95) // 100] < 40:
+        return False
+    def flat(v):
+        return v.size == 0 or v.max() - v.min() <= 10
+    t, b, l, r = 0, grid, 0, grid
+    while t < b and flat(lum[t, l:r]):
+        t += 1
+    while b > t and flat(lum[b - 1, l:r]):
+        b -= 1
+    while l < r and flat(lum[t:b, l]):
+        l += 1
+    while r > l and flat(lum[t:b, r - 1]):
+        r -= 1
+    if t >= b or l >= r:
+        return False
+    c = lum[1:-1, 1:-1]
+    f = ((abs(c - lum[:-2, 1:-1]) <= 2) & (abs(c - lum[2:, 1:-1]) <= 2) &
+         (abs(c - lum[1:-1, :-2]) <= 2) & (abs(c - lum[1:-1, 2:]) <= 2))
+    if f.sum() >= 0.9 * (grid - 2) ** 2:
+        return False
+    return (b - t) * (r - l) >= 0.15 * grid * grid
+
+
+def region_signal(crop):
+    """Region path as in the app: blank crops are skipped (signal 0)."""
+    return signal(crop) if region_content_ok(crop) else 0.0
+
+
 def dhash(img):
     g = np.asarray(img.resize((9, 8), Image.BILINEAR).convert("L"), dtype=np.int32)
     return int("".join("1" if b else "0" for b in (g[:, :-1] > g[:, 1:]).flatten()), 2)
@@ -82,7 +124,7 @@ def false_positives(photos, th):
         for bw in (700, 450):
             s, box = with_photo(ph, bw)
             res[f"whole {bw}px"].append(signal(s))
-            res[f"region {bw}px"].append(signal(s.crop(box)))
+            res[f"region {bw}px"].append(region_signal(s.crop(box)))
     n = len(photos)
     print(f"\n{n} photos, threshold {th}")
     for k, v in res.items():
@@ -116,8 +158,8 @@ def cost(photos, n_regions, changing, captures=40):
         for i in range(n_regions):
             crop = s.crop(BOXES[i])
             key = (dhash(crop), crop.size)
-            if key not in cache:
-                cache[key] = signal(crop)
+            if key not in cache:  # cache checked first; blank verdicts are cached too (as in the app)
+                cache[key] = region_signal(crop)
                 inferences += 1
         t2 = time.perf_counter()
         whole.append((t1 - t0) * 1000)

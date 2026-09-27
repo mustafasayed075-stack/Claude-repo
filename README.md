@@ -216,7 +216,9 @@ these in order (from the spec):
   `CONFIRMATION_WINDOW_MS` = **7 s**. Negative frames in between don't reset
   anything (e.g. positive → negative → positive within 7 s confirms); positives
   simply age out of the window. This bounds time-to-detection at about 7 s in
-  fast mode (1.5 s frames) and normal mode (6 s frames).
+  fast mode (1.5 s frames) and normal mode (6 s frames). Positives are cleared when
+  another app comes to the foreground: frames from two different apps never
+  combine into one detection (see *Region scanning → false-positive investigation*).
   - **Why 0.3 (and how this scale differs from the old model):** the previous
     model (OpenNSFW) only separated "explicit" from "everything else", so a swimwear
     photo and an ordinary photo both scored low and no threshold could split them.
@@ -280,10 +282,15 @@ unchanged and still runs on every capture.
      (`android.widget.Image`);
    - **video:** `VideoView`, `SurfaceView`, `TextureView`, `…PlayerView`;
    - **media hint:** any other view whose resource id or content description names
-     media — sticker, photo, image, gif, video, thumb, preview, player, صورة, ملصق,
-     فيديو. This covers apps that draw media in custom views (e.g. Telegram).
-     Containers (layouts, lists, WebView) never count themselves; their children
-     are walked.
+     media as a **whole word** — sticker, photo, image, img, picture, gif, video,
+     thumbnail, preview, player, poster, صورة, ملصق, فيديو (so "gift" ≠ "gif",
+     "Thumbs up" ≠ thumbnail). This covers apps that draw media in custom views
+     (e.g. Telegram). Containers (layouts, lists, WebView) never count themselves;
+     their children are walked. Text, button, input and similar widgets never count
+     ("Add photo" buttons, captions).
+   - **never:** an element whose id or description names a **UI graphic** — logo,
+     icon/ic, splash, badge, illustration, placeholder, emoji, shutter, watermark,
+     gradient/overlay/scrim, arrow/chevron, mascot, animation… — whatever its class.
 2. **Filter:**
    - visible nodes only, clipped to the screen;
    - shorter side ≥ `REGION_MIN_SIDE_DP` = **64 dp** (skips avatars, icons, emoji);
@@ -297,19 +304,30 @@ unchanged and still runs on every capture.
    `REGION_TIME_BUDGET_MS` = **400 ms**. Once region work passes the budget, the
    remaining regions of that capture are skipped and counted, so a slow phone can't
    fall behind the 1.5 s fast-mode interval.
-4. **Crop and classify** each region at its own resolution: the element's exact
+4. **Stable bounds only:** the node tree is read **before and after** the
+   screenshot. Only elements with identical bounds in both reads, in the same app,
+   are used. Nothing is used within `REGION_SETTLE_MS` = **1 s** of a window change
+   (new activity, dialog, app switch), or if the screenshot's size doesn't match the
+   display the bounds refer to.
+5. **Blank-crop check** (`RegionContent`, on a 48×48 downsample): crops that are
+   flat (placeholders, solid blocks), near-black (a video surface captured black) or
+   mostly empty margin (content under 15% after trimming flat borders) are skipped
+   without running the model.
+6. **Crop and classify** each region at its own resolution: the element's exact
    bounds from the screenshot, through the same halving downscale (or upscale) to
    224×224. The crop isn't padded to a square, because the model was trained on
    squashed whole images.
-5. **Cache:** the score of each crop is remembered by its 64-bit dHash plus size
-   (`REGION_CACHE_SIZE` = 32, LRU, exact match only). A sticker or photo that stays
-   on screen across captures is classified once, not every 1.5 s.
-6. **Verdict** (`FrameVerdict`): a frame is positive if the whole screen reaches
+7. **Cache:** the result for each crop — its scores, or "blank" — is remembered by
+   its 64-bit dHash plus size (`REGION_CACHE_SIZE` = 32, LRU, exact match only). A
+   sticker, photo or placeholder that stays on screen across captures is checked
+   once, not every 1.5 s.
+8. **Verdict** (`FrameVerdict`): a frame is positive if the whole screen reaches
    `NSFW_THRESHOLD` **or** any region reaches `REGION_THRESHOLD`. Confirmation
    (2 positives within 7 s), cooldown and reactions are unchanged. When a region
    decided the verdict:
    - the review thumbnail is the region crop, not the whole screen;
-   - the metadata line gets `"region":"image 480x480@560,900 (ImageView)"`;
+   - the metadata line gets `"region":"image 480x480@560,900 (ImageView #profile_picture)"`
+     (the element's resource id, so a report can be traced to the exact element);
    - the `CONFIRMED` log line says `scored=<region>`;
    - the same-content cooldown uses the region's own fingerprint, so scrolling a
      chat doesn't re-report the same sticker.
@@ -340,23 +358,30 @@ wide) on a 1080×2400 chat-like screen. No explicit images were used.
   - The earlier "max 0.18 on ordinary content" figure (below) came from a much
     smaller sample.
 
-**Performance** (same machine, 40 captures = one minute of fast mode; region cost
-includes crop, fingerprint, cache and inference):
+**Performance** (same machine, 40 captures = one minute of fast mode, each scenario
+run twice and averaged; region cost includes crop, fingerprint, blank-crop check,
+cache and inference). Timings from the latest run, the old pipeline and the new one
+back to back; this machine was slower than in the first measurement, so compare
+the overhead column:
 
-| Scenario | Whole-screen ms/capture | Region ms/capture | Region inferences / 40 captures | Overhead |
-|---|---|---|---|---|
-| text chat, no media | 31.3 | 0 | 0 | +0% |
-| chat with 2 stickers + a photo, unchanged | 32.5 | 4.0 | 3 | +12% |
-| scrolling chat, 1 new image per capture | 33.7 | 14.4 | 41 | +43% |
-| small video player (1 changing region) | 30.8 | 11.0 | 40 | +36% |
-| worst case: 3 changing regions every capture | 32.2 | 33.1 | 120 | +103% |
+| Scenario | Whole-screen ms/capture | Region ms/capture | Overhead (before the FP fixes) |
+|---|---|---|---|
+| text chat, no media | 49.3 | 0 | +0% (+0%) |
+| chat with 2 stickers + a photo, unchanged | 45.4 | 7.3 | +16% (+15%) |
+| scrolling chat, 1 new image per capture | 44.5 | 25.0 | +56% (+49%) |
+| small video player (1 changing region) | 44.8 | 21.2 | +47% (+37%) |
+| worst case: 3 changing regions every capture | 44.8 | 66.0 | +147% (+121%) |
 
 Reading the numbers:
-- One inference took 5.7 ms here. The whole-screen downscale (20 ms in PIL) is most
-  of the whole-screen cost, while a region crop plus scale is under 1 ms.
+- The blank-crop check adds about 2–4 ms per *new* region in Python (PIL). It runs
+  only on a cache miss, so unchanged content costs the same as before. On the
+  phone, bitmap scaling is native.
+- One inference took 5.7 ms here. The whole-screen downscale is most of the
+  whole-screen cost, while a region crop plus scale is about 1 ms.
 - The node walk is about 3 ms at the 1,500-node limit on the JVM
-  (`ImageRegionsTest` benchmark). On a device, fetching nodes over binder adds to
-  that.
+  (`ImageRegionsTest` benchmark). It now runs twice per capture (before and after
+  the screenshot). On a device, fetching nodes over binder adds to that. Both reads
+  are included in the logged region time.
 - On a phone, inference is a larger share, so each *new* region can cost relatively
   more: up to about one extra whole-screen inference.
 - Static content is nearly free thanks to the cache. The cap (3) and the 400 ms
@@ -365,9 +390,56 @@ Reading the numbers:
   in an app.
 - To confirm on your phone, the service writes a cost line every 200 captures, also
   to the diagnostics log: `Scan cost (last 200 captures): whole-screen X ms avg,
-  regions Y ms avg (… classified, … cached, … skipped by time budget)`.
+  regions Y ms avg (… classified, … cached, … blank/flat skipped, … skipped by time
+  budget)`.
 - To turn the path off, set `REGION_SCAN_ENABLED = false`. To make it cheaper, lower
   `REGION_MAX_PER_CAPTURE`.
+
+#### False-positive investigation (after two on-device reports)
+
+The two reports were a friend's ordinary profile picture, and simply opening the
+Claude app with no photos of people on screen. Each suspected cause was tested with
+the real model: `tools/region_scan_benchmark.py` (COCO photos, costs) and
+`tools/region_rico_eval.py` (real app screens), plus one-off experiments whose
+results are in the table. No explicit images were used.
+
+| Suspected cause | Test | Finding | Action |
+|---|---|---|---|
+| UI graphics picked as media | RICO: 5,463 real Android app screens with view hierarchies and element labels; the detector replicated exactly | Of 2,976 regions picked, 204 were elements RICO labels "Icon", plus logos, a splash logo, a camera shutter button, a "gift" view (substring "gif") and text buttons. Their scores were mostly low; the Icon rate was 1 in 204. | Whole-word hints, graphic-word exclusion, no text/button widgets (above) |
+| Icons, logos, illustrations scoring high | Synthetic Claude-app-like graphics (terracotta logo on cream, letter avatars, solids, gradients); 309 OpenMoji stickers; Claude-like screens in light and dark | Logos, avatars, solids, emoji and Claude-like screens all stay below 0.3 (max 0.22). Flat illustrations in warm or skin-like palettes reach 0.83 via *hentai* (7 of 32) — the old logo bug's failure mode. | Graphic-word exclusion covers named illustrations. No pixel-level "not a photo" rule, because it would also drop drawn explicit stickers (*hentai*) |
+| Crop doesn't match what's on screen | RICO high scorers inspected | Several of the highest (up to 1.00) were half-photo/half-UI crops, a photo in a mostly white box, grey placeholders, near-black thumbnails | Before/after bounds check, 1 s settle after window changes, blank-crop check |
+| Positives combining across apps | Code review | A positive frame in the previous app plus one in the new app's first frames confirmed a detection attributed to the new app. With the tree read after the screenshot, the new app's bounds could also crop the previous app's pixels during the switch. This matches "just opened an app". | Confirmer reset on app switch; stable-bounds and settle rules |
+| Small crops upscaled | COCO photos at 96–700 px | Smaller crops score *lower* (96 px: 31/400; 224 px and up: 54–57) | none needed |
+| Aspect-ratio distortion | Squash vs centre-crop vs pad; 3:1 stretch | Squash 60, centre-crop 59, 3:1 stretch 54–58. Padding gives 34 only by diluting the photo, which also dilutes real content | none needed (keep squash, as in training) |
+| Resize method vs the model's reference | App's halving vs `predict.py` nearest-neighbour, bilinear, bicubic, box | 55–63 of 400 for all methods | none needed |
+| Letterbox colour | Photo in white, cream or black margins | White margins lower scores (13 of 200 → 0 as the photo shrinks). Black margins keep them (23–31 of 200) | covered by the blank-crop check for mostly-empty views |
+
+**Results after the fixes:**
+- **Everyday photos (COCO, 400, region path):** unchanged at **54 at 0.3**, 42 at 0.5,
+  24 at 0.7, 14 at 0.9. These are genuine photos of clothed people that the model
+  scores high (tennis, baseball, children at home). None of the bugs above affects
+  them, so this is the model's own false-positive rate.
+- **Real app screens (RICO, screens where the detector picks something):**
+
+  | Threshold | Before: regions / screens | After: regions / screens |
+  |---|---|---|
+  | 0.3 | 87 / 77 | 83 / 73 |
+  | 0.5 | 68 / 62 | 65 / 59 |
+  | 0.7 | 37 / 35 | 35 / 33 |
+  | 0.9 | 22 / 22 | 21 / 21 |
+
+  Regions sent to the model fall from 2,976 to 2,677; 132 blank crops are now skipped
+  before the model. Most of the remaining high scorers are ordinary photos (sports,
+  faces, hands, food). Roughly a dozen are fashion, swimwear or shirtless images of
+  the kind the model is meant to flag.
+- **The two reports:**
+  - The Claude-app detection fits the fixed cross-app confirmation and
+    after-screenshot bounds bugs. That app's own UI doesn't score.
+  - A clothed person's profile photo scoring high matches the model behaviour
+    measured on COCO; no region-path bug was found for it.
+  - The `CONFIRMED` log line's `scored=` field (now with the element's resource id)
+    and the saved thumbnail show exactly which element or screen scored, if either
+    happens again.
 
 ### Model: source and license
 
@@ -392,9 +464,13 @@ Reading the numbers:
   web content, as well as regions under 64 dp and more than 3 per capture.
 - Region scanning makes small ordinary photos count like full-screen ones, including
   the model's false positives on some sports and family photos (13.5% of a COCO
-  people sample at 0.3). Tune `REGION_THRESHOLD`.
-- Region bounds come from the node tree slightly after the screenshot is taken. A
-  fast scroll in between can shift a crop a little.
+  people sample at 0.3; not a pipeline bug — see *False-positive investigation*).
+  Tune `REGION_THRESHOLD`.
+- Regions are skipped while the screen is changing: during scrolls (bounds differ
+  between the before/after reads) and for 1 s after window changes. The whole-screen
+  pass still runs.
+- Flat illustrations in skin-like palettes can score high as *hentai*. Named ones
+  (id or description says illustration, logo…) are excluded; unnamed ones aren't.
 - Accuracy on real content can only be judged on-device; the threshold (0.3) is a
   starting point to tune with the per-frame (per-class) score log.
 - The model is a MobileNet: fast and small, but less accurate than large models.
@@ -1094,6 +1170,8 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
   `tools/region_scan_benchmark.py <dir of everyday .jpg photos>` (needs
   `ai-edge-litert`, Pillow, numpy) prints the false-positive table and the
   per-scenario cost table from *Region scanning*.
+  `tools/region_rico_eval.py <work dir>` replicates the region detector on real app
+  screens (Rico, downloaded on first run) and prints false positives per threshold.
 - **Log retention:** `LogFilesTest` (diagnostics survive main-log rotation).
 - **Text scanning:** `KeywordMatcherTest` (matcher + real list + ordinary-text
   spot-check), `KeywordRulesTest` (context rules, restored terms, Arabic/English

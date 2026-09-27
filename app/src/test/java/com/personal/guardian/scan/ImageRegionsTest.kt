@@ -327,10 +327,10 @@ class ImageRegionsTest {
         val stats = ScanCostStats(reportEvery = 3)
         assertNull(stats.record(40, 0, 0, 0, 0, 0))
         assertNull(stats.record(40, 60, 2, 1, 1, 0))
-        val line = stats.record(40, 90, 1, 1, 0, 1)
+        val line = stats.record(40, 90, 1, 1, 0, 1, blankSkips = 2)
         assertEquals(
             "Scan cost (last 3 captures): whole-screen 40.0 ms avg, regions 50.0 ms avg " +
-                "(1.00 regions/capture: 2 classified, 1 cached, 1 skipped by time budget)",
+                "(1.00 regions/capture: 2 classified, 1 cached, 2 blank/flat skipped, 1 skipped by time budget)",
             line
         )
         assertEquals(0, stats.captures)
@@ -341,5 +341,132 @@ class ImageRegionsTest {
         val json = DetectionEvent(1_790_000_000_123L, 0.9f, TriggerSource.EVENT, "com.whatsapp", "t.jpg",
             region = "image 480x480@560,900 (ImageView)").toJsonLine()
         assertTrue(json, json.endsWith(",\"thumbnail\":\"t.jpg\",\"region\":\"image 480x480@560,900 (ImageView)\"}"))
+    }
+
+    // ---- false-positive fixes: UI graphics, blank crops, unstable bounds, app switches ----
+
+    @Test
+    fun uiGraphicsAreNotRegionsWhateverTheirClass() {
+        val iv = "android.widget.ImageView"
+        for ((id, desc) in listOf(
+            "com.app:id/app_logo" to null, "com.app:id/ic_launcher" to null, "com.app:id/item_icon" to null,
+            "com.app:id/vendorLogoImageView" to null, "com.app:id/img_splash_logo" to null,
+            "com.app:id/record_preview_shutter" to null, "com.app:id/emoji_image" to null,
+            null to "Claude logo", null to "Settings icon", null to "Onboarding illustration", null to "Loading placeholder"
+        )) {
+            assertNull("$id / $desc", ImageRegionFinder.kindOf(iv, id, desc))
+        }
+        // Real media stays in.
+        assertEquals(RegionKind.IMAGE, ImageRegionFinder.kindOf(iv, "com.whatsapp:id/profile_picture", "Profile photo"))
+        assertEquals(RegionKind.IMAGE, ImageRegionFinder.kindOf(iv, "com.app:id/ivCardBackground", null))
+        assertEquals(RegionKind.IMAGE, ImageRegionFinder.kindOf("android.widget.ImageButton", "com.app:id/thumbnail", null))
+    }
+
+    @Test
+    fun mediaHintsMatchWholeWordsOnlyAndNotOnTextOrButtons() {
+        val v = "android.view.View"
+        assertNull("gift is not gif", ImageRegionFinder.kindOf(v, "com.app:id/filter_handover_conditions_gift", null))
+        assertNull("thumbs up is not a thumbnail", ImageRegionFinder.kindOf(v, null, "Thumbs up"))
+        assertNull(ImageRegionFinder.kindOf("android.widget.TextView", "com.app:id/photo_caption", "Photo"))
+        assertNull(ImageRegionFinder.kindOf("android.widget.Button", "com.app:id/add_photo", "Add photo"))
+        assertEquals(RegionKind.MEDIA_HINT, ImageRegionFinder.kindOf(v, "com.app:id/post_preview_card", null))
+        assertEquals(RegionKind.MEDIA_HINT, ImageRegionFinder.kindOf(v, null, "صورة"))
+        assertEquals(setOf("img", "splash", "logo", "2"), ImageRegionFinder.words("imgSplash_logo2"))
+    }
+
+    @Test
+    fun claudeLikeScreenHasNoRegions() {
+        // A chat app with a large logo, an illustration and a small avatar: nothing to classify.
+        val tree = root(
+            image(box(390, 700, 300, 300), desc = "Claude logo"),
+            image(box(140, 1100, 800, 500), id = "com.anthropic.claude:id/empty_state_illustration"),
+            image(box(960, 110, 96, 96), desc = "Profile picture"), // 35 dp: below the minimum
+            Node("android.widget.TextView", box(60, 1700, 960, 300), contentDescription = "How can I help you today?")
+        )
+        assertTrue(ImageRegionFinder.collect(tree, screen, limits).isEmpty())
+    }
+
+    @Test
+    fun regionLabelNamesTheElementForDiagnosis() {
+        val found = ImageRegionFinder.collect(root(image(box(100, 500, 600, 600), id = "com.whatsapp:id/profile_picture")), screen, limits)
+        assertEquals("image 600x600@100,500 (ImageView #profile_picture)", found.single().label)
+    }
+
+    private fun grid(f: (x: Int, y: Int) -> Int): IntArray {
+        val g = RegionContent.GRID
+        return IntArray(g * g) { i -> f(i % g, i / g) }
+    }
+    private fun rgb(v: Int) = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+    /** Deterministic photo-like texture. */
+    private fun texture(x: Int, y: Int) = rgb(60 + ((x * 37 + y * 91 + (x * y) % 13 * 11) % 150))
+
+    @Test
+    fun blankFlatAndDarkCropsAreNotClassified() {
+        assertEquals(RegionContent.Verdict.FLAT, RegionContent.assess(grid { _, _ -> rgb(245) }))       // placeholder
+        assertEquals(RegionContent.Verdict.DARK, RegionContent.assess(grid { x, y -> rgb((x + y) % 7) })) // black video surface
+        // A small image in a big empty view (bounds mostly margin): 10% content.
+        assertEquals(RegionContent.Verdict.MOSTLY_EMPTY,
+            RegionContent.assess(grid { x, y -> if (x in 0 until 15 && y in 0 until 15) texture(x, y) else rgb(255) }))
+        // A photo, also one with white margins taking half the view, is classified.
+        assertEquals(RegionContent.Verdict.OK, RegionContent.assess(grid(::texture)))
+        assertEquals(RegionContent.Verdict.OK,
+            RegionContent.assess(grid { x, y -> if (y < 24) texture(x, y) else rgb(255) }))
+    }
+
+    @Test
+    fun scorerSkipsBlankCropsWithoutRunningTheModel() {
+        var modelRuns = 0
+        val pass = RegionScorer(RegionScoreCache()) { 0L }.score(
+            regions(box(0, 0, 500, 500), box(0, 600, 400, 400)), 1080, 2400, 176,
+            crop = { FakeImage(it) }, fingerprint = { it.rect.top.toLong() },
+            classify = { modelRuns++; scores(0.9f) }, release = {},
+            content = { if (it.rect.top == 0) RegionContent.Verdict.FLAT else RegionContent.Verdict.OK }
+        )
+        assertEquals(1, pass.blankSkips)
+        assertEquals(1, pass.classified)
+        assertEquals(1, modelRuns)
+    }
+
+    @Test
+    fun blankVerdictIsCachedSoUnchangedPlaceholdersAreCheckedOnce() {
+        val scorer = RegionScorer(RegionScoreCache()) { 0L }
+        var checks = 0
+        repeat(3) {
+            val pass = scorer.score(
+                regions(box(0, 0, 500, 500)), 1080, 2400, 176,
+                crop = { FakeImage(it) }, fingerprint = { 5L }, classify = { scores(0.9f) }, release = {},
+                content = { checks++; RegionContent.Verdict.FLAT }
+            )
+            assertEquals(1, pass.blankSkips)
+            assertTrue(pass.scores.isEmpty())
+        }
+        assertEquals("content check ran once", 1, checks)
+    }
+
+    @Test
+    fun onlyRegionsWithTheSameBoundsBeforeAndAfterTheScreenshotAreUsed() {
+        val still = regions(box(100, 500, 600, 600)).single()
+        val moved = regions(box(100, 900, 400, 400)).single()
+        val movedLater = moved.copy(box = box(100, 700, 400, 400)) // scrolled between the two reads
+        assertEquals(listOf(still), RegionStability.stable("com.whatsapp", listOf(still, moved), "com.whatsapp", listOf(still, movedLater)))
+        // App switch between the reads: nothing is trusted.
+        assertTrue(RegionStability.stable("com.whatsapp", listOf(still), "com.anthropic.claude", listOf(still)).isEmpty())
+        assertTrue(RegionStability.stable(null, listOf(still), null, listOf(still)).isEmpty())
+    }
+
+    @Test
+    fun appSwitchResetsAndWindowChangesSettle() {
+        val t = AppSwitchTracker(settleMs = 1_000)
+        val overlays = setOf("com.android.systemui")
+        assertTrue(t.isSettled(0))
+        assertFalse("first app seen is not a switch", t.onWindowStateChanged("com.whatsapp", 0, overlays))
+        assertFalse(t.isSettled(500))
+        assertTrue(t.isSettled(1_000))
+        assertFalse("overlay windows are ignored", t.onWindowStateChanged("com.android.systemui", 5_000, overlays))
+        assertTrue("…and don't restart the settle time", t.isSettled(5_100))
+        assertFalse("new activity in the same app: settle, but no switch", t.onWindowStateChanged("com.whatsapp", 6_000, overlays))
+        assertFalse(t.isSettled(6_500))
+        assertTrue("another app: switch", t.onWindowStateChanged("com.anthropic.claude", 8_000, overlays))
+        assertEquals("com.anthropic.claude", t.foregroundPackage)
     }
 }

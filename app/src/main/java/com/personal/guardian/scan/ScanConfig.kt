@@ -162,6 +162,13 @@ object ScanConfig {
      */
     const val REGION_TIME_BUDGET_MS = 400L
 
+    /**
+     * After a window change (new activity, dialog, app switch) the region pass waits
+     * this long: while transitions animate, node bounds and screenshot pixels disagree.
+     * The whole-screen pass is unaffected.
+     */
+    const val REGION_SETTLE_MS = 1_000L
+
     /** Recently classified regions remembered by content (unchanged stickers aren't re-classified). */
     const val REGION_CACHE_SIZE = 32
 
