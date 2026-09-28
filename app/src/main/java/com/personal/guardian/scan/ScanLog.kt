@@ -11,8 +11,10 @@ object ScanLog {
     /**
      * One line per classified frame (calibration aid, see
      * [ScanConfig.LOG_EVERY_FRAME_SCORE]), e.g.
-     * `Scan frame: signal=0.6430 [>= 0.30] sexy=0.612 porn=0.031 hentai=0.000 neutral=0.340 drawings=0.017 trigger=event app=com.whatsapp positives=1/2`,
-     * where `signal` = sexy + porn + hentai (what the threshold applies to) and
+     * `Scan frame: signal=0.6430 [>= 0.15] sexy=0.612 porn=0.031 hentai=0.000 safe=0.340 drawing=0.017 trigger=event app=com.whatsapp positives=1/2`,
+     * where `signal` is what the threshold applies to — [signal], by default
+     * [NsfwScores.signal]; the scanner passes the verdict's own signal (the whole
+     * screen's [NsfwScores.screenSignal], or the region's) — and
      * `positives` counts positive frames currently inside the confirmation window.
      * With region scanning, [regions] summarises the regions of this capture (see
      * [regionSummary]) and is appended as ` regions=…`.
@@ -24,9 +26,9 @@ object ScanLog {
         foregroundPackage: String?,
         positives: Int,
         required: Int,
-        regions: String? = null
+        regions: String? = null,
+        signal: Float = scores.signal
     ): String {
-        val signal = scores.signal
         val cmp = if (signal >= threshold) ">=" else "<"
         return String.format(
             Locale.US,

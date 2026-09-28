@@ -144,7 +144,7 @@ class GuardianAccessibilityService : AccessibilityService() {
                 applicationContext,
                 "Screen scanning active: baseline every ${scheduler.baselineIntervalMs} ms, " +
                     "fast every ${scheduler.fastIntervalMs} ms for ${ScanConfig.WATCHED_PACKAGES.size} watched apps " +
-                    "(threshold ${ScanConfig.NSFW_THRESHOLD}, confirm ${ScanConfig.CONFIRMATION_COUNT} " +
+                    "(thresholds: screen ${ScanConfig.NSFW_THRESHOLD}, region ${ScanConfig.REGION_THRESHOLD}; confirm ${ScanConfig.CONFIRMATION_COUNT} " +
                     "in ${ScanConfig.CONFIRMATION_WINDOW_MS} ms)."
             )
             handler.post(tick)
@@ -302,7 +302,8 @@ class GuardianAccessibilityService : AccessibilityService() {
                         verdict.scores,
                         if (verdict.region != null) ScanConfig.REGION_THRESHOLD else confirmer.threshold,
                         source, scheduler.foregroundPackage, positives, confirmer.requiredPositives,
-                        if (ScanConfig.REGION_SCAN_ENABLED) ScanLog.regionSummary(regions.scores) else null
+                        if (ScanConfig.REGION_SCAN_ENABLED) ScanLog.regionSummary(regions.scores) else null,
+                        signal = verdict.score
                     )
                 )
             }

@@ -40,14 +40,12 @@ class DetectionConfirmerTest {
     }
 
     @Test
-    fun defaultThresholdIsPointThreeOnTheSexyPornHentaiSignal() {
-        assertEquals(0.3f, ScanConfig.NSFW_THRESHOLD)
+    fun defaultThresholdIsTheCalibratedWholeScreenValue() {
+        assertEquals(0.15f, ScanConfig.NSFW_THRESHOLD)
         val c = DetectionConfirmer()
-        assertTrue(c.isPositive(0.3f))
+        assertTrue(c.isPositive(0.15f))
         assertTrue(c.isPositive(0.35f))
-        assertFalse(c.isPositive(0.2999f))
-        // Highest signal seen on ordinary photos/screens in model testing (~0.19) stays negative.
-        assertFalse(c.isPositive(0.19f))
+        assertFalse(c.isPositive(0.1499f))
         assertFalse(c.isPositive(0.05f))
     }
 
@@ -78,24 +76,24 @@ class DetectionConfirmerTest {
 
     @Test
     fun atDefaultThresholdPositiveDipPositiveConfirms() {
-        // Shipped config: 0.3 threshold, 2 positives, 7 s window. A 0.29 dip between
-        // two 0.31 frames used to reset; now it confirms.
+        // Shipped config: 0.15 threshold, 2 positives, 7 s window. A 0.14 dip between
+        // two 0.16 frames used to reset; now it confirms.
         val c = DetectionConfirmer()
-        assertNull(c.onFrame(0.31f, 0, e))
-        assertNull(c.onFrame(0.29f, ScanConfig.FAST_INTERVAL_MS, e))
-        assertNotNull(c.onFrame(0.31f, 2 * ScanConfig.FAST_INTERVAL_MS, e))
+        assertNull(c.onFrame(0.16f, 0, e))
+        assertNull(c.onFrame(0.14f, ScanConfig.FAST_INTERVAL_MS, e))
+        assertNotNull(c.onFrame(0.16f, 2 * ScanConfig.FAST_INTERVAL_MS, e))
     }
 
     @Test
     fun alternatingScoresInFastModeNowConfirm() {
-        // Fast mode, scores flickering 0.35 / 0.25 around the 0.3 threshold for 30 s.
+        // Fast mode, scores flickering 0.20 / 0.10 around the 0.15 threshold for 30 s.
         // Old rule: never confirmed. New rule: positives every 3 s → one confirmation
         // per two positives → 5 confirmations.
         val c = DetectionConfirmer()
         var t = 0L
         val confirmedAt = mutableListOf<Long>()
         repeat(20) { i ->
-            val score = if (i % 2 == 0) 0.35f else 0.25f
+            val score = if (i % 2 == 0) 0.20f else 0.10f
             if (c.onFrame(score, t, e) != null) confirmedAt += t
             t += ScanConfig.FAST_INTERVAL_MS
         }

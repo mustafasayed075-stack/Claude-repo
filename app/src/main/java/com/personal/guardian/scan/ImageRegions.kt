@@ -333,8 +333,9 @@ data class RegionScore(
 
 /**
  * Combines one capture's whole-screen score with its region scores into a single
- * frame verdict for [DetectionConfirmer]: the frame is positive if the whole screen
- * reaches [wholeThreshold] **or** any region reaches [regionThreshold]. The reported
+ * frame verdict for [DetectionConfirmer]: the frame is positive if the whole screen's
+ * [NsfwScores.screenSignal] reaches [wholeThreshold] **or** any region's
+ * [NsfwScores.signal] reaches [regionThreshold]. The reported
  * score/classes are those of the strongest positive (a region wins over the whole
  * screen only when it scores higher); with no positive, the highest signal is
  * reported for the log. Pure Kotlin.
@@ -355,14 +356,15 @@ object FrameVerdict {
         wholeThreshold: Float = ScanConfig.NSFW_THRESHOLD,
         regionThreshold: Float = ScanConfig.REGION_THRESHOLD
     ): Result {
-        val wholePositive = whole.signal >= wholeThreshold
+        val wholeSignal = whole.screenSignal
+        val wholePositive = wholeSignal >= wholeThreshold
         val bestRegion = regions.maxByOrNull { it.scores.signal }
         val regionPositive = bestRegion != null && bestRegion.scores.signal >= regionThreshold
         val useRegion = bestRegion != null &&
-            ((regionPositive && (!wholePositive || bestRegion.scores.signal > whole.signal)) ||
-                (!wholePositive && !regionPositive && bestRegion.scores.signal > whole.signal))
+            ((regionPositive && (!wholePositive || bestRegion.scores.signal > wholeSignal)) ||
+                (!wholePositive && !regionPositive && bestRegion.scores.signal > wholeSignal))
         return if (useRegion) Result(wholePositive || regionPositive, bestRegion!!.scores.signal, bestRegion.scores, bestRegion)
-        else Result(wholePositive || regionPositive, whole.signal, whole, null)
+        else Result(wholePositive || regionPositive, wholeSignal, whole, null)
     }
 }
 

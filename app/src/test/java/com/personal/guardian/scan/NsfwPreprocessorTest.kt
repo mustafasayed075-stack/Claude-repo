@@ -1,15 +1,18 @@
 package com.personal.guardian.scan
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
 
 /**
- * Pure-JVM tests for the GantMan model's input conversion (RGB, 0..1), output
- * parsing (class order, signal), the anti-aliasing downscale plan, and the bundled
- * model file itself.
+ * Pure-JVM tests for the viddexa-nano model's input conversion (RGB, 0..1, nearest
+ * resize), output parsing (class order safe/hentai/porn/sexy/drawing), the two
+ * signals (regions: sexy+porn+hentai; whole screen: hentai gated at 0.95), the
+ * filtered downscale plan still used by the blank-crop check, and the bundled model
+ * file and its licence.
  */
 class NsfwPreprocessorTest {
 
@@ -57,34 +60,52 @@ class NsfwPreprocessorTest {
 
     @Test
     fun parsesClassesInModelOrder() {
-        val s = NsfwPreprocessor.scoresFromOutput(floatArrayOf(0.01f, 0.02f, 0.30f, 0.07f, 0.60f))
-        assertEquals(0.01f, s.drawings)
+        // Model order: safe, hentai, porn, sexy, drawing.
+        val s = NsfwPreprocessor.scoresFromOutput(floatArrayOf(0.30f, 0.02f, 0.07f, 0.60f, 0.01f))
+        assertEquals(0.30f, s.safe)
         assertEquals(0.02f, s.hentai)
-        assertEquals(0.30f, s.neutral)
         assertEquals(0.07f, s.porn)
         assertEquals(0.60f, s.sexy)
+        assertEquals(0.01f, s.drawing)
     }
 
     @Test
-    fun signalIsSexyPlusPornPlusHentai() {
+    fun regionSignalIsSexyPlusPornPlusHentai() {
         // Suggestive photo: driven by "sexy".
-        val suggestive = NsfwScores(drawings = 0.01f, hentai = 0.00f, neutral = 0.39f, porn = 0.02f, sexy = 0.58f)
+        val suggestive = NsfwScores(safe = 0.39f, hentai = 0.00f, porn = 0.02f, sexy = 0.58f, drawing = 0.01f)
         assertEquals(0.60f, suggestive.signal, 1e-6f)
         // Explicit photo: "sexy" is low because the probability went to "porn" — still counts.
-        val explicit = NsfwScores(drawings = 0.00f, hentai = 0.01f, neutral = 0.01f, porn = 0.95f, sexy = 0.03f)
+        val explicit = NsfwScores(safe = 0.01f, hentai = 0.01f, porn = 0.95f, sexy = 0.03f, drawing = 0.00f)
         assertEquals(0.99f, explicit.signal, 1e-6f)
-        assertTrue(explicit.signal >= ScanConfig.NSFW_THRESHOLD)
-        // Ordinary photo: neutral dominates.
-        val ordinary = NsfwScores(drawings = 0.008f, hentai = 0.001f, neutral = 0.984f, porn = 0.000f, sexy = 0.006f)
-        assertTrue(ordinary.signal < ScanConfig.NSFW_THRESHOLD)
-        // Drawings don't count.
-        assertEquals(0f, NsfwScores(drawings = 1f, hentai = 0f, neutral = 0f, porn = 0f, sexy = 0f).signal)
+        assertTrue(explicit.signal >= ScanConfig.REGION_THRESHOLD)
+        // Ordinary photo: safe dominates.
+        val ordinary = NsfwScores(safe = 0.984f, hentai = 0.001f, porn = 0.000f, sexy = 0.006f, drawing = 0.009f)
+        assertTrue(ordinary.signal < ScanConfig.REGION_THRESHOLD)
+        // Drawings (non-explicit) don't count; hentai does, in regions.
+        assertEquals(0f, NsfwScores(safe = 0f, hentai = 0f, porn = 0f, sexy = 0f, drawing = 1f).signal)
+        assertEquals(0.8f, NsfwScores(safe = 0.1f, hentai = 0.8f, porn = 0f, sexy = 0f, drawing = 0.1f).signal, 1e-6f)
+    }
+
+    @Test
+    fun screenSignalCountsHentaiOnlyWhenConfident() {
+        assertEquals(0.95f, ScanConfig.SCREEN_HENTAI_GATE)
+        // A UI/text screen read as a drawing leaking into hentai: not counted.
+        val uiScreen = NsfwScores(safe = 0.13f, hentai = 0.73f, porn = 0.00f, sexy = 0.00f, drawing = 0.14f)
+        assertEquals(0f, uiScreen.screenSignal, 1e-6f)
+        assertTrue(uiScreen.screenSignal < ScanConfig.NSFW_THRESHOLD)
+        // Confident drawn explicit content: counted.
+        val hentai = NsfwScores(safe = 0.01f, hentai = 0.97f, porn = 0.01f, sexy = 0.00f, drawing = 0.01f)
+        assertEquals(0.98f, hentai.screenSignal, 1e-6f)
+        // Photos: sexy + porn as usual.
+        val suggestive = NsfwScores(safe = 0.60f, hentai = 0.02f, porn = 0.10f, sexy = 0.26f, drawing = 0.02f)
+        assertEquals(0.36f, suggestive.screenSignal, 1e-6f)
+        assertTrue(suggestive.screenSignal >= ScanConfig.NSFW_THRESHOLD)
     }
 
     @Test
     fun breakdownListsEveryClass() {
-        val s = NsfwScores(drawings = 0.017f, hentai = 0f, neutral = 0.34f, porn = 0.031f, sexy = 0.612f)
-        assertEquals("sexy=0.612 porn=0.031 hentai=0.000 neutral=0.340 drawings=0.017", s.breakdown())
+        val s = NsfwScores(safe = 0.34f, hentai = 0f, porn = 0.031f, sexy = 0.612f, drawing = 0.017f)
+        assertEquals("sexy=0.612 porn=0.031 hentai=0.000 safe=0.340 drawing=0.017", s.breakdown())
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -92,7 +113,19 @@ class NsfwPreprocessorTest {
         NsfwPreprocessor.scoresFromOutput(floatArrayOf(0.1f, 0.9f))
     }
 
-    // ---- Downscale plan ----
+    // ---- Resize ----
+
+    @Test
+    fun modelInputIsResizedNearestNeighbour() {
+        // One unfiltered createScaledBitmap straight to 224x224, as the model was trained.
+        assertEquals(false, NsfwPreprocessor.RESIZE_FILTER)
+        assertEquals(224, NsfwPreprocessor.INPUT_DIM)
+        val classifier = File("src/main/java/com/personal/guardian/scan/NsfwClassifier.kt").readText()
+        assertTrue(classifier.contains("Bitmap.createScaledBitmap(src, dim, dim, NsfwPreprocessor.RESIZE_FILTER)"))
+        assertFalse("no stepwise filtered downscale for the model input", classifier.contains("downscaleSteps"))
+    }
+
+    // ---- Filtered downscale plan (blank-crop check) ----
 
     @Test
     fun phoneScreenIsHalvedStepwiseBeforeFinalResize() {
@@ -124,17 +157,29 @@ class NsfwPreprocessorTest {
     // ---- Bundled model ----
 
     @Test
-    fun bundledModelIsTheVerifiedGantManFile() {
+    fun bundledModelIsTheVerifiedViddexaNanoConversion() {
+        assertEquals("models/viddexa_nsfw_detection_2_nano_224.tflite", ScanConfig.MODEL_ASSET)
         val model = File("src/main/assets/" + ScanConfig.MODEL_ASSET)
         assertTrue("missing ${model.absolutePath}", model.isFile)
-        assertEquals(17_355_548L, model.length())
+        assertEquals(16_339_368L, model.length())
         val sha = MessageDigest.getInstance("SHA-256").digest(model.readBytes()).joinToString("") { "%02x".format(it) }
-        assertEquals("380f98f7685f9d8a386f8cc595b6dfcb972989aae3d1b8b270d3a4a5b96fab40", sha)
+        assertEquals("87b4701b8a69d771b90d635ef5145df8c92e1c4632da47b270029a15ef4b7fa2", sha)
     }
 
     @Test
-    fun classOrderMatchesTheModelsLabelFile() {
-        val labels = File("../third_party/nsfw_model/class_labels.txt").readLines().filter { it.isNotBlank() }
+    fun previousModelAndItsLicencesAreGone() {
+        assertFalse(File("src/main/assets/models/nsfw_mobilenet_v2_140_224.tflite").exists())
+        assertFalse(File("../third_party/nsfw_model").exists())
+        assertEquals(listOf("viddexa_nsfw_detection_2_nano_224.tflite"), File("src/main/assets/models").list()!!.sorted())
+    }
+
+    @Test
+    fun classOrderMatchesTheModelsLabelFileAndLicenceIsBundled() {
+        val dir = File("../third_party/viddexa_nsfw_detection_2_nano")
+        val labels = File(dir, "class_labels.txt").readLines().filter { it.isNotBlank() }
         assertEquals(labels, NsfwPreprocessor.CLASS_LABELS)
+        assertEquals(listOf("safe", "hentai", "porn", "sexy", "drawing"), NsfwPreprocessor.CLASS_LABELS)
+        assertTrue(File(dir, "LICENSE-Apache-2.0.txt").readText().contains("Apache License"))
+        assertTrue(File(dir, "README.md").readText().contains("87b4701b8a69d771b90d635ef5145df8c92e1c4632da47b270029a15ef4b7fa2"))
     }
 }

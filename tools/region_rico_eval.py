@@ -6,7 +6,8 @@ replicates ImageRegionFinder's rules (ImageRegions.kt) on each hierarchy, crops 
 picked elements from the screenshot and scores them with the bundled model through
 the app's region path (blank-crop check included; see region_scan_benchmark.py).
 Prints the Rico labels of the picked elements and false-positive counts per
-threshold. Keep the rules below in sync with ImageRegions.kt.
+threshold, and the whole-screen pass (gated screen signal) on the same screens.
+Keep the rules below in sync with ImageRegions.kt.
 
 Usage:  pip install ai-edge-litert pillow numpy
         python tools/region_rico_eval.py /tmp/rico [max_bytes_of_annotations=45000000]
@@ -110,7 +111,7 @@ def main():
     os.makedirs(os.path.join(path, "shots"), exist_ok=True)
     samples = load_samples(path, int(sys.argv[2]) if len(sys.argv) > 2 else 45_000_000)
     min_side = int(64 * 2.625)  # 64 dp on Rico's 1080-wide screenshots (1440 px @ 3.5 originally)
-    labels, sig, screens = collections.Counter(), [], []
+    labels, sig, screens, whole = collections.Counter(), [], [], []
     for fp, w, h, dets in samples:
         cands = []
         for d in dets:
@@ -128,6 +129,7 @@ def main():
         if not os.path.exists(shot):
             urllib.request.urlretrieve(BASE + fp, shot)
         im = Image.open(shot).convert("RGB")
+        whole.append(bench["screen_signal"](im))
         best = 0.0
         for c in picked:
             labels[c["label"]] += 1
@@ -136,8 +138,12 @@ def main():
             best = max(best, v)
         screens.append(best)
     print(f"{len(samples)} screens, {len(screens)} with regions, {len(sig)} regions; Rico labels: {labels.most_common()}")
+    print(f"Region path (REGION_THRESHOLD = {bench['REGION_THRESHOLD']}):")
     for t in (0.3, 0.5, 0.7, 0.9):
         print(f"  >= {t}: {sum(v >= t for v in sig)} regions on {sum(b >= t for b in screens)} screens")
+    print(f"Whole-screen pass on the same {len(whole)} screens (NSFW_THRESHOLD = {bench['SCREEN_THRESHOLD']}):")
+    for t in (0.1, 0.15, 0.2, 0.3):
+        print(f"  >= {t}: {sum(v >= t for v in whole)} screens")
 
 
 if __name__ == "__main__":

@@ -11,10 +11,10 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 
 /**
- * On-device NSFW classifier: TensorFlow Lite running the bundled GantMan
- * nsfw_model ([ScanConfig.MODEL_ASSET]; 5 classes: drawings, hentai, neutral, porn,
- * sexy). Inference is entirely local — the interpreter and the model file make no
- * network calls.
+ * On-device NSFW classifier: TensorFlow Lite running the bundled
+ * viddexa/nsfw-detection-2-nano model ([ScanConfig.MODEL_ASSET]; EfficientNet-B0,
+ * 5 classes: safe, hentai, porn, sexy, drawing). Inference is entirely local — the
+ * interpreter and the model file make no network calls.
  *
  * Not thread-safe; use from the scanner's single worker thread.
  */
@@ -29,7 +29,7 @@ class NsfwClassifier private constructor(private val interpreter: Interpreter) :
     /** Returns the per-class probabilities for [bitmap] (any size, software config). */
     fun classify(bitmap: Bitmap): NsfwScores {
         val dim = NsfwPreprocessor.INPUT_DIM
-        val scaled = downscale(bitmap)
+        val scaled = resize(bitmap)
         try {
             scaled.getPixels(pixels, 0, dim, 0, 0, dim, dim)
         } finally {
@@ -42,15 +42,11 @@ class NsfwClassifier private constructor(private val interpreter: Interpreter) :
         return NsfwPreprocessor.scoresFromOutput(output[0])
     }
 
-    /** Area-like downscale via repeated filtered halving (see [NsfwPreprocessor.downscaleSteps]). */
-    private fun downscale(src: Bitmap): Bitmap {
-        var current = src
-        for ((w, h) in NsfwPreprocessor.downscaleSteps(src.width, src.height)) {
-            val next = Bitmap.createScaledBitmap(current, w, h, /* filter = */ true)
-            if (current !== src && current !== next) current.recycle()
-            current = next
-        }
-        return current
+    /** One nearest-neighbour resize to the model input, as the model was trained (see [NsfwPreprocessor.RESIZE_FILTER]). */
+    private fun resize(src: Bitmap): Bitmap {
+        val dim = NsfwPreprocessor.INPUT_DIM
+        if (src.width == dim && src.height == dim) return src
+        return Bitmap.createScaledBitmap(src, dim, dim, NsfwPreprocessor.RESIZE_FILTER)
     }
 
     override fun close() = interpreter.close()

@@ -42,7 +42,7 @@ class ImageRegionsTest {
     private fun root(vararg children: Node) =
         Node("android.widget.FrameLayout", screen, children = listOf(Node("androidx.recyclerview.widget.RecyclerView", screen, children = children.toList())))
 
-    private fun scores(signal: Float) = NsfwScores(drawings = 0f, hentai = 0f, neutral = 1f - signal, porn = 0f, sexy = signal)
+    private fun scores(signal: Float) = NsfwScores(safe = 1f - signal, hentai = 0f, porn = 0f, sexy = signal, drawing = 0f)
 
     // ---- which nodes are image-bearing ----
 
@@ -295,14 +295,30 @@ class ImageRegionsTest {
     }
 
     @Test
-    fun regionThresholdIsTheChosenIndependentValue() {
-        assertEquals(0.5f, ScanConfig.REGION_THRESHOLD, 0f)
-        // Default verdicts use each path's own threshold: a region at 0.4 is not positive,
+    fun thresholdsAreTheChosenIndependentValues() {
+        assertEquals(0.7f, ScanConfig.REGION_THRESHOLD, 0f)
+        assertEquals(0.15f, ScanConfig.NSFW_THRESHOLD, 0f)
+        // Default verdicts use each path's own threshold: a region at 0.6 is not positive,
         // while the whole screen at the same signal is (NSFW_THRESHOLD is lower).
-        assertTrue(ScanConfig.NSFW_THRESHOLD < 0.4f)
-        assertFalse(FrameVerdict.combine(scores(0.05f), listOf(regionScore(0.4f))).positive)
-        assertTrue(FrameVerdict.combine(scores(0.05f), listOf(regionScore(0.55f))).positive)
-        assertTrue(FrameVerdict.combine(scores(0.4f), emptyList()).positive)
+        assertFalse(FrameVerdict.combine(scores(0.05f), listOf(regionScore(0.6f))).positive)
+        assertTrue(FrameVerdict.combine(scores(0.05f), listOf(regionScore(0.75f))).positive)
+        assertTrue(FrameVerdict.combine(scores(0.6f), emptyList()).positive)
+        assertFalse(FrameVerdict.combine(scores(0.14f), emptyList()).positive)
+    }
+
+    @Test
+    fun wholeScreenIgnoresUnconfidentHentaiButRegionsCountIt() {
+        // A chat-app UI screen read as a drawing: hentai 0.73 on the whole screen → not positive.
+        val uiScreen = NsfwScores(safe = 0.13f, hentai = 0.73f, porn = 0f, sexy = 0f, drawing = 0.14f)
+        val v = FrameVerdict.combine(uiScreen, emptyList())
+        assertFalse(v.positive)
+        assertEquals(0f, v.score, 1e-6f)
+        // Confident drawn explicit content on the whole screen still counts.
+        assertTrue(FrameVerdict.combine(NsfwScores(0.01f, 0.97f, 0.01f, 0f, 0.01f), emptyList()).positive)
+        // In a region, hentai counts in full (signal = sexy + porn + hentai).
+        val drawnRegion = RegionScore(regions(box(560, 900, 480, 480)).single(), box(560, 900, 480, 480),
+            NsfwScores(0.1f, 0.75f, 0f, 0f, 0.15f), 7L, cached = false)
+        assertTrue(FrameVerdict.combine(scores(0f), listOf(drawnRegion)).positive)
     }
 
     @Test

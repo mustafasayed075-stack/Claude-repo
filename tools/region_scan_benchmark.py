@@ -1,15 +1,19 @@
 """Off-device validation for Stage 3 region scanning (README "Region scanning").
 
-Runs the bundled TFLite model with the app's preprocessing (repeated bilinear
-halving to 224x224, RGB / 255, 2 threads; signal = hentai + porn + sexy) and prints:
+Runs the bundled TFLite model (viddexa-nano) with the app's preprocessing
+(nearest-neighbour resize to 224x224, RGB / 255, 2 threads) and the app's two
+signals — regions: sexy + porn + hentai (REGION_THRESHOLD); whole screen: sexy +
+porn, hentai only when >= 0.95 (NSFW_THRESHOLD) — and prints:
   1. false positives: each photo alone vs. as a chat image on a 1080x2400 chat-like
      screen, classified by the whole-screen pass and as a region crop;
+     with an optional second directory of revealing (non-explicit) photos, the same
+     for recall;
   2. cost per capture for typical scenarios (region cache included).
 No explicit images are needed or used: pass a directory of everyday photos (the
 README numbers used 400 random COCO-2017 val photos containing people).
 
 Usage:  pip install ai-edge-litert pillow numpy
-        python tools/region_scan_benchmark.py /path/to/photos [threshold]
+        python tools/region_scan_benchmark.py /path/to/photos [/path/to/revealing_photos]
 """
 import glob
 import os
@@ -22,14 +26,17 @@ from PIL import Image, ImageDraw
 from ai_edge_litert.interpreter import Interpreter
 
 MODEL = os.path.join(os.path.dirname(__file__), "..", "app", "src", "main", "assets", "models",
-                     "nsfw_mobilenet_v2_140_224.tflite")
+                     "viddexa_nsfw_detection_2_nano_224.tflite")
+SCREEN_THRESHOLD = 0.15   # ScanConfig.NSFW_THRESHOLD
+REGION_THRESHOLD = 0.7    # ScanConfig.REGION_THRESHOLD
+HENTAI_GATE = 0.95        # ScanConfig.SCREEN_HENTAI_GATE
 T = 224
 it = Interpreter(model_path=MODEL, num_threads=2)
 it.allocate_tensors()
 INP, OUT = it.get_input_details()[0]["index"], it.get_output_details()[0]["index"]
 
 
-def downscale(img):  # mirrors NsfwPreprocessor.downscaleSteps
+def downscale(img):  # mirrors NsfwPreprocessor.downscaleSteps (filtered halving; not the model input)
     w, h = img.size
     while w > 2 * T or h > 2 * T:
         if w > 2 * T:
@@ -40,12 +47,24 @@ def downscale(img):  # mirrors NsfwPreprocessor.downscaleSteps
     return img.resize((T, T), Image.BILINEAR) if (w, h) != (T, T) else img
 
 
-def signal(img):
-    x = np.asarray(downscale(img.convert("RGB")), dtype=np.float32)[None] / 255.0
+def probs(img):
+    """Model input as in the app: one nearest-neighbour resize (NsfwPreprocessor.RESIZE_FILTER = false)."""
+    x = np.asarray(img.convert("RGB").resize((T, T), Image.NEAREST), dtype=np.float32)[None] / 255.0
     it.set_tensor(INP, x)
     it.invoke()
-    p = it.get_tensor(OUT)[0]  # drawings, hentai, neutral, porn, sexy
-    return float(p[1] + p[3] + p[4])
+    return it.get_tensor(OUT)[0]  # safe, hentai, porn, sexy, drawing
+
+
+def signal(img):
+    """NsfwScores.signal (regions): sexy + porn + hentai."""
+    p = probs(img)
+    return float(p[1] + p[2] + p[3])
+
+
+def screen_signal(img):
+    """NsfwScores.screenSignal (whole screen): sexy + porn, hentai only when >= HENTAI_GATE."""
+    p = probs(img)
+    return float(p[2] + p[3] + (p[1] if p[1] >= HENTAI_GATE else 0.0))
 
 
 def chat_screen():
@@ -117,24 +136,26 @@ def dhash(img):
     return int("".join("1" if b else "0" for b in (g[:, :-1] > g[:, 1:]).flatten()), 2)
 
 
-def false_positives(photos, th):
-    res = {k: [] for k in ("photo alone", "whole 700px", "region 700px", "whole 450px", "region 450px")}
+def evaluate(photos, label):
+    res = {k: [] for k in ("photo alone (region)", "whole 700px", "region 700px", "whole 450px", "region 450px")}
     for ph in photos:
-        res["photo alone"].append(signal(ph))
+        res["photo alone (region)"].append(signal(ph))
         for bw in (700, 450):
             s, box = with_photo(ph, bw)
-            res[f"whole {bw}px"].append(signal(s))
+            res[f"whole {bw}px"].append(screen_signal(s))
             res[f"region {bw}px"].append(region_signal(s.crop(box)))
     n = len(photos)
-    print(f"\n{n} photos, threshold {th}")
+    print(f"\n{label}: {n} photos (whole screen at {SCREEN_THRESHOLD}, regions at {REGION_THRESHOLD})")
     for k, v in res.items():
-        print(f"  {k:13s} >= {th}: {sum(x >= th for x in v):4d}/{n}   median {statistics.median(v):.3f}")
+        th = SCREEN_THRESHOLD if k.startswith("whole") else REGION_THRESHOLD
+        print(f"  {k:21s} >= {th}: {sum(x >= th for x in v):4d}/{n}   median {statistics.median(v):.3f}")
     for bw in (700, 450):
-        dr = statistics.median(abs(a - b) for a, b in zip(res["photo alone"], res[f"region {bw}px"]))
-        dw = statistics.median(abs(a - b) for a, b in zip(res["photo alone"], res[f"whole {bw}px"]))
-        print(f"  |signal - photo alone| median at {bw}px: region {dr:.3f}, whole screen {dw:.3f}")
-    for t in (0.5, 0.7, 0.9):
+        dr = statistics.median(abs(a - b) for a, b in zip(res["photo alone (region)"], res[f"region {bw}px"]))
+        print(f"  |region signal - photo alone| median at {bw}px: {dr:.3f}")
+    for t in (0.3, 0.5, 0.7, 0.9):
         print(f"  region 450px >= {t}: {sum(x >= t for x in res['region 450px'])}/{n}")
+    for t in (0.1, 0.15, 0.2, 0.3):
+        print(f"  whole 450px  >= {t}: {sum(x >= t for x in res['whole 450px'])}/{n}")
 
 
 BOXES = [(560, 500, 1040, 980), (340, 1050, 1040, 1575), (560, 1650, 1040, 2130)]
@@ -153,7 +174,7 @@ def cost(photos, n_regions, changing, captures=40):
             b = BOXES[i]
             s.paste(ph.resize((b[2] - b[0], b[3] - b[1])), (b[0], b[1]))
         t0 = time.perf_counter()
-        signal(s)
+        screen_signal(s)
         t1 = time.perf_counter()
         for i in range(n_regions):
             crop = s.crop(BOXES[i])
@@ -169,8 +190,10 @@ def cost(photos, n_regions, changing, captures=40):
 
 def main():
     photos = [Image.open(f).convert("RGB") for f in sorted(glob.glob(os.path.join(sys.argv[1], "*.jpg")))]
-    th = float(sys.argv[2]) if len(sys.argv) > 2 else 0.3
-    false_positives(photos, th)
+    evaluate(photos, "Ordinary photos (false positives)")
+    if len(sys.argv) > 2:
+        revealing = [Image.open(f).convert("RGB") for f in sorted(glob.glob(os.path.join(sys.argv[2], "*.jpg")))]
+        evaluate(revealing, "Revealing, non-explicit photos (recall)")
     print("\nscenario | whole ms/capture | region ms/capture | region inferences per 40 captures | overhead")
     for name, n, ch in [("text chat, no media", 0, 0), ("2 stickers + photo, unchanged", 3, 0),
                         ("scrolling chat, 1 new image per capture", 3, 1),

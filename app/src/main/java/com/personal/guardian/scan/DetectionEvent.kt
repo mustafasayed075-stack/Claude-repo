@@ -33,7 +33,9 @@ data class DetectionEvent(
     /** Wall-clock time of the confirming frame, epoch millis. */
     val timestampMs: Long,
     /**
-     * Image: signal (sexy + porn + hentai) of the confirming frame, 0..1.
+     * Image: signal of the confirming frame, 0..1 — the whole-screen signal
+     * ([NsfwScores.screenSignal]) or, when a region scored, the region's
+     * ([NsfwScores.signal]).
      * Text: 1.0 (a keyword match is binary).
      */
     val confidence: Float,
@@ -74,8 +76,8 @@ data class DetectionEvent(
             append("\"sexy\":").append(num(s.sexy))
             append(",\"porn\":").append(num(s.porn))
             append(",\"hentai\":").append(num(s.hentai))
-            append(",\"neutral\":").append(num(s.neutral))
-            append(",\"drawings\":").append(num(s.drawings))
+            append(",\"safe\":").append(num(s.safe))
+            append(",\"drawing\":").append(num(s.drawing))
             append('}')
         }
         append('}')

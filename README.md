@@ -12,8 +12,10 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
   without the app; blocked lookups are answered locally with `NXDOMAIN`.
 - **Stage 3 — Screen scanning:** an Accessibility Service takes one-shot
   screenshots (every 6 s, every 1.5 s while a watched app is in the foreground),
-  classifies them **on-device** with a TensorFlow Lite NSFW model, and — once 2
-  frames with a suggestive/explicit signal ≥ 0.3 fall within 7 s (not necessarily in a row) — logs the detection, saves a small
+  classifies them — and the image elements on them — **on-device** with a
+  TensorFlow Lite NSFW model (viddexa nsfw-detection-2-nano), and — once 2 frames
+  with a suggestive/explicit signal (whole screen ≥ 0.15, image region ≥ 0.7) fall
+  within 7 s (not necessarily in a row) — logs the detection, saves a small
   review thumbnail locally and shows a notification. **Detection and logging only;
   no lock action yet.**
 - **Stage 4 — Text scanning:** the same Accessibility Service reads the **visible
@@ -82,11 +84,11 @@ app/src/main/java/com/personal/guardian/
 
 app/src/main/res/xml/device_admin_policies.xml        Stage 1: device-admin policy declaration
 app/src/main/res/xml/accessibility_service_config.xml Stage 3: accessibility service declaration
-app/src/main/assets/models/nsfw_mobilenet_v2_140_224.tflite  Stage 3: bundled 5-class NSFW model (see below)
+app/src/main/assets/models/viddexa_nsfw_detection_2_nano_224.tflite  Stage 3: bundled 5-class NSFW model (see below)
 app/src/main/assets/text/keywords.txt                  Stage 4: bundled keyword/phrase list (generated, editable)
 app/src/test/...                                       Unit tests (pure JVM)
-tools/verify_nsfw_model.py                             Stage 3: re-verifies the bundled model + preprocessing
-third_party/nsfw_model/                                Stage 3: model licenses + class labels
+tools/convert_nsfw_model.py                            Stage 3: rebuilds + verifies the bundled model (byte-for-byte)
+third_party/viddexa_nsfw_detection_2_nano/             Stage 3: model licence (Apache-2.0), attribution, class labels
 tools/build_keyword_list.py                            Stage 4: builds keywords.txt from LDNOOBW + additions,
                                                        context rules, noun-mode terms, roots, exceptions
 third_party/ldnoobw/                                   Stage 4: LDNOOBW license (CC BY 4.0)
@@ -202,16 +204,25 @@ these in order (from the spec):
   Below API 30 the service logs *"Screen scanning unsupported on this Android
   version"* and stays idle.
 - **Classifier:** TensorFlow Lite on-device (`NsfwClassifier`), 2 threads, running
-  the GantMan 5-class model (drawings / hentai / neutral / porn / sexy). The frame
-  is shrunk to 224×224 by repeated filtered halving (≈ area averaging — a single
-  big bitmap scale aliases and made a plain logo read as 0.65 "hentai" in testing),
-  converted to RGB in 0..1, and classified.
-- **Signal:** the threshold applies to **sexy + porn + hentai** probability. On
-  suggestive photos (swimwear, lingerie…) that is essentially the *sexy* class,
-  which is the primary signal; explicit content moves its probability to
-  *porn*/*hentai* (a sexy-only score would miss it), so those count too.
-- **Confirmation:** `DetectionConfirmer` — a frame is positive when its signal ≥
-  `NSFW_THRESHOLD` = **0.3**; a detection is confirmed after
+  **viddexa nsfw-detection-2-nano** (EfficientNet-B0; 5 classes safe / hentai / porn
+  / sexy / drawing; see *Model*). The frame (or region crop) is resized to 224×224
+  in **one nearest-neighbour step**, the resize the model was trained with, then
+  converted to RGB in 0..1 and classified. The model's normalisation is part of the
+  bundled graph.
+- **Signals** (`NsfwScores`):
+  - **image regions** use `signal` = **sexy + porn + hentai**. On suggestive photos
+    (swimwear, lingerie…) that is essentially *sexy*; explicit content moves to
+    *porn*/*hentai*, which count too.
+  - **the whole screen** uses `screenSignal` = **sexy + porn, plus hentai only when
+    it is ≥ `SCREEN_HENTAI_GATE` = 0.95**. The model reads plain UI and text
+    screenshots as drawings of something, and they leak into *hentai*: with hentai
+    counted in full, 60% of chat-app screens and 8% of real app screens scored ≥ 0.3.
+    Innocent screens reach 0.95 hentai in 0.1% of cases, so confidently drawn
+    explicit content still counts (owner decision; see *Model → whole-screen
+    calibration*).
+- **Confirmation:** `DetectionConfirmer` — a frame is positive when the whole
+  screen's `screenSignal` ≥ `NSFW_THRESHOLD` = **0.15** or an image region's
+  `signal` ≥ `REGION_THRESHOLD` = **0.7**; a detection is confirmed after
   at least `CONFIRMATION_COUNT` = **2** positive frames within the last
   `CONFIRMATION_WINDOW_MS` = **7 s**. Negative frames in between don't reset
   anything (e.g. positive → negative → positive within 7 s confirms); positives
@@ -219,22 +230,13 @@ these in order (from the spec):
   fast mode (1.5 s frames) and normal mode (6 s frames). Positives are cleared when
   another app comes to the foreground: frames from two different apps never
   combine into one detection (see *Region scanning → false-positive investigation*).
-  - **Why 0.3 (and how this scale differs from the old model):** the previous
-    model (OpenNSFW) only separated "explicit" from "everything else", so a swimwear
-    photo and an ordinary photo both scored low and no threshold could split them.
-    This model is a 5-way softmax with a separate *sexy* class, and it is
-    **confident**: ordinary content puts almost everything on *neutral* (or
-    *drawings*). In testing (`tools/verify_nsfw_model.py`: sample photos plus the
-    same photos laid out as 1080×2400 phone screens) the signal had a median of
-    0.01 and a maximum of 0.18 (textures/illustrations leaking into *hentai*).
-    0.3 sits just above that noise while still firing when only ~30% of the
-    probability is suggestive/explicit — far below "sexy is the most likely class"
-    (~0.5). Lower it for more sensitivity; the per-class frame log shows where real
-    content lands.
+  Both thresholds are calibrated in *Model*.
 - **Calibration logging (temporary):** with `LOG_EVERY_FRAME_SCORE = true` every
   classified frame is logged, e.g.
-  `Scan frame: signal=0.6430 [>= 0.30] sexy=0.612 porn=0.031 hentai=0.000 neutral=0.340 drawings=0.017 trigger=event app=com.whatsapp positives=1/2`
-  (`positives` = positive frames currently inside the window).
+  `Scan frame: signal=0.6430 [>= 0.15] sexy=0.612 porn=0.031 hentai=0.000 safe=0.340 drawing=0.017 trigger=event app=com.whatsapp positives=1/2 regions=0`
+  — all five class scores; `signal` is the one the threshold was applied to (the
+  whole screen's gated signal, or the scoring region's) and `positives` counts
+  positive frames currently inside the window.
   Set the flag to `false` (or delete it and its one use) when calibration is done;
   while on, the event log rotates within a few hours of heavy use.
 - **Lifecycle diagnostics:** the service logs each connect (instance number, pid,
@@ -314,15 +316,16 @@ unchanged and still runs on every capture.
    mostly empty margin (content under 15% after trimming flat borders) are skipped
    without running the model.
 6. **Crop and classify** each region at its own resolution: the element's exact
-   bounds from the screenshot, through the same halving downscale (or upscale) to
-   224×224. The crop isn't padded to a square, because the model was trained on
-   squashed whole images.
+   bounds from the screenshot, resized straight to 224×224 with nearest-neighbour
+   (as the whole screen is). The crop isn't padded to a square, because the model
+   was trained on squashed whole images.
 7. **Cache:** the result for each crop — its scores, or "blank" — is remembered by
    its 64-bit dHash plus size (`REGION_CACHE_SIZE` = 32, LRU, exact match only). A
    sticker, photo or placeholder that stays on screen across captures is checked
    once, not every 1.5 s.
 8. **Verdict** (`FrameVerdict`): a frame is positive if the whole screen reaches
-   `NSFW_THRESHOLD` (**0.3**) **or** any region reaches `REGION_THRESHOLD` (**0.5**).
+   `NSFW_THRESHOLD` (**0.15**, on the gated screen signal) **or** any region
+   reaches `REGION_THRESHOLD` (**0.7**, on sexy + porn + hentai).
    These are two independent thresholds (see *Region threshold decision*). Confirmation
    (2 positives within 7 s), cooldown and reactions are unchanged. When a region
    decided the verdict:
@@ -336,7 +339,11 @@ unchanged and still runs on every capture.
    `regions=2 [0.912 image 480x480@560,900 (ImageView)*, …]` (`*` = cached).
    The main screen shows regions classified and cache hits.
 
-**Validation with the real model** (bundled `.tflite` via LiteRT on a 4-core x86
+> The validation, investigation and threshold-decision history below was measured
+> with the **previous model** (GantMan MobileNetV2) and is kept as a record. The
+> current model's numbers are in *Model: source, license and measurements*.
+
+**Validation with the previous model** (bundled `.tflite` via LiteRT on a 4-core x86
 dev machine, 2 threads). The preprocessing mirrors the app. The test images were
 400 everyday COCO-2017 photos with people, shown as a chat image (700 or 450 px
 wide) on a 1080×2400 chat-like screen. No explicit images were used.
@@ -397,7 +404,7 @@ Reading the numbers:
 - To turn the path off, set `REGION_SCAN_ENABLED = false`. To make it cheaper, lower
   `REGION_MAX_PER_CAPTURE`.
 
-#### False-positive investigation (after two on-device reports)
+#### False-positive investigation (after two on-device reports; previous model)
 
 The two reports were a friend's ordinary profile picture, and simply opening the
 Claude app with no photos of people on screen. Each suspected cause was tested with
@@ -445,46 +452,154 @@ results are in the table. No explicit images were used.
 
 #### Region threshold decision
 
-**Final: `REGION_THRESHOLD` = 0.5** (owner decision). The whole-screen
-`NSFW_THRESHOLD` stays unchanged at **0.3**; the two thresholds are independent.
+**Current: `REGION_THRESHOLD` = 0.7** (owner decision, set together with the switch
+to the viddexa model; measurements below in *Model*). History: with the previous
+model the owner had chosen 0.5, when 42 of 400 COCO people photos and 59 of 1,504
+Rico screens crossed it (0.3: 54 / 73; 0.7: 24 / 33; 0.9: 14 / 21).
 
-| Region threshold | COCO everyday people photos over it (of 400) | Rico app screens that would alert (of 1,504 with regions) |
-|---|---|---|
-| 0.3 | 54 (13.5%) | 73 |
-| **0.5 (chosen)** | **42 (10.5%)** | **59** |
-| 0.7 | 24 (6%) | 33 |
-| 0.9 | 14 (3.5%) | 21 |
+The whole-screen `NSFW_THRESHOLD` (0.15) is independent of it; see
+*Whole-screen calibration* below.
 
-Why 0.5:
-- **The fixable part is fixed.** The app-switch reset, stale-crop (before/after
-  bounds, 1 s settle), blank-crop and UI-graphic fixes removed the false positives
-  that came from pipeline bugs. They are in place before this choice.
-- **What remains is the model.** It rates some ordinary photos of clothed people as
-  suggestive. A region is classified at the photo's own resolution, so it gets that
-  full rate. The whole screen dilutes small images, which is why the two paths need
-  different thresholds.
-- **0.5 is the most sensitive of the measured options** that cuts ordinary-photo
-  alerts: about a fifth fewer COCO photos (54 → 42) and app screens (73 → 59) than
-  0.3. A region counts once *sexy + porn + hentai* together hold at least half the
-  model's probability: suggestive or explicit is more likely than not. That is still
-  well below 0.7–0.9, which would drop about half of the ordinary-looking
-  high scorers along with clearly suggestive ones.
-- **What 0.5 gives up:** on the Rico screens, the cleavage, swimwear, tank-top and
-  shirtless images that ranked high mostly scored 0.5–1.0 and are still caught.
-  A few product shots of ordinary dresses scored 0.33–0.42 and no longer count.
-  On-device, the per-frame log (`regions=[…]`) shows where real content lands if
-  the value needs revisiting.
-
-### Model: source and license
+### Model: source, license and measurements
 
 | | |
 |---|---|
-| Model | **GantMan nsfw_model** — MobileNetV2 (depth 1.4, 224×224) fine-tuned into 5 classes: drawings, hentai, neutral, porn, sexy (~92% validation accuracy per its training log) |
-| Source | https://github.com/GantMan/nsfw_model — official release `1.2.0`, asset `mobilenet_v2_140_224.1.zip` (SHA-256 `22c0892695929639c16ea302996b8f64df9c52e7a6c1d874c1de1047bfe109f7`). Bundled unmodified: its `saved_model.tflite`. (The README's S3 links return 403; the GitHub release asset is reachable.) |
-| Licenses | nsfw_model: **MIT** (© 2020 The nsfw_model Developers); base MobileNetV2 weights: **Apache 2.0** (Google) — full texts in `third_party/nsfw_model/` |
-| Bundled file | `assets/models/nsfw_mobilenet_v2_140_224.tflite`, float32, 17.4 MB, SHA-256 `380f98f7685f9d8a386f8cc595b6dfcb972989aae3d1b8b270d3a4a5b96fab40` |
-| I/O | input `1×224×224×3` float32, RGB scaled to 0..1 (as in the project's `predict.py`); output `1×5` softmax in `class_labels.txt` order |
-| Verification | `tools/verify_nsfw_model.py`: bundled file is byte-identical to the release's; TFLite matches the release's SavedModel to within 0.000004 |
+| Model | **viddexa/nsfw-detection-2-nano**: EfficientNet-B0 (4.0M parameters), 5 classes in output order **safe, hentai, porn, sexy, drawing** |
+| Source | https://huggingface.co/viddexa/nsfw-detection-2-nano, revision `12e57200346246b37382f746e4d94d10b014f6a1`, `model.safetensors` SHA-256 `011ef883033b5908994a06d3b6dcfbf55498206afc1cb55849f918588c7dfcba` |
+| License | **Apache-2.0**: full text, attribution and the list of changes in `third_party/viddexa_nsfw_detection_2_nano/` |
+| Bundled file | `assets/models/viddexa_nsfw_detection_2_nano_224.tflite`, float32, 16,339,368 bytes, SHA-256 `87b4701b8a69d771b90d635ef5145df8c92e1c4632da47b270029a15ef4b7fa2` |
+| I/O | input `1×224×224×3` float32 RGB in 0..1; the model's own normalisation is inside the graph. Output `1×5` softmax in the order above |
+| Resize | one **nearest-neighbour** step to 224×224 (`createScaledBitmap(…, filter = false)`), matching how the model was trained |
+| Build | `tools/convert_nsfw_model.py` rebuilds the file byte-for-byte from the pinned revision (LiteRT-Torch). It replaces the model's global-average pools with an equivalent full-window average pool, because the stock export produced a 1.6 s/inference graph. The TFLite output matches PyTorch to within 0.0000015 |
+| Speed | 21.2 ms per inference with LiteRT on 2 threads (x86 dev machine); the previous model took 19.8 ms |
+
+The int8 variant was measured (AUROC 0.992, 20 ms) but is not shipped.
+
+**Why this model.** The candidates were compared on the same sets:
+- 400 ordinary COCO photos of people;
+- 639 revealing photos (underwear or swimwear worn by a model; no explicit images);
+- Rico app regions;
+- UI graphics.
+
+| Model | AUROC, ordinary vs revealing | False positives at 90% recall: COCO / Rico / graphics | License, size |
+|---|---|---|---|
+| **viddexa nano (shipped, nearest resize)** | **0.995** | **0.5% / 1.3% / 0%** | Apache-2.0, 16 MB |
+| viddexa nano, smooth downscale | 0.985 | 2.0% / 1.8% / 0% | same |
+| GantMan MobileNetV2 (previous) | 0.949 | 2.8% / 0.7% / 0% | MIT + Apache-2.0, 17 MB |
+| viddexa mini | 0.991 | 0.8% / 8.5% / 1.4% | Apache-2.0, 1.3 s/img |
+| Falconsai ViT | 0.996 | 1.0% / 20.2% / 4.9% | binary output only; its own decision catches 46% |
+| Freepik | 0.986 | 0.8% / 0.8% / 0% | 173 MB, 2.3 s/img |
+| MobileNetV4 / Marqo / NudeNet | 0.957 / 0.951 / 0.958 | 13.5% / 7.2% / 1.2% on COCO | NudeNet is AGPL |
+
+Two more differences matter in practice:
+- **Ordinary photos:** under its own argmax, the previous model called 10% of the
+  ordinary COCO people photos not-safe. Viddexa does this for 0.5%.
+- **Revealing photos:** the previous model filed 65% of the revealing photos as
+  *porn/hentai*; viddexa files 0.3% that way, which leaves them to *sexy*.
+
+**Signals.**
+- **Regions** use `signal` = sexy + porn + hentai, at `REGION_THRESHOLD` 0.7.
+- **The whole screen** uses `screenSignal`: sexy + porn, plus hentai only when
+  hentai ≥ `SCREEN_HENTAI_GATE` = 0.95. This was an owner decision, taken because
+  the model reads plain UI and text screens as drawings and leaks them into hentai.
+  With hentai counted in full, whole-screen false alarms were:
+
+  | Screens (whole-screen false alarms) | At 0.3 | At 0.7 |
+  |---|---|---|
+  | Claude-like chat-app screens | 60% | 43% |
+  | Real Rico app screens | 8.2% | — |
+
+  With the gate, these hits disappear. Innocent screens reach 0.95 hentai in 0.1%
+  of cases (Claude-like: 0%), so confidently drawn explicit content still counts.
+
+  On regions hentai barely matters: at 0.7, Rico regions give 2.2% with it and
+  2.0% without it.
+
+#### Whole-screen calibration
+
+`NSFW_THRESHOLD` = **0.15** on the gated signal. It is aimed at high sensitivity
+while keeping false alarms on ordinary people photos low. All inputs were
+screen-sized, 1080×2400 resized as the app does. "Chat" means the photo is shown
+as a chat image on a chat-like screen.
+
+| Set | Gated @ **0.15** (shipped) | Gated @ 0.2 | Previous model @ 0.3 | Ungated @ 0.7 |
+|---|---|---|---|---|
+| Ordinary people photos, full screen (false alarms) | **0.5%** | 0% | 5.2% | 0% |
+| Ordinary people photos in a chat (false alarms) | **0%** | 0% | 0.8% | 0% |
+| Rico app screens, 1,664 (false alarms) | **0.4%** | 0.4% | 1.0% | 1.5% |
+| Claude-like chat-app screens (false alarms) | **0%** | 0% | 5% | 43% |
+| Revealing photos, full screen (recall) | **71%** | 63% | 30% | 11% |
+| Revealing photos in a chat (recall) | **81%** | 78% | 80% | 39% |
+
+#### Final measurements with the integrated pipeline
+
+These were measured with `tools/region_scan_benchmark.py` and
+`tools/region_rico_eval.py`, which mirror the app: nearest resize, gated whole
+screen, and region detection, filters and blank-crop check exactly as shipped.
+
+- **COCO, 400 ordinary people photos shown as a chat image:**
+
+  | Measure | Result |
+  |---|---|
+  | A region reaches 0.7, 450 px image | **7 of 400** (1.8%) |
+  | Same, other region thresholds | 0.3: 15; 0.5: 10; 0.9: 3 |
+  | A region reaches 0.7, 700 px image | 5 of 400 |
+  | Whole screen reaches 0.15, 450 px / 700 px image | **0** / 4 of 400 |
+  | The photo alone, full frame, reaches 0.7 | 2 of 400 |
+  | Region score vs the photo alone (median difference) | 0.000 |
+
+  The previous model at its thresholds flagged 42 of 400 as a region (0.5) and
+  3 of 400 on the whole screen (0.3).
+- **Revealing photos, 639, shown as a 450 px chat image:**
+
+  | Path | Caught |
+  |---|---|
+  | Region ≥ 0.7 | **595** (93%) |
+  | Whole screen ≥ 0.15 | 510 (80%) |
+  | Whole screen ≥ 0.15, 700 px image | 603 |
+- **Rico, 5,463 real app screens.** 1,504 of them have regions, 2,677 regions in
+  all:
+
+  | Threshold | Regions over it | Screens over it | Previous model (regions / screens) |
+  |---|---|---|---|
+  | 0.3 | 188 | 164 | — |
+  | 0.5 | 110 | 95 | 65 / 59 |
+  | **0.7** | **67** | **63** | 35 / 33 |
+  | 0.9 | 36 | 34 | — |
+
+  The whole-screen pass at 0.15 alerts on 5 of those 1,504 screens.
+
+  This is the one set where the new model does worse. On app content it fires
+  somewhat more than the previous model did at its chosen 0.5: 63 screens against
+  59. It does much better on ordinary people photos: 7 of 400 against 42.
+- **Cost:** per capture on the same x86 machine, 40 captures per scenario. The
+  whole-screen pass is now about **20 ms**, cheaper than before because the
+  multi-step filtered downscale is gone. Region costs per capture:
+
+  | Scenario | Region ms/capture | Overhead |
+  |---|---|---|
+  | Chat with 2 stickers and a photo, unchanged | 6.7 | +33% |
+  | Scrolling, 1 new image per capture | 26.9 | +134% |
+  | Small video | 22.3 | +109% |
+  | Worst case, 3 changing regions | 69 | +349% |
+
+  Absolute region costs are similar to before. The percentages are higher because
+  the whole-screen baseline shrank.
+
+#### Known weakness: drawn, cartoon and UI content
+
+The model has a *drawing* class and a *hentai* class, and it confuses them on
+non-photo content:
+- **Plain UI and text screens** leak into *hentai* as a whole screen. The
+  whole-screen gate (above) handles this.
+- **Illustrations, cartoon stickers and app graphics as regions** can still reach
+  0.7 through hentai or sexy. Most of the extra Rico region hits are of this kind,
+  and the UI-graphic word rules only exclude named ones.
+- **Drawn explicit content** is caught on the whole screen only when the model is
+  at least 95% sure it is hentai. As a region, it counts in full.
+
+The per-frame log shows all five class scores, so a false alarm from this weakness
+is easy to recognise as a high *hentai* score with a high *drawing* score.
 
 ### Known limitations
 
@@ -497,19 +612,18 @@ Why 0.5:
   accessibility nodes and have no media hint, such as some games or canvas-drawn
   web content, as well as regions under 64 dp and more than 3 per capture.
 - Region scanning makes small ordinary photos count like full-screen ones, including
-  the model's false positives on some sports and family photos: 10.5% of a COCO
-  people sample at the chosen 0.5. This is not a pipeline bug (see *False-positive
-  investigation*); the choice is recorded in *Region threshold decision*.
+  the model's own false positives: 1.8% of a COCO people sample at 0.7 (7 of 400).
 - Regions are skipped while the screen is changing: during scrolls (bounds differ
   between the before/after reads) and for 1 s after window changes. The whole-screen
   pass still runs.
-- Flat illustrations in skin-like palettes can score high as *hentai*. Named ones
-  (id or description says illustration, logo…) are excluded; unnamed ones aren't.
-- Accuracy on real content can only be judged on-device; the threshold (0.3) is a
-  starting point to tune with the per-frame (per-class) score log.
-- The model is a MobileNet: fast and small, but less accurate than large models.
-  It was trained on whole photos, so screens with a lot of UI around an image score
-  lower than the image alone.
+- Drawn, cartoon and UI content can score high as *hentai* (see *Known weakness*).
+  Named illustrations (id or description says illustration, logo…) are excluded as
+  regions; unnamed ones aren't. On the whole screen, hentai counts only at ≥ 0.95.
+- Accuracy on real content can only be judged on-device; the thresholds (0.15
+  whole screen, 0.7 region) were calibrated offline and can be tuned with the
+  per-frame (per-class) score log.
+- The model is small (EfficientNet-B0) and was trained on whole photos, so screens
+  with a lot of UI around an image score lower than the image alone.
 
 ### Stage 3 — Definition of Done → how it's met
 
@@ -1200,12 +1314,18 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
 - **Screen-scan logic:** `DetectionConfirmerTest`, `DetectionCooldownTest`,
   `CaptureSchedulerTest`, `NsfwPreprocessorTest`, `DetectionEventTest`,
   `ScanLogTest`, `ImageRegionsTest` (region scanning, pure JVM).
+  `NsfwPreprocessorTest` also pins the bundled model: its size and SHA-256, the
+  class order, the nearest-neighbour resize, and the licence and labels files.
 - **Region-scanning validation with the real model** (optional, off-device):
   `tools/region_scan_benchmark.py <dir of everyday .jpg photos>` (needs
   `ai-edge-litert`, Pillow, numpy) prints the false-positive table and the
-  per-scenario cost table from *Region scanning*.
+  per-scenario cost table (optionally a second directory of revealing photos for
+  recall).
   `tools/region_rico_eval.py <work dir>` replicates the region detector on real app
   screens (Rico, downloaded on first run) and prints false positives per threshold.
+- **Rebuilding the model:** `tools/convert_nsfw_model.py` (LiteRT-Torch,
+  transformers) reproduces the bundled `.tflite` byte-for-byte, checks it against
+  PyTorch and prints its SHA-256.
 - **Log retention:** `LogFilesTest` (diagnostics survive main-log rotation).
 - **Text scanning:** `KeywordMatcherTest` (matcher + real list + ordinary-text
   spot-check), `KeywordRulesTest` (context rules, restored terms, Arabic/English

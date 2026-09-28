@@ -62,19 +62,30 @@ object ScanConfig {
     )
 
     /**
-     * Threshold on the frame's signal ([NsfwScores.signal] = sexy + porn + hentai
-     * probability from the GantMan 5-class model, 0..1) at or above which a frame
-     * counts as positive. For suggestive photos the signal is essentially the "sexy"
-     * class; explicit content moves to porn/hentai and still counts.
+     * Whole-screen threshold, on [NsfwScores.screenSignal] (sexy + porn, plus hentai
+     * only when ≥ [SCREEN_HENTAI_GATE]) from the viddexa-nano model. Independent of
+     * [REGION_THRESHOLD].
      *
-     * Starting point 0.3, chosen for maximum sensitivity: in testing, ordinary photos
-     * and phone-screen layouts scored median ~0.01 and at most ~0.19 (textures and
-     * logos, mostly "hentai"/"drawings" noise), so 0.3 sits just above that, while a
-     * frame only needs ~30% combined sexy/porn probability — well below "sexy is the
-     * most likely class". Lower (e.g. 0.2) for more sensitivity; tune with the
-     * per-class scores from [LOG_EVERY_FRAME_SCORE].
+     * **0.15**, calibrated for high sensitivity (README "Model → whole-screen
+     * calibration"). Measured on screen-sized inputs:
+     *  - suggestive recall (underwear/swimwear worn by a model): **71%** shown
+     *    full-screen, **81%** as a chat image;
+     *  - false alarms: ordinary people photos 0.5% full-screen and 0% in a chat,
+     *    real app screens (Rico, 1,664) **0.4%**, chat-app UI screens 0%.
+     * The previous model at its 0.3: recall 30% / 80%; false alarms 5.2% / 0.8%,
+     * app screens 1.0%, chat UI 5%. A stricter 0.2 would give 63% / 78% recall with
+     * 0% / 0% / 0.4% false alarms.
      */
-    const val NSFW_THRESHOLD = 0.3f
+    const val NSFW_THRESHOLD = 0.15f
+
+    /**
+     * On the whole screen, hentai counts only at or above this confidence. The model
+     * reads UI/text screenshots as drawings and puts them in hentai: 60% of chat-app
+     * screens and 8% of real app screens reached a 0.3 signal with hentai counted in
+     * full. Innocent screens reach 0.95 hentai in 0.1% of cases (Claude-like: 0%),
+     * so confidently drawn explicit content still counts. Owner decision.
+     */
+    const val SCREEN_HENTAI_GATE = 0.95f
 
     /**
      * TEMPORARY calibration aid: when true, every classified frame's raw score is
@@ -130,16 +141,12 @@ object ScanConfig {
     const val REGION_SCAN_ENABLED = true
 
     /**
-     * Threshold on a region's signal — independent of [NSFW_THRESHOLD] (whole screen).
-     * Final choice: **0.5** (owner decision, README "Region threshold decision"),
-     * chosen after the app-switch reset, stale-crop, blank-crop and UI-graphic fixes.
-     * A region is the photo at its own resolution, so it gets the model's full
-     * false-positive rate on ordinary photos. Measured on 400 everyday COCO photos
-     * of people shown as a chat image: 0.3 → 54, **0.5 → 42**, 0.7 → 24, 0.9 → 14
-     * reach the threshold. On real app screens (Rico, 1,504 screens with regions):
-     * 0.3 → 73 screens, **0.5 → 59**, 0.7 → 33, 0.9 → 21.
+     * Threshold on a region's signal ([NsfwScores.signal] = sexy + porn + hentai) —
+     * independent of [NSFW_THRESHOLD] (whole screen). **0.7** (owner decision, README
+     * "Model"): with viddexa-nano, ordinary people photos as regions 0.5%, real app
+     * regions 2.2%, suggestive recall 93%.
      */
-    const val REGION_THRESHOLD = 0.5f
+    const val REGION_THRESHOLD = 0.7f
 
     /** At most this many regions classified per capture: the largest qualifying ones. */
     const val REGION_MAX_PER_CAPTURE = 3
@@ -202,8 +209,8 @@ object ScanConfig {
     const val TEXT_SNIPPET_RADIUS = 40
 
     /**
-     * Bundled TFLite model: GantMan nsfw_model, MobileNetV2 140 224, 5 classes
-     * (see README "Stage 3" for source, license and checksum).
+     * Bundled TFLite model: viddexa/nsfw-detection-2-nano (EfficientNet-B0, 5 classes,
+     * Apache-2.0; see README "Model" and third_party/viddexa_nsfw_detection_2_nano/).
      */
-    const val MODEL_ASSET = "models/nsfw_mobilenet_v2_140_224.tflite"
+    const val MODEL_ASSET = "models/viddexa_nsfw_detection_2_nano_224.tflite"
 }
