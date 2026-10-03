@@ -1,6 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    // Screenshot tests for the UI redesign (test-only; never part of the shipped app).
+    id("app.cash.paparazzi") version "1.3.5"
 }
 
 android {

@@ -1,20 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base app theme built on a Material 3 DayNight parent so it adapts to the
-         system light/dark setting without a separate values-night file. -->
-    <style name="Theme.Guardian" parent="Theme.Material3.DayNight">
-        <item name="colorPrimary">@color/guardian_primary</item>
-        <item name="colorPrimaryVariant">@color/guardian_primary_dark</item>
-        <item name="colorSecondary">@color/guardian_accent</item>
-        <item name="android:statusBarColor" tools:targetApi="l">@color/guardian_primary_dark</item>
+
+    <!-- Rafiq base theme: Material 3 DayNight. All brand colours are @color names that
+         values-night/colors.xml overrides, so this one theme adapts to dark mode.
+         (Per-screen NoActionBar toolbars + edge-to-edge insets are applied in each
+         screen's redesign step.) -->
+    <style name="Theme.Rafiq" parent="Theme.Material3.DayNight">
+        <item name="colorPrimary">@color/rafiq_primary</item>
+        <item name="colorOnPrimary">@color/rafiq_on_primary</item>
+        <item name="colorPrimaryContainer">@color/rafiq_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/rafiq_on_primary_container</item>
+
+        <!-- Secondary = the gold accent -->
+        <item name="colorSecondary">@color/rafiq_accent</item>
+        <item name="colorOnSecondary">@color/rafiq_on_accent</item>
+        <item name="colorSecondaryContainer">@color/rafiq_accent</item>
+        <item name="colorOnSecondaryContainer">@color/rafiq_on_accent</item>
+
+        <item name="android:colorBackground">@color/rafiq_background</item>
+        <item name="colorOnBackground">@color/rafiq_on_background</item>
+        <item name="colorSurface">@color/rafiq_surface</item>
+        <item name="colorOnSurface">@color/rafiq_on_surface</item>
+        <item name="colorSurfaceVariant">@color/rafiq_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/rafiq_on_surface_variant</item>
+        <item name="colorOutline">@color/rafiq_outline</item>
+        <item name="colorError">@color/rafiq_error</item>
+        <item name="colorOnError">@color/rafiq_on_error</item>
+
+        <item name="android:statusBarColor">@color/rafiq_primary</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
+
+        <!-- Default button is the SECONDARY (outlined) look; the primary CTA opts in. -->
+        <item name="materialButtonStyle">@style/Widget.Rafiq.Button.Secondary</item>
     </style>
 
-    <!-- Stage 6: Reflection Mode is full-screen with no action bar; the activity also
-         hides the system bars at runtime (immersive). windowFullscreen covers the
-         pre-immersive frame so the status bar never flashes on launch. -->
-    <style name="Theme.Guardian.Reflection" parent="Theme.Material3.DayNight.NoActionBar">
+    <!-- Primary call-to-action: filled teal, white text. -->
+    <style name="Widget.Rafiq.Button.Primary" parent="Widget.Material3.Button">
+        <item name="backgroundTint">@color/rafiq_primary</item>
+        <item name="android:textColor">@color/rafiq_on_primary</item>
+        <item name="iconTint">@color/rafiq_on_primary</item>
+        <item name="cornerRadius">14dp</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:paddingTop">14dp</item>
+        <item name="android:paddingBottom">14dp</item>
+    </style>
+
+    <!-- Secondary: outlined teal, used for everything that isn't the main action. -->
+    <style name="Widget.Rafiq.Button.Secondary" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:textColor">@color/rafiq_primary</item>
+        <item name="strokeColor">@color/rafiq_outline</item>
+        <item name="iconTint">@color/rafiq_primary</item>
+        <item name="rippleColor">@color/rafiq_primary</item>
+        <item name="cornerRadius">14dp</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <!-- Reflection Mode: unchanged behaviour, just reparented under the Rafiq name. -->
+    <style name="Theme.Rafiq.Reflection" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/black</item>
         <item name="android:navigationBarColor">@android:color/black</item>
     </style>
+
+    <!-- Back-compat alias so the manifest's old name keeps working during the rebrand. -->
+    <style name="Theme.Guardian" parent="Theme.Rafiq" />
+    <style name="Theme.Guardian.Reflection" parent="Theme.Rafiq.Reflection" />
 </resources>

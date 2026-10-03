@@ -1,7 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rafiq ("رفيق") palette — light. Dark overrides live in values-night/colors.xml,
+     so one theme (themes.xml) adapts by re-reading these names at night. -->
 <resources>
-    <color name="guardian_primary">#1B5E20</color>
-    <color name="guardian_primary_dark">#003300</color>
-    <color name="guardian_accent">#2E7D32</color>
-    <color name="white">#FFFFFFFF</color>
-    <color name="ic_launcher_background">#1B5E20</color>
+    <!-- Brand -->
+    <color name="rafiq_primary">#2F6F6B</color>        <!-- teal -->
+    <color name="rafiq_on_primary">#FFFFFF</color>     <!-- white on teal ≈ 4.9:1 -->
+    <color name="rafiq_primary_container">#D7E7E4</color>
+    <color name="rafiq_on_primary_container">#16302E</color>
+    <color name="rafiq_accent">#C9A66B</color>         <!-- gold -->
+    <color name="rafiq_on_accent">#1F2D2B</color>      <!-- dark text on gold (white is only 2.3:1) -->
+
+    <!-- Surfaces -->
+    <color name="rafiq_background">#F6F3EC</color>
+    <color name="rafiq_on_background">#1F2D2B</color>
+    <color name="rafiq_surface">#FFFFFF</color>
+    <color name="rafiq_on_surface">#1F2D2B</color>
+    <color name="rafiq_surface_variant">#ECE7DB</color>
+    <color name="rafiq_on_surface_variant">#4A574F</color>
+    <color name="rafiq_outline">#CFC7B5</color>
+
+    <!-- Text -->
+    <color name="rafiq_text">#1F2D2B</color>
+    <color name="rafiq_text_muted">#5C6B68</color>
+
+    <!-- Semantic -->
+    <color name="rafiq_success">#2F6F6B</color>
+    <color name="rafiq_warn">#9A6B16</color>
+    <color name="rafiq_error">#B3261E</color>
+    <color name="rafiq_on_error">#FFFFFF</color>
+
+    <!-- Launcher background (icon updated in a later step) -->
+    <color name="ic_launcher_background">#2F6F6B</color>
 </resources>

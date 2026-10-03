@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rafiq palette — dark. Lighter teal for primary with DARK text on it (owner's
+     choice), so contrast stays strong on the dark background (#101A19). -->
+<resources>
+    <color name="rafiq_primary">#5AB0A8</color>        <!-- lighter teal -->
+    <color name="rafiq_on_primary">#07201D</color>     <!-- dark text on light teal ≈ 8:1 -->
+    <color name="rafiq_primary_container">#1E3C39</color>
+    <color name="rafiq_on_primary_container">#CDE8E4</color>
+    <color name="rafiq_accent">#D4B37A</color>
+    <color name="rafiq_on_accent">#1A1407</color>
+
+    <color name="rafiq_background">#101A19</color>
+    <color name="rafiq_on_background">#E7ECEA</color>
+    <color name="rafiq_surface">#17241F</color>
+    <color name="rafiq_on_surface">#E7ECEA</color>
+    <color name="rafiq_surface_variant">#1E2B29</color>
+    <color name="rafiq_on_surface_variant">#B7C4C0</color>
+    <color name="rafiq_outline">#3A4A47</color>
+
+    <color name="rafiq_text">#E7ECEA</color>
+    <color name="rafiq_text_muted">#9DB0AC</color>
+
+    <color name="rafiq_success">#5AB0A8</color>
+    <color name="rafiq_warn">#E0B870</color>
+    <color name="rafiq_error">#F2B8B5</color>
+    <color name="rafiq_on_error">#2A0A08</color>
+</resources>

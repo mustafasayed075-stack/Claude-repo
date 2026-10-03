@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Guardian</string>
+    <string name="app_name">رفيق</string>
 
     <!-- Device admin -->
     <string name="admin_label">Guardian Protection</string>
