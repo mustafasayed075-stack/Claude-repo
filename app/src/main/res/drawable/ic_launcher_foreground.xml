@@ -1,16 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rafiq launcher foreground: a rounded shield with a heart cut out of it, so on the
+     teal background the heart reads as teal. One white path with even-odd fill, which
+     also makes it a clean single-colour silhouette for the monochrome (themed) icon.
+     108x108 viewport; art kept inside the 72dp adaptive-icon safe zone (18..90). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Shield centered within the 108x108 adaptive icon safe zone. -->
-    <group
-        android:scaleX="3"
-        android:scaleY="3"
-        android:translateX="18"
-        android:translateY="18">
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5l-9,-4zM10.5,16.5L6.5,12.5l1.41,-1.41 2.59,2.58 4.59,-4.59 1.41,1.42 -6,6z" />
-    </group>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,24
+            C54,24 66,32 80,32
+            C81.1,32 82,32.9 82,34
+            L82,54
+            C82,72 70,84 54,90
+            C38,84 26,72 26,54
+            L26,34
+            C26,32.9 26.9,32 28,32
+            C42,32 54,24 54,24
+            Z
+            M54,66
+            C54,66 67,58 67,49
+            C67,45 64,42 60.5,42
+            C57.8,42 55.5,43.6 54,46
+            C52.5,43.6 50.2,42 47.5,42
+            C44,42 41,45 41,49
+            C41,58 54,66 54,66
+            Z" />
 </vector>

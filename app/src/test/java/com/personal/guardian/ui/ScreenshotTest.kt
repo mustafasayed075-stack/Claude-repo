@@ -142,4 +142,26 @@ class ScreenshotTest {
 
     @Test fun fastScanCardsLight() = fastScanCards("fast-scan-cards-light", night = false)
     @Test fun fastScanCardsDark() = fastScanCards("fast-scan-cards-dark", night = true)
+
+    /** The actual adaptive-icon foreground vector on the teal background, square and round. */
+    private fun iconPreview(name: String, round: Boolean) {
+        night(false)
+        val ctx = paparazzi.context
+        val px = (108 * ctx.resources.displayMetrics.density).toInt()
+        val bg = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF2F6F6B.toInt())
+            shape = if (round) android.graphics.drawable.GradientDrawable.OVAL
+            else android.graphics.drawable.GradientDrawable.RECTANGLE
+            if (!round) cornerRadius = px * 0.18f
+        }
+        val view = ImageView(ctx).apply {
+            background = bg
+            setImageResource(R.drawable.ic_launcher_foreground)
+            layoutParams = android.view.ViewGroup.LayoutParams(px, px)
+        }
+        paparazzi.snapshot(view, name)
+    }
+
+    @Test fun iconSquare() = iconPreview("icon-square", round = false)
+    @Test fun iconRound() = iconPreview("icon-round", round = true)
 }
