@@ -158,6 +158,24 @@
     <string name="sensitivity_normal_desc">عادية — تتفاعل مع المحتوى الإيحائي الأوضح</string>
     <string name="sensitivity_high_desc">عالية — تتفاعل مع محتوى إيحائي أخف</string>
     <string name="sensitivity_saved">تم ضبط الحساسية: %1$s</string>
+    <string name="row_blind_spot_title">قفل عند عدم الرؤية</string>
+    <string name="row_blind_spot_summary">%1$d تطبيق</string>
+
+    <!-- Blind-spot apps editor -->
+    <string name="blind_spot_title">قفل عند عدم الرؤية</string>
+    <string name="blind_spot_intro">في التطبيقات دي: لو رفيق فضل مش قادر يشوف الشاشة (نافذة محميّة من التصوير أو شاشة سودا)، هيقفل بعد مهلة بتقصر كل مرة (60 ثم 30 ثم 10 ثوانٍ، وبعدها فورًا). البنوك ومديري كلمات السر والمحافظ مش في القايمة افتراضيًا.</string>
+    <string name="blind_spot_empty">مفيش تطبيقات. اضغط زرار الإضافة علشان تختار.</string>
+    <string name="blind_spot_add">إضافة تطبيق</string>
+    <string name="blind_spot_picker_title">اختر تطبيقًا</string>
+    <string name="blind_spot_remove">إزالة</string>
+    <string name="blind_spot_remove_title">إزالة %1$s؟</string>
+    <string name="blind_spot_save_failed">تعذّر حفظ التغيير.</string>
+
+    <!-- Developer: share log -->
+    <string name="btn_share_log">مشاركة اللوج</string>
+    <string name="share_log_subject">سجل أحداث رفيق</string>
+    <string name="share_log_empty">اللوج فاضي لسه.</string>
+    <string name="share_log_failed">تعذّر مشاركة اللوج.</string>
 
     <string name="section_developer">للمطورين</string>
     <string name="version_label">الإصدار %1$s</string>

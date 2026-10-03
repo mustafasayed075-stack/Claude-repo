@@ -66,6 +66,23 @@ object ScanLog {
         }
 
     /**
+     * One line for a "suspect" frame (per-class floor reached but not locked), so the
+     * per-class thresholds can be tuned from the log, e.g.
+     * `Scan suspect: whole[sexy=0.312 porn=0.028 hentai=0.004] region[sexy=0.455 porn=0.010 hentai=0.002 image …] app=…`.
+     */
+    fun perClassLine(whole: NsfwScores, regions: List<RegionScore>, foregroundPackage: String?): String {
+        val best = regions.maxByOrNull { maxOf(it.scores.sexy, it.scores.porn, it.scores.hentai) }
+        val w = String.format(Locale.US, "whole[sexy=%.3f porn=%.3f hentai=%.3f]", whole.sexy, whole.porn, whole.hentai)
+        val r = best?.let {
+            String.format(
+                Locale.US, " region[sexy=%.3f porn=%.3f hentai=%.3f %s]",
+                it.scores.sexy, it.scores.porn, it.scores.hentai, it.region.label
+            )
+        } ?: ""
+        return "Scan suspect: $w$r app=${foregroundPackage ?: "unknown"}"
+    }
+
+    /**
      * Name for an `ApplicationExitInfo.REASON_*` code (values are stable API
      * constants; listed here so older code paths don't reference newer fields).
      */

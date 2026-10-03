@@ -16,6 +16,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
@@ -27,6 +28,7 @@ import com.personal.guardian.reflection.ReflectionLauncher
 import com.personal.guardian.reflection.ReflectionSettings
 import com.personal.guardian.reflection.ReflectionSettingsActivity
 import com.personal.guardian.scan.DetectionStore
+import com.personal.guardian.scan.BlindSpotSettings
 import com.personal.guardian.scan.FastScanSettings
 import com.personal.guardian.scan.GuardianAccessibilityService
 import com.personal.guardian.scan.ScanConfig
@@ -112,6 +114,7 @@ class MainActivity : AppCompatActivity() {
         binding.rowReflection.setOnClickListener { startActivity(Intent(this, ReflectionSettingsActivity::class.java)) }
         binding.rowLockDuration.setOnClickListener { showLockDurationDialog() }
         binding.rowSensitivity.setOnClickListener { showSensitivityDialog() }
+        binding.rowBlindSpot.setOnClickListener { startActivity(Intent(this, BlindSpotAppsActivity::class.java)) }
 
         binding.btnFullScreenIntentSettings.setOnClickListener { ReflectionLauncher.openFullScreenIntentSettings(this) }
 
@@ -127,6 +130,30 @@ class MainActivity : AppCompatActivity() {
             refreshStatus()
         }
         binding.btnRefreshStatus.setOnClickListener { refreshStatus() }
+        binding.btnShareLog.setOnClickListener { shareLog() }
+    }
+
+    /** Exports the local event log as a file through a share sheet (no network). */
+    private fun shareLog() {
+        val log = GuardianLog.logFile(this)
+        if (!log.exists() || log.length() == 0L) {
+            Toast.makeText(this, R.string.share_log_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uri = try {
+            FileProvider.getUriForFile(this, "$packageName.fileprovider", log)
+        } catch (t: Throwable) {
+            GuardianLog.e(this, "Share log: could not expose the log file.", t)
+            Toast.makeText(this, R.string.share_log_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, getString(R.string.share_log_subject))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(send, getString(R.string.btn_share_log)))
     }
 
     override fun onResume() {
@@ -279,6 +306,7 @@ class MainActivity : AppCompatActivity() {
         binding.txtReflectionSummary.text = getString(R.string.row_reflection_summary, ReflectionSettings.library(this).size)
         binding.txtLockDurationSummary.text = getString(R.string.row_lock_duration_summary, ReflectionSettings.durationSeconds(this))
         binding.txtSensitivitySummary.text = getString(sensitivityLabel(ScanSensitivitySettings.get(this)))
+        binding.txtBlindSpotSummary.text = getString(R.string.row_blind_spot_summary, BlindSpotSettings.get(this).size)
 
         // Warnings.
         val fsiMissing = ReflectionLauncher.needsFullScreenIntentGrant(this)

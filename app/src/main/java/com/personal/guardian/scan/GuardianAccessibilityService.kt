@@ -99,6 +99,8 @@ class GuardianAccessibilityService : AccessibilityService() {
     private val appSwitch = AppSwitchTracker()
     // Blind-spot escalation: shrinking grace each time Guardian can't read the screen.
     private val blindSpot = BlindSpotPolicy({ SystemClock.elapsedRealtime() })
+    // Consecutive unreadable captures (secure/blank), for the black-frame guardrail.
+    private var consecutiveUnreadable = 0
     private val contentPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
     // Reused scratch for the whole-screen letterbox crop (Screen scanning → letterbox crop).
     private val letterboxPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
@@ -324,7 +326,8 @@ class GuardianAccessibilityService : AccessibilityService() {
         takeScreenshot(Display.DEFAULT_DISPLAY, onWorker, object : TakeScreenshotCallback {
             override fun onSuccess(result: ScreenshotResult) {
                 try {
-                    onReadableFrame() // Guardian can see the screen — drives the blind-spot reset.
+                    // Readability (and the blind-spot reset) is decided inside, once we know
+                    // whether the frame is blank/near-black.
                     processScreenshot(result, source, regionsBefore)
                 } catch (t: Throwable) {
                     logFailureRateLimited("processing", "Screen scan: frame processing failed.", t)
@@ -344,7 +347,7 @@ class GuardianAccessibilityService : AccessibilityService() {
                     null
                 )
                 // A secure / screenshot-protected window: Guardian can't read the screen.
-                if (errorCode == ERROR_TAKE_SCREENSHOT_SECURE_WINDOW) onBlindFrame()
+                if (errorCode == ERROR_TAKE_SCREENSHOT_SECURE_WINDOW) onCaptureUnreadable(pkg)
             }
         })
     }
@@ -389,18 +392,25 @@ class GuardianAccessibilityService : AccessibilityService() {
             val verdict = FrameVerdict.combine(whole, regions.scores)
             ScanStatus.onFrame(System.currentTimeMillis(), verdict.score, source)
             val now = SystemClock.elapsedRealtime()
+            val pkg = scheduler.foregroundPackage
+            // Readable vs blank/near-black (a black media-viewer background, a secure
+            // render): drives the blind-spot path and its black-frame guardrail.
+            val readable = regionContent(frame) == RegionContent.Verdict.OK
+            if (readable) onCaptureReadable() else onCaptureUnreadable(pkg)
+
             val confirmation = confirmer.onFrame(verdict.score, now, source, verdict.positive)
-            // Suggestive tier: judged against the current sensitivity threshold and fed
-            // every frame, independent of the same-content cooldown. Two suggestive frames
-            // within the window lock. An explicit frame (verdict.positive) is already on the
-            // immediate path above, so it isn't also counted here.
+            // Additive per-class layer: raw-class rules on top of the combined paths.
             val suggestiveThreshold = ScanSensitivitySettings.suggestiveThreshold(applicationContext)
-            val suggestive = !verdict.positive && verdict.score >= suggestiveThreshold
+            val perClass = PerClassLayer.evaluate(whole, regions.scores.map { it.scores }, suggestiveThreshold)
+            // Suggestive tier: judged against the sensitivity threshold and fed every frame,
+            // independent of the same-content cooldown. Two suggestive frames within the
+            // window lock. The combined-signal suggestive (an explicit frame is already on
+            // the immediate path, so excluded) OR a per-class sexy/region-hentai hit.
+            val suggestive = (!verdict.positive && verdict.score >= suggestiveThreshold) || perClass.suggestive
             val suggestiveConfirmed = suggestiveConfirmer.onFrame(now, suggestive)
             if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
                 // TEMPORARY calibration logging (see ScanConfig.LOG_EVERY_FRAME_SCORE).
                 val positives = if (confirmation != null) confirmer.requiredPositives else confirmer.pendingPositives
-                val pkg = scheduler.foregroundPackage
                 val level = NsfwLevel.of(verdict.score, suggestiveThreshold, ScanConfig.REGION_THRESHOLD)
                 GuardianLog.i(
                     applicationContext,
@@ -414,16 +424,21 @@ class GuardianAccessibilityService : AccessibilityService() {
                         fastScan = fastScanLabel(pkg)
                     )
                 )
-                // A blank / near-black whole frame (black media-viewer background, secure
-                // render): worth a distinct line, since its signal reads ~0.
-                if (regionContent(frame) != RegionContent.Verdict.OK) {
+                if (!readable) {
                     GuardianLog.i(applicationContext, ScanLog.captureIssueLine("BLANK frame", pkg, fastScanLabel(pkg)))
+                }
+                // Per-class "suspect" frames are logged (not locked) so the thresholds can
+                // be tuned from the log.
+                if (perClass.suspect && !perClass.pornImmediate && !suggestive) {
+                    GuardianLog.i(applicationContext, ScanLog.perClassLine(whole, regions.scores, pkg))
                 }
             }
             if (confirmation != null) onConfirmed(confirmation, frame, verdict)
+            // Per-class porn: an immediate (one-frame) lock, after the explicit confirmation.
+            if (perClass.pornImmediate) onPerClassImmediate(verdict, "porn")
             // Suggestive tier: locks on its own, after the explicit confirmation above
             // (so a frame that also confirmed explicitly locks as that first).
-            if (suggestiveConfirmed) onSuggestiveConfirmed(verdict)
+            else if (suggestiveConfirmed) onSuggestiveConfirmed(verdict)
             // Stage 5: a borderline text match waiting for an image check (after the
             // confirmation, so a confirmed image detection locks as "image" first).
             lockController?.let { lc ->
@@ -646,6 +661,30 @@ class GuardianAccessibilityService : AccessibilityService() {
         )
     }
 
+    /**
+     * A per-class rule that locks immediately (one frame) — currently porn at or above
+     * [ScanConfig.PORN_IMMEDIATE_THRESHOLD]. Locks through the same controller as a
+     * detection, bypassing the confirmer and cooldown. Log + lock only.
+     */
+    private fun onPerClassImmediate(verdict: FrameVerdict.Result, cls: String) {
+        val ctx = applicationContext
+        val pkg = scheduler.foregroundPackage
+        GuardianLog.w(
+            ctx,
+            "PER-CLASS lock (immediate): $cls (${verdict.scores.breakdown()}) " +
+                "scored=${verdict.region?.region?.label ?: "whole screen"} app=${pkg ?: "unknown"}."
+        )
+        ScanStatus.confirmedCount++
+        handleLock(
+            lockController?.onDetection(
+                DetectionEvent(
+                    System.currentTimeMillis(), verdict.scores.porn, TriggerSource.EVENT,
+                    pkg, null, verdict.scores, region = verdict.region?.region?.label
+                )
+            )
+        )
+    }
+
     // ---- Stage 5: lock ----
 
     private fun startLock(handler: Handler) {
@@ -696,6 +735,24 @@ class GuardianAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** A readable capture: clears the black-frame guardrail and drives the 1-hour reset. */
+    private fun onCaptureReadable() {
+        consecutiveUnreadable = 0
+        onReadableFrame()
+    }
+
+    /**
+     * An unreadable capture — a secure/screenshot-protected window, or a blank/near-black
+     * frame. Only acts when the foreground app is on the blind-spot list, and only after
+     * [ScanConfig.BLIND_SPOT_CONFIRM_FRAMES] *consecutive* unreadable captures, so a single
+     * transient blank (a media viewer loading a frame) is ignored. Worker thread.
+     */
+    private fun onCaptureUnreadable(pkg: String?) {
+        consecutiveUnreadable++
+        if (pkg == null || !BlindSpotSettings.get(this).contains(pkg)) return
+        if (consecutiveUnreadable >= ScanConfig.BLIND_SPOT_CONFIRM_FRAMES) onBlindFrame()
+    }
+
     /** A frame Guardian could read — drives the blind-spot escalation reset (worker thread). */
     private fun onReadableFrame() {
         if (blindSpot.onVisible() is BlindSpotPolicy.Outcome.LevelReset) {
@@ -704,9 +761,9 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * A frame Guardian could not read (secure/screenshot-protected window). Starts or
-     * continues the escalating grace; locks (via the same path as a detection) once the
-     * grace for this entry has elapsed. Worker thread.
+     * A blind-spot-listed app stayed unreadable. Starts or continues the escalating grace;
+     * locks (via the same path as a detection) once the grace for this entry has elapsed.
+     * Worker thread.
      */
     private fun onBlindFrame() {
         when (val o = blindSpot.onBlind()) {

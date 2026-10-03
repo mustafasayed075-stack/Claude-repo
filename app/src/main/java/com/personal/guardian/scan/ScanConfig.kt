@@ -132,12 +132,33 @@ object ScanConfig {
      * alone does not. The value in use depends on the owner's sensitivity setting
      * (normal vs high); the explicit immediate/confirmed path is unchanged.
      */
-    const val SUGGESTIVE_THRESHOLD_NORMAL = 0.45f
+    const val SUGGESTIVE_THRESHOLD_NORMAL = 0.40f
     const val SUGGESTIVE_THRESHOLD_HIGH = 0.30f
 
     /** Two suggestive frames within this window lock. */
     const val SUGGESTIVE_WINDOW_MS = 3_000L
     const val SUGGESTIVE_COUNT = 2
+
+    /**
+     * Additive per-class layer (README "Screen scanning → per-class layer"), on the raw
+     * viddexa-nano classes, on top of the combined-signal paths above (never removes a
+     * catch). Values chosen from the RICO/COCO measurement (tools/per_class_eval.py).
+     *
+     *  - [PORN_IMMEDIATE_THRESHOLD]: porn is a strong, rarely-benign class, so any surface
+     *    (letterbox-cropped whole screen or a region) reaching it locks **immediately**
+     *    (one frame). 0.40 → ~1.3% benign region frames in the measurement.
+     *  - [HENTAI_SUGGESTIVE_THRESHOLD]: the model mislabels UI/drawings as hentai, so
+     *    hentai is counted **only on image regions** (never the whole UI screen) and only
+     *    as *suggestive* — it goes through [SuggestiveConfirmer] (two frames), never an
+     *    immediate lock. 0.70 → ~0.7% benign region frames.
+     *  - [SUSPECT_FLOOR]: a low floor used **only for the diagnostic log** ("suspect"
+     *    frame), never to lock (at 0.25 it fires on 5–8% of benign frames).
+     *  - sexy uses the sensitivity threshold ([ScanSensitivity], 0.40 / 0.30) and is
+     *    suggestive (two frames), like the combined tier.
+     */
+    const val PORN_IMMEDIATE_THRESHOLD = 0.40f
+    const val HENTAI_SUGGESTIVE_THRESHOLD = 0.70f
+    const val SUSPECT_FLOOR = 0.25f
 
     /** At most this many regions classified per capture: the largest qualifying ones. */
     const val REGION_MAX_PER_CAPTURE = 3
@@ -238,6 +259,14 @@ object ScanConfig {
      * continuously readable for this long — a full hour.
      */
     const val BLIND_SPOT_RESET_AFTER_VISIBLE_MS = 3_600_000L
+
+    /**
+     * Black-frame guardrail: this many *consecutive* unreadable captures (a secure
+     * window, or a blank/near-black frame) are required before the grace counter starts,
+     * so a single transient blank (a media viewer loading a frame) is not treated as
+     * hiding. The blind-spot path also only acts in apps on the blind-spot list.
+     */
+    const val BLIND_SPOT_CONFIRM_FRAMES = 2
 
     /**
      * Also lock on a confirmed detection the same-content cooldown keeps from the

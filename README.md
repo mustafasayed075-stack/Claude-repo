@@ -265,9 +265,21 @@ these in order (from the spec):
   same-content cooldown that gates explicit reporting — so the same suggestive image
   across two frames still locks. The explicit immediate/confirmed path is unchanged.
   - **Sensitivity** (`ScanSensitivity`, editable in the app under *حساسية المحتوى
-    الإيحائي*): **normal** = `SUGGESTIVE_THRESHOLD_NORMAL` **0.45** (reacts to the
+    الإيحائي*): **normal** = `SUGGESTIVE_THRESHOLD_NORMAL` **0.40** (reacts to the
     clearer suggestive content), **high** = `SUGGESTIVE_THRESHOLD_HIGH` **0.30**
     (reacts to lighter suggestive content). Persisted in the private files dir.
+- **Per-class layer (`PerClassLayer`):** independent per-class thresholds on the raw
+  viddexa-nano classes, **added on top** of the combined-signal paths (never removes a
+  catch). Chosen from the RICO/COCO measurement (`tools/per_class_eval.py`):
+  - **porn ≥ `PORN_IMMEDIATE_THRESHOLD` 0.40** on any surface (the letterbox-cropped
+    whole screen or a region) → **immediate** one-frame lock. porn is rarely benign;
+    0.40 cost ≈ 1.3 % of benign region frames in the measurement.
+  - **sexy ≥ the sensitivity threshold** (0.40 / 0.30) → *suggestive* (two frames).
+  - **hentai ≥ `HENTAI_SUGGESTIVE_THRESHOLD` 0.70 on image regions only** → suggestive.
+    The model mislabels UI/drawings as hentai (3.7 % of app screens reach 0.5 on the
+    whole UI, vs 0 % on real photos), so whole-screen hentai is **never** counted here.
+  - a low floor (`SUSPECT_FLOOR` 0.25) only marks a frame *suspect* in the log
+    (`Scan suspect: …`), never locks — at 0.25 it fires on 5–8 % of benign frames.
 - **Letterbox crop (`LetterboxCrop`):** in an in-app media viewer (a Telegram album,
   etc.) a large image sits on black bands with a status bar, header and thumbnail
   strip around it; classifying that whole frame dilutes the signal below the screen
@@ -699,8 +711,18 @@ is easy to recognise as a high *hentai* score with a high *drawing* score.
 ### Known limitations
 
 - **View-once / screenshot-protected content** (FLAG_SECURE windows, e.g. WhatsApp
-  and Telegram view-once media, some banking apps) cannot be captured — accepted
-  per spec. These frames are skipped and logged (rate-limited) as "secure window".
+  and Telegram view-once media, some banking apps) cannot be captured. These frames
+  are skipped and logged (rate-limited) as "secure window". To stop this being a
+  hiding place, the **blind-spot lock** (`BlindSpotPolicy`, `BlindSpotSettings`)
+  escalates: in an app on the **blind-spot list** (default Telegram + variants,
+  WhatsApp, Chrome, Instagram, Facebook — banks / password managers / wallets are
+  *not* listed), staying unreadable past a shrinking grace (60 s → 30 s → 10 s →
+  immediate) locks and shows Reflection Mode; the grace resets after an hour of
+  continuously readable screen. A **black-frame guardrail** treats a secure window
+  **or** a blank/near-black frame as unreadable, but only after
+  `BLIND_SPOT_CONFIRM_FRAMES` = 2 *consecutive* unreadable captures, so a single
+  transient blank (a media viewer loading) is ignored. Editable in the app under
+  *قفل عند عدم الرؤية*.
 - The **whole screen** is squashed into one 224×224 input, so a small image inside
   a larger page scores low. **Region scanning** (above) now classifies image, video
   and sticker elements separately. It still misses images that aren't separate

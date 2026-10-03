@@ -195,6 +195,16 @@
                         </LinearLayout>
                         <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
                     </LinearLayout>
+
+                    <View style="@style/Widget.Rafiq.Divider" />
+
+                    <LinearLayout android:id="@+id/rowBlindSpot" style="@style/Widget.Rafiq.Row">
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/row_blind_spot_title" />
+                            <TextView android:id="@+id/txtBlindSpotSummary" style="@style/Widget.Rafiq.Row.Desc" />
+                        </LinearLayout>
+                        <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -273,6 +283,11 @@
                     android:id="@+id/btnRefreshStatus" style="@style/Widget.Rafiq.Button.Secondary"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:text="@string/btn_refresh_status" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnShareLog" style="@style/Widget.Rafiq.Button.Secondary"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/btn_share_log" />
 
                 <TextView
                     android:id="@+id/txtProvisionHint"
