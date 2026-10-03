@@ -212,6 +212,20 @@ object ScanConfig {
     const val CORROBORATION_WINDOW_MS = 3_000L
 
     /**
+     * Blind-spot escalation (README "Stage 5 — blind-spot escalation"): grace, in order,
+     * each time the user enters a state Guardian can't read (a secure / screenshot-
+     * protected window). 1st entry 60 s, 2nd 30 s, 3rd 10 s; the 4th and after lock at
+     * once (the schedule is exhausted). Stay blind past the grace → lock.
+     */
+    val BLIND_SPOT_GRACE_MS = longArrayOf(60_000L, 30_000L, 10_000L)
+
+    /**
+     * The escalation resets to the first step (60 s) after the screen has been
+     * continuously readable for this long — a full hour.
+     */
+    const val BLIND_SPOT_RESET_AFTER_VISIBLE_MS = 3_600_000L
+
+    /**
      * Also lock on a confirmed detection the same-content cooldown keeps from the
      * notifications (a repeat within [DETECTION_COOLDOWN_MS] / [TEXT_COOLDOWN_MS]; for text,
      * explicit tier only — a borderline repeat does not reopen corroboration):

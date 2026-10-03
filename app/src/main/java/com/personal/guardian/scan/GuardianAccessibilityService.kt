@@ -94,6 +94,8 @@ class GuardianAccessibilityService : AccessibilityService() {
     private val regionCache = RegionScoreCache()
     private val regionScorer = RegionScorer(regionCache) { SystemClock.elapsedRealtime() }
     private val appSwitch = AppSwitchTracker()
+    // Blind-spot escalation: shrinking grace each time Guardian can't read the screen.
+    private val blindSpot = BlindSpotPolicy({ SystemClock.elapsedRealtime() })
     private val contentPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
     private val costStats = ScanCostStats()
     private var classifier: NsfwClassifier? = null
@@ -314,6 +316,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         takeScreenshot(Display.DEFAULT_DISPLAY, onWorker, object : TakeScreenshotCallback {
             override fun onSuccess(result: ScreenshotResult) {
                 try {
+                    onReadableFrame() // Guardian can see the screen — drives the blind-spot reset.
                     processScreenshot(result, source, regionsBefore)
                 } catch (t: Throwable) {
                     logFailureRateLimited("processing", "Screen scan: frame processing failed.", t)
@@ -329,6 +332,8 @@ class GuardianAccessibilityService : AccessibilityService() {
                     "Screen scan: takeScreenshot failed (${screenshotErrorName(errorCode)}); skipping frame.",
                     null
                 )
+                // A secure / screenshot-protected window: Guardian can't read the screen.
+                if (errorCode == ERROR_TAKE_SCREENSHOT_SECURE_WINDOW) onBlindFrame()
             }
         })
     }
@@ -575,6 +580,42 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     /** Acts on what the lock controller decided (worker thread). */
+    /** A frame Guardian could read — drives the blind-spot escalation reset (worker thread). */
+    private fun onReadableFrame() {
+        if (blindSpot.onVisible() is BlindSpotPolicy.Outcome.LevelReset) {
+            GuardianLog.i(applicationContext, "Blind-spot: an hour of readable screen — grace reset to ${ScanConfig.BLIND_SPOT_GRACE_MS[0] / 1000}s.")
+        }
+    }
+
+    /**
+     * A frame Guardian could not read (secure/screenshot-protected window). Starts or
+     * continues the escalating grace; locks (via the same path as a detection) once the
+     * grace for this entry has elapsed. Worker thread.
+     */
+    private fun onBlindFrame() {
+        when (val o = blindSpot.onBlind()) {
+            is BlindSpotPolicy.Outcome.GraceStarted -> GuardianLog.w(
+                applicationContext,
+                "Blind-spot: can't read the screen (entry #${o.episode}); grace ${o.graceMs / 1000}s before locking."
+            )
+            is BlindSpotPolicy.Outcome.Act -> {
+                GuardianLog.w(
+                    applicationContext,
+                    "Blind-spot lock: grace elapsed while the screen stayed unreadable (entry #${o.episode})."
+                )
+                handleLock(
+                    lockController?.onDetection(
+                        DetectionEvent(
+                            System.currentTimeMillis(), 1f, TriggerSource.EVENT,
+                            scheduler.foregroundPackage, null
+                        )
+                    )
+                )
+            }
+            else -> Unit
+        }
+    }
+
     private fun handleLock(outcome: LockOutcome?) {
         val handler = worker ?: return
         when (outcome) {
