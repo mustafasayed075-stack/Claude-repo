@@ -1524,8 +1524,8 @@ adds any number of items through the system pickers:
 |---|---|---|
 | **Text** | typed in | large, centred |
 | **Image** | `ACTION_OPEN_DOCUMENT` | full-screen |
-| **Audio** | `ACTION_OPEN_DOCUMENT` | looped, with a simple pulsing visual |
-| **Video** | `ACTION_OPEN_DOCUMENT` | looped, muted (autoplay-safe) |
+| **Audio** | `ACTION_OPEN_DOCUMENT` | looped, with sound, with a simple pulsing visual |
+| **Video** | `ACTION_OPEN_DOCUMENT` | looped, **with sound** |
 
 - Media is stored as a `content://` URI with a **persisted read grant**
   (`takePersistableUriPermission`), so it still opens after a reboot; removing an
@@ -1562,6 +1562,29 @@ read. There is also a 24-hour sanity cap. It replaces the old fixed
 - `ReflectionActivity` uses `showWhenLocked` / `turnScreenOn`, `singleInstance` and
   `excludeFromRecents`.
 
+### Media audio
+
+Video and audio reminders **play with sound** (the earlier muted-autoplay video is
+gone). Playback uses the music stream with `USAGE_MEDIA` audio attributes, so it
+plays at the **device's current media volume** — if the user has media muted it stays
+silent, otherwise it plays at their level. Guardian **requests audio focus**
+(`AUDIOFOCUS_GAIN`) while a clip plays, so other media pauses; on a transient
+duck it lowers its own volume and restores it on gain, and it abandons focus when the
+screen ends. The playback choices live in the pure `ReflectionMedia` object
+(`videoVolume()`, `volumeForFocus()`, `keepsPlaying()`), unit-tested, with the focus
+constants checked against the Android API.
+
+### Hiding the exit affordances
+
+`ReflectionActivity` runs **immersive full-screen**: no action bar, and both the
+status bar and the navigation/gesture bar are hidden
+(`WindowInsetsControllerCompat`, re-asserted on every window-focus gain). So the
+gesture pill, the clock/notification icons and the notification-shade pull handle are
+not shown, and a swipe only reveals the bars transiently without leaving Reflection
+Mode. Screen pinning (`startLockTask`) additionally blocks the notification shade
+while pinned. Together these remove the *visible* ways out; the one that remains is
+the OS gesture below.
+
 ### Logging (auditable)
 
 - `Reflection Mode shown (content=text|image|audio|video, duration=Xs), source=…, detectionId=…`
@@ -1572,15 +1595,22 @@ read. There is also a 24-hour sanity cap. It replaces the old fixed
 
 ### Known, accepted limitation — screen-pinning escape
 
-Without full **Device Owner** mode (deferred until the factory-reset provisioning
-step), Android's screen pinning is the user-exitable kind: it can be left with the
-standard system gesture (**hold Back + Recents/Overview together**). This is an
-OS-level safety feature that **only Device Owner mode can disable** (via
-`setLockTaskPackages`, which makes the pin non-exitable). For this test phase this is
-**expected, not a bug** — the same accepted trade-off as the Device Admin limitation
-(lock can be skipped until admin is active). The pin-exit is logged (above) so it is
-auditable, and once the device is provisioned as Device Owner the pin becomes
-non-exitable with no code change to this stage.
+The visible exit affordances are now hidden: immersive full-screen removes the status
+bar, the gesture pill and the shade handle, and screen pinning blocks the
+notification shade while pinned, so **pulling down the shade to tap a notification is
+no longer an exit route**.
+
+What still remains, and **cannot** be removed without full **Device Owner** mode
+(deferred until the factory-reset provisioning step), is the OS's own pin-exit:
+non-Device-Owner screen pinning can always be left with the standard system gesture
+(**hold Back + Recents/Overview together**). That gesture works even with the bars
+hidden — hiding the pill removes the hint, not the gesture. It is an OS-level safety
+feature that **only Device Owner mode can disable** (via `setLockTaskPackages`, which
+makes the pin non-exitable). For this test phase this is **expected, not a bug** — the
+same accepted trade-off as the Device Admin limitation (lock can be skipped until
+admin is active). The pin-exit is logged (above) so it is auditable, and once the
+device is provisioned as Device Owner the pin becomes non-exitable with no code change
+to this stage.
 
 ### Other known limitations
 

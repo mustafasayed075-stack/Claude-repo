@@ -187,6 +187,49 @@ object ReflectionDuration {
 }
 
 /**
+ * Media playback policy for Reflection Mode (pure, so the choices are unit-tested).
+ *
+ * Video and audio reminders play **with sound** at the device's current media volume
+ * — the player uses the music stream, so if the user has media muted it stays silent,
+ * and otherwise it plays at their chosen level. The app requests audio focus while a
+ * clip plays (pausing other media) and lowers its own volume while ducked.
+ */
+object ReflectionMedia {
+
+    /** Video reminders play with audio (the earlier muted-autoplay behaviour is off). */
+    const val VIDEO_PLAYS_WITH_AUDIO = true
+
+    /** Normal in-app playback gain. Absolute loudness is still the device media volume. */
+    const val FULL_VOLUME = 1f
+
+    /** Gain while another app holds transient focus with ducking. */
+    const val DUCK_VOLUME = 0.2f
+
+    /** Per-track volume multiplier for video: full when playing with audio, else muted. */
+    fun videoVolume(): Float = if (VIDEO_PLAYS_WITH_AUDIO) FULL_VOLUME else 0f
+
+    /**
+     * Volume to apply for an audio-focus change. GAIN → full, transient LOSS with
+     * ducking → quieter, any real LOSS → silent (and the caller may pause).
+     */
+    fun volumeForFocus(focusChange: Int): Float = when (focusChange) {
+        AUDIOFOCUS_GAIN -> FULL_VOLUME
+        AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> DUCK_VOLUME
+        else -> 0f // LOSS / LOSS_TRANSIENT
+    }
+
+    /** True if the clip should keep playing through this focus change (only ducking does). */
+    fun keepsPlaying(focusChange: Int): Boolean =
+        focusChange == AUDIOFOCUS_GAIN || focusChange == AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK
+
+    // AudioManager focus constants (stable platform values), mirrored so this stays pure.
+    const val AUDIOFOCUS_GAIN = 1
+    const val AUDIOFOCUS_LOSS = -1
+    const val AUDIOFOCUS_LOSS_TRANSIENT = -2
+    const val AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK = -3
+}
+
+/**
  * The countdown for [ReflectionActivity], with an injected monotonic clock so timing
  * and the back-button rule are tested without Android.
  *

@@ -69,7 +69,7 @@
             android:launchMode="singleInstance"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
-            android:theme="@style/Theme.Guardian"
+            android:theme="@style/Theme.Guardian.Reflection"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <activity

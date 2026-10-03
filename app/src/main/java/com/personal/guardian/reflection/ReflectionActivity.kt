@@ -2,6 +2,9 @@ package com.personal.guardian.reflection
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
@@ -13,6 +16,8 @@ import android.view.View
 import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.personal.guardian.R
 import com.personal.guardian.util.GuardianLog
 
@@ -28,9 +33,19 @@ class ReflectionActivity : AppCompatActivity() {
 
     private lateinit var countdown: ReflectionCountdown
     private val ui = Handler(Looper.getMainLooper())
+    /** Audio-clip player, and the VideoView's own MediaPlayer, so focus ducking can set either's volume. */
     private var player: MediaPlayer? = null
+    private var videoPlayer: MediaPlayer? = null
     private var lockTaskStarted = false
     private var endedNormally = false
+
+    private val audioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        val volume = ReflectionMedia.volumeForFocus(change)
+        player?.runCatching { setVolume(volume, volume) }
+        videoPlayer?.runCatching { setVolume(volume, volume) }
+    }
 
     private val tick = object : Runnable {
         override fun run() {
@@ -97,7 +112,16 @@ class ReflectionActivity : AppCompatActivity() {
         player?.runCatching { stop() }
         player?.release()
         player = null
+        videoPlayer = null
+        abandonAudioFocus()
         super.onDestroy()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Re-assert immersive full-screen whenever focus returns (e.g. after a
+        // transient system-bar swipe), so the status/nav bars don't linger.
+        if (hasFocus) hideSystemBars()
     }
 
     private fun endNormally() {
@@ -140,7 +164,12 @@ class ReflectionActivity : AppCompatActivity() {
             videoView.setVideoURI(Uri.parse(value))
             videoView.setOnPreparedListener { mp ->
                 mp.isLooping = true
-                mp.setVolume(0f, 0f) // muted: autoplay-safe
+                // Play with audio at the device's media volume (not muted). Hold the
+                // VideoView's MediaPlayer so audio-focus ducking can adjust it.
+                videoPlayer = mp
+                requestAudioFocus()
+                val v = ReflectionMedia.videoVolume()
+                mp.setVolume(v, v)
                 videoView.start()
             }
             videoView.setOnErrorListener { _, _, _ -> showError(textView); true }
@@ -161,12 +190,45 @@ class ReflectionActivity : AppCompatActivity() {
         runCatching {
             player = MediaPlayer().apply {
                 setDataSource(this@ReflectionActivity, Uri.parse(value))
+                // Music stream: honours the device's current media volume.
+                setAudioAttributes(mediaAttributes())
                 isLooping = true
-                setOnPreparedListener { it.start() }
+                setOnPreparedListener { requestAudioFocus(); it.start() }
                 setOnErrorListener { _, _, _ -> showError(textView); true }
                 prepareAsync()
             }
         }.onFailure { showError(textView) }
+    }
+
+    private fun mediaAttributes(): AudioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+        .build()
+
+    /** Requests audio focus so a reminder's sound pauses or ducks other apps' media. */
+    private fun requestAudioFocus() {
+        if (audioFocusRequest != null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(mediaAttributes())
+                .setOnAudioFocusChangeListener(focusListener)
+                .build()
+            audioFocusRequest = request
+            runCatching { audioManager.requestAudioFocus(request) }
+        } else {
+            @Suppress("DEPRECATION")
+            runCatching { audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) }
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { runCatching { audioManager.abandonAudioFocusRequest(it) } }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            runCatching { audioManager.abandonAudioFocus(focusListener) }
+        }
     }
 
     private fun showError(textView: android.widget.TextView) {
@@ -187,6 +249,23 @@ class ReflectionActivity : AppCompatActivity() {
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        hideSystemBars()
+    }
+
+    /**
+     * Immersive full-screen: hide the status bar and the navigation/gesture bar so
+     * neither the gesture pill nor the notification shade handle is shown, and a swipe
+     * only reveals them transiently (BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE) without
+     * leaving Reflection Mode. Combined with screen pinning, this removes the visible
+     * exit affordances. The hold-Back+Recents pin-exit itself is an OS feature that
+     * only Device Owner can disable (documented limitation).
+     */
+    private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
     }
 
     companion object {

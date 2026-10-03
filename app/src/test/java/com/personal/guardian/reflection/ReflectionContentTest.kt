@@ -246,6 +246,44 @@ class ReflectionContentTest {
         assertFalse("once elapsed, back is allowed (activity is finishing)", c.onBackPressed())
     }
 
+    // ---- media playback policy ----
+
+    @Test
+    fun videoPlaysWithAudioAtFullTrackVolume() {
+        assertTrue(ReflectionMedia.VIDEO_PLAYS_WITH_AUDIO)
+        assertEquals(1f, ReflectionMedia.videoVolume(), 0f)
+    }
+
+    @Test
+    fun audioFocusChangesMapToTheRightVolumeAndPlayState() {
+        assertEquals(1f, ReflectionMedia.volumeForFocus(ReflectionMedia.AUDIOFOCUS_GAIN), 0f)
+        assertEquals(0.2f, ReflectionMedia.volumeForFocus(ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK), 0f)
+        assertEquals(0f, ReflectionMedia.volumeForFocus(ReflectionMedia.AUDIOFOCUS_LOSS), 0f)
+        assertEquals(0f, ReflectionMedia.volumeForFocus(ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT), 0f)
+
+        assertTrue(ReflectionMedia.keepsPlaying(ReflectionMedia.AUDIOFOCUS_GAIN))
+        assertTrue("ducking keeps playing, just quieter", ReflectionMedia.keepsPlaying(ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK))
+        assertFalse(ReflectionMedia.keepsPlaying(ReflectionMedia.AUDIOFOCUS_LOSS))
+        assertFalse(ReflectionMedia.keepsPlaying(ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT))
+    }
+
+    @Test
+    fun mediaFocusConstantsMatchTheAndroidApi() {
+        assertEquals(android.media.AudioManager.AUDIOFOCUS_GAIN, ReflectionMedia.AUDIOFOCUS_GAIN)
+        assertEquals(android.media.AudioManager.AUDIOFOCUS_LOSS, ReflectionMedia.AUDIOFOCUS_LOSS)
+        assertEquals(android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT)
+        assertEquals(android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK, ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
+    }
+
+    @Test
+    fun theActivityPlaysVideoWithAudioAndRequestsFocus() {
+        val src = File("src/main/java/com/personal/guardian/reflection/ReflectionActivity.kt").readText()
+        assertFalse("no hard mute on video any more", src.contains("setVolume(0f, 0f)"))
+        assertTrue("video uses the policy volume", src.contains("ReflectionMedia.videoVolume()"))
+        assertTrue("requests audio focus", src.contains("requestAudioFocus"))
+        assertTrue("abandons audio focus", src.contains("abandonAudioFocus"))
+    }
+
     // ---- auditable logging and lock-task wiring (source checks; the rest needs a device) ----
 
     @Test

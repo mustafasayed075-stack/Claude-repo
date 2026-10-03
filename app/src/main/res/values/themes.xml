@@ -7,4 +7,14 @@
         <item name="colorSecondary">@color/guardian_accent</item>
         <item name="android:statusBarColor" tools:targetApi="l">@color/guardian_primary_dark</item>
     </style>
+
+    <!-- Stage 6: Reflection Mode is full-screen with no action bar; the activity also
+         hides the system bars at runtime (immersive). windowFullscreen covers the
+         pre-immersive frame so the status bar never flashes on launch. -->
+    <style name="Theme.Guardian.Reflection" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+    </style>
 </resources>
