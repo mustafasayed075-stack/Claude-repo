@@ -82,6 +82,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         applyInsets()
 
+        // First run: show the welcome screen once.
+        if (WelcomeActivity.shouldShow(this)) {
+            startActivity(Intent(this, WelcomeActivity::class.java))
+        }
+
         // The core service should be running whenever the app is used.
         GuardianForegroundService.start(this)
         BlocklistManager.ensureLoaded(this)

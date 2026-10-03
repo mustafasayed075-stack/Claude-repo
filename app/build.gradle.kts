@@ -51,6 +51,17 @@ android {
     }
 }
 
+// Unit tests (including Paparazzi screenshots) run only on the debug variant. The
+// Paparazzi plugin swaps the Android platform on the test classpath for the variant
+// it instruments (debug); compiling the release unit tests then can't resolve
+// android.* constants. We never run release unit tests, so disable that variant's.
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) {
+        @Suppress("UnstableApiUsage")
+        it.enableUnitTest = false
+    }
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")

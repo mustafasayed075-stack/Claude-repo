@@ -157,6 +157,18 @@
     <string name="developer_unlocked">تم فتح قسم المطورين</string>
     <string name="developer_locked">تم إخفاء قسم المطورين</string>
 
+    <!-- First-run welcome (step 7) -->
+    <string name="welcome_title">أهلًا بيك في رفيق</string>
+    <string name="welcome_subtitle">رفيقك اللي يساعدك تلتزم، وكل حاجة بتتعمل على جهازك إنت.</string>
+    <string name="welcome_point1_title">كله على جهازك</string>
+    <string name="welcome_point1_desc">الفحص والنماذج بتشتغل على الموبايل نفسه، مفيش حاجة بتترفع لأي سيرفر.</string>
+    <string name="welcome_point2_title">مفيش بيانات بتتبعت</string>
+    <string name="welcome_point2_desc">لا صور ولا رسايل ولا سجل تصفّح بيخرج من جهازك. خصوصيتك محفوظة.</string>
+    <string name="welcome_point3_title">إنت المتحكّم</string>
+    <string name="welcome_point3_desc">إنت اللي بتختار التطبيقات اللي تتراقب ورسائل التذكير ومدة القفل.</string>
+    <string name="welcome_start">يلا نبدأ</string>
+    <string name="welcome_icon_desc">شعار رفيق</string>
+
     <string name="yes">نعم</string>
     <string name="no">لا</string>
 </resources>

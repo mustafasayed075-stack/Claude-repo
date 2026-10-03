@@ -58,6 +58,11 @@
         </activity>
 
         <activity
+            android:name=".WelcomeActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Rafiq.Main" />
+
+        <activity
             android:name=".FastScanAppsActivity"
             android:exported="false"
             android:theme="@style/Theme.Rafiq.Main"

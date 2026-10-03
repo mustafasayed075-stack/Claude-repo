@@ -164,4 +164,22 @@ class ScreenshotTest {
 
     @Test fun iconSquare() = iconPreview("icon-square", round = false)
     @Test fun iconRound() = iconPreview("icon-round", round = true)
+
+    private fun welcome(name: String, night: Boolean) {
+        night(night)
+        val root = paparazzi.inflate<View>(R.layout.activity_welcome)
+        fun point(pointId: Int, icon: Int, title: Int, desc: Int) {
+            val p = root.findViewById<View>(pointId)
+            p.findViewById<ImageView>(R.id.imgPoint).setImageResource(icon)
+            p.findViewById<TextView>(R.id.txtPointTitle).setText(title)
+            p.findViewById<TextView>(R.id.txtPointDesc).setText(desc)
+        }
+        point(R.id.point1, R.drawable.ic_guardian_shield, R.string.welcome_point1_title, R.string.welcome_point1_desc)
+        point(R.id.point2, R.drawable.ic_cloud_off, R.string.welcome_point2_title, R.string.welcome_point2_desc)
+        point(R.id.point3, R.drawable.ic_check_circle, R.string.welcome_point3_title, R.string.welcome_point3_desc)
+        paparazzi.snapshot(root, name)
+    }
+
+    @Test fun welcomeLight() = welcome("welcome-light", night = false)
+    @Test fun welcomeDark() = welcome("welcome-dark", night = true)
 }

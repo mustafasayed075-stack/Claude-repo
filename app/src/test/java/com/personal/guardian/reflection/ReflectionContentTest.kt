@@ -269,10 +269,13 @@ class ReflectionContentTest {
 
     @Test
     fun mediaFocusConstantsMatchTheAndroidApi() {
-        assertEquals(android.media.AudioManager.AUDIOFOCUS_GAIN, ReflectionMedia.AUDIOFOCUS_GAIN)
-        assertEquals(android.media.AudioManager.AUDIOFOCUS_LOSS, ReflectionMedia.AUDIOFOCUS_LOSS)
-        assertEquals(android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT)
-        assertEquals(android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK, ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
+        // android.media.AudioManager's stable platform values (mirrored in ReflectionMedia
+        // so the policy stays pure). Asserted as literals to keep this test independent of
+        // the Android platform jar on the test classpath (Paparazzi swaps it per variant).
+        assertEquals(1, ReflectionMedia.AUDIOFOCUS_GAIN)
+        assertEquals(-1, ReflectionMedia.AUDIOFOCUS_LOSS)
+        assertEquals(-2, ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT)
+        assertEquals(-3, ReflectionMedia.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
     }
 
     @Test
