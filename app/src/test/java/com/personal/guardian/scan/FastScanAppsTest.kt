@@ -19,10 +19,11 @@ class FastScanAppsTest {
     @get:Rule
     val tmp = TemporaryFolder()
 
-    /** The packages that were hard-coded in ScanConfig.WATCHED_PACKAGES before the list. */
-    private val previousHardCoded = setOf(
+    /** The current first-run default packages (messaging apps + common browsers). */
+    private val defaultPackages = setOf(
         "com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "org.telegram.messenger.web",
-        "org.thunderdog.challegram", "com.android.chrome", "com.chrome.beta", "org.mozilla.firefox",
+        "org.thunderdog.challegram", "org.telegram.plus", "tw.nekomimi.nekogram", "ir.ilmili.telegraph",
+        "com.android.chrome", "com.chrome.beta", "org.mozilla.firefox",
         "org.mozilla.firefox_beta", "org.mozilla.focus", "com.sec.android.app.sbrowser", "com.microsoft.emmx",
         "com.opera.browser", "com.opera.mini.native", "com.brave.browser", "com.duckduckgo.mobile.android",
         "com.UCMobile.intl", "com.mi.globalbrowser", "com.android.browser",
@@ -36,11 +37,11 @@ class FastScanAppsTest {
     @Test
     fun defaultsAreExactlyThePreviousHardCodedAppsWithTextAndImageOn() {
         val d = FastScanDefaults.list()
-        assertEquals(previousHardCoded, d.entries.map { it.packageName }.toSet())
-        assertEquals(previousHardCoded.size, d.size)
+        assertEquals(defaultPackages, d.entries.map { it.packageName }.toSet())
+        assertEquals(defaultPackages.size, d.size)
         assertTrue(d.entries.all { it.text && it.image && it.label.isNotBlank() })
-        assertEquals(previousHardCoded, d.textPackages)
-        assertEquals(previousHardCoded, d.imagePackages)
+        assertEquals(defaultPackages, d.textPackages)
+        assertEquals(defaultPackages, d.imagePackages)
     }
 
     @Test
@@ -74,7 +75,7 @@ class FastScanAppsTest {
     @Test
     fun aDefaultAppCanBeRemovedLikeAnyOther() {
         val list = FastScanDefaults.list().remove("com.whatsapp")
-        assertEquals(previousHardCoded.size - 1, list.size)
+        assertEquals(defaultPackages.size - 1, list.size)
         assertFalse("com.whatsapp" in list.textPackages || "com.whatsapp" in list.imagePackages)
     }
 

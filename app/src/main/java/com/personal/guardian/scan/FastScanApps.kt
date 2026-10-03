@@ -107,6 +107,9 @@ object FastScanDefaults {
         FastScanApp("org.telegram.messenger", "Telegram"),
         FastScanApp("org.telegram.messenger.web", "Telegram (direct download)"),
         FastScanApp("org.thunderdog.challegram", "Telegram X"),
+        FastScanApp("org.telegram.plus", "Plus Messenger"),
+        FastScanApp("tw.nekomimi.nekogram", "Nekogram"),
+        FastScanApp("ir.ilmili.telegraph", "Telegraph"),
         // Browsers
         FastScanApp("com.android.chrome", "Chrome"),
         FastScanApp("com.chrome.beta", "Chrome Beta"),
