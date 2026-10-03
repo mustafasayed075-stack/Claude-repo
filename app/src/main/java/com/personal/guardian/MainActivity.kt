@@ -89,6 +89,9 @@ class MainActivity : AppCompatActivity() {
 
         // The core service should be running whenever the app is used.
         GuardianForegroundService.start(this)
+        // If already provisioned as Device Owner, make sure Guardian is allowlisted for
+        // lock task so Reflection Mode's pin is the non-exitable kind.
+        GuardianDeviceAdminReceiver.allowlistForLockTask(this)
         BlocklistManager.ensureLoaded(this)
         maybeTriggerFirstRefresh()
         maybeRequestNotificationPermission()

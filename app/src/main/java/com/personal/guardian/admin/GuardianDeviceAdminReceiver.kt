@@ -31,6 +31,9 @@ class GuardianDeviceAdminReceiver : DeviceAdminReceiver() {
     override fun onEnabled(context: Context, intent: Intent) {
         super.onEnabled(context, intent)
         GuardianLog.i(context, "Device admin ENABLED. Device owner=${isDeviceOwner(context)}")
+        // As Device Owner, allowlist Guardian for lock task so Reflection Mode's
+        // startLockTask() becomes the non-exitable kind (shade blocked, no pin-exit).
+        allowlistForLockTask(context)
         // Ensure the core service is up as soon as we hold privileges.
         GuardianForegroundService.start(context)
     }
@@ -71,5 +74,28 @@ class GuardianDeviceAdminReceiver : DeviceAdminReceiver() {
         /** True if this app is at least an active device admin (owner implies admin). */
         fun isAdminActive(context: Context): Boolean =
             dpm(context).isAdminActive(componentName(context))
+
+        /**
+         * As Device Owner, allowlist this package for lock task
+         * (`setLockTaskPackages`). Only then does `startLockTask()` enter the
+         * non-exitable lock-task mode — status bar/shade blocked and the Back+Recents
+         * pin-exit gesture disabled — instead of ordinary user-exitable screen pinning.
+         * No-op (returns false) when not Device Owner.
+         */
+        fun allowlistForLockTask(context: Context): Boolean {
+            if (!isDeviceOwner(context)) return false
+            return try {
+                dpm(context).setLockTaskPackages(componentName(context), arrayOf(context.packageName))
+                GuardianLog.i(context, "Lock task allowlist applied for ${context.packageName} (Device Owner).")
+                true
+            } catch (t: Throwable) {
+                GuardianLog.e(context, "Could not set lock-task allowlist.", t)
+                false
+            }
+        }
+
+        /** True if [startLockTask] would enter the non-exitable lock-task mode for this app. */
+        fun isLockTaskPermitted(context: Context): Boolean =
+            runCatching { dpm(context).isLockTaskPermitted(context.packageName) }.getOrDefault(false)
     }
 }

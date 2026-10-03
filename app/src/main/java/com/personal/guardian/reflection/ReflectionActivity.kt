@@ -81,23 +81,24 @@ class ReflectionActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (!lockTaskStarted) {
-            // Pins the app. Without Device Owner this is "screen pinning": the system
-            // itself hides the status bar and blocks the notification shade while pinned,
-            // but the user can still leave with the Back+Recents gesture (documented
-            // limitation; only Device Owner can disable that gesture).
+            // As Device Owner, allowlist first so startLockTask() enters the
+            // non-exitable lock-task mode (no shade, no Back+Recents exit). Without
+            // Device Owner this is ordinary "screen pinning": the system hides the
+            // status bar and blocks the shade while pinned, but the user can still
+            // leave with the Back+Recents gesture (documented limitation).
+            com.personal.guardian.admin.GuardianDeviceAdminReceiver.allowlistForLockTask(this)
+            val trueLock = com.personal.guardian.admin.GuardianDeviceAdminReceiver.isLockTaskPermitted(this)
             runCatching { startLockTask() }.onFailure {
                 GuardianLog.w(this, "Reflection Mode: startLockTask() failed (continuing unpinned).", it)
             }
             lockTaskStarted = true
-            // If pinning did not engage, the shade stays usable and only immersive hiding
-            // is in effect — worth seeing in the log.
             val am = getSystemService(ACTIVITY_SERVICE) as? android.app.ActivityManager
-            val pinned = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                am?.lockTaskModeState == android.app.ActivityManager.LOCK_TASK_MODE_PINNED else null
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) am?.lockTaskModeState else null
             GuardianLog.i(
                 this,
-                "Reflection Mode started: screen pinning engaged=${pinned ?: "unknown"}." +
-                    if (pinned == false) " Notification shade NOT blocked — turn on the system's screen/app pinning for that." else ""
+                "Reflection Mode started: deviceOwnerLock=$trueLock, lockTaskModeState=${mode ?: "unknown"}. " +
+                    if (!trueLock) "Not Device Owner — shade/exit only limited while screen pinning is on; " +
+                        "full lock needs Device Owner provisioning." else "Full lock: no exit until the secret taps."
             )
         }
     }
@@ -158,10 +159,14 @@ class ReflectionActivity : AppCompatActivity() {
     private fun revealSystemBars() {
         WindowInsetsControllerCompat(window, window.decorView)
             .show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        // The secret taps are the way out: lift the lock so the user can leave. Under
+        // Device Owner this is the ONLY exit (the pin has no Back+Recents gesture);
+        // under ordinary pinning it simply unpins now instead of needing the gesture.
+        runCatching { stopLockTask() }
         GuardianLog.w(
             this,
-            "Reflection Mode secret unlock: ${secretUnlock.threshold} taps reached; system bars revealed " +
-                "(the OS screen-pinning exit can now be used), detectionId=${intent.getStringExtra(EXTRA_DETECTION_ID)}."
+            "Reflection Mode secret unlock: ${secretUnlock.threshold} taps reached; lock lifted and system bars " +
+                "revealed, detectionId=${intent.getStringExtra(EXTRA_DETECTION_ID)}."
         )
     }
 
