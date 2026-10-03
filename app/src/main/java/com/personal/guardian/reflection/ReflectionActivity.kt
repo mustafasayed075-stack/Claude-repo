@@ -81,17 +81,32 @@ class ReflectionActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (!lockTaskStarted) {
-            // Pins the app. Without Device Owner this is "screen pinning" the user can
-            // still exit via Back+Recents (documented limitation).
+            // Pins the app. Without Device Owner this is "screen pinning": the system
+            // itself hides the status bar and blocks the notification shade while pinned,
+            // but the user can still leave with the Back+Recents gesture (documented
+            // limitation; only Device Owner can disable that gesture).
             runCatching { startLockTask() }.onFailure {
                 GuardianLog.w(this, "Reflection Mode: startLockTask() failed (continuing unpinned).", it)
             }
             lockTaskStarted = true
+            // If pinning did not engage, the shade stays usable and only immersive hiding
+            // is in effect — worth seeing in the log.
+            val am = getSystemService(ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val pinned = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+                am?.lockTaskModeState == android.app.ActivityManager.LOCK_TASK_MODE_PINNED else null
+            GuardianLog.i(
+                this,
+                "Reflection Mode started: screen pinning engaged=${pinned ?: "unknown"}." +
+                    if (pinned == false) " Notification shade NOT blocked — turn on the system's screen/app pinning for that." else ""
+            )
         }
     }
 
     override fun onResume() {
         super.onResume()
+        // Re-assert immersive on resume too (not only on focus change), so the bars are
+        // hidden again after any transient reveal or returning to the screen.
+        if (!secretUnlock.unlocked) hideSystemBars()
         countdown.start()
         ui.removeCallbacks(tick)
         ui.post(tick)
