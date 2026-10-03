@@ -63,6 +63,12 @@
         <item name="android:navigationBarColor">@android:color/black</item>
     </style>
 
+    <!-- Home screen uses its own MaterialToolbar, so no system action bar. -->
+    <style name="Theme.Rafiq.Main" parent="Theme.Rafiq">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
     <!-- Back-compat alias so the manifest's old name keeps working during the rebrand. -->
     <style name="Theme.Guardian" parent="Theme.Rafiq" />
     <style name="Theme.Guardian.Reflection" parent="Theme.Rafiq.Reflection" />

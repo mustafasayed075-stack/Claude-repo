@@ -121,6 +121,38 @@
     <string name="fast_scan_picker_loading">بيحمّل التطبيقات…</string>
     <string name="fast_scan_picker_empty">مفيش تطبيقات تانية تضيفها.</string>
 
+    <!-- Main screen redesign (step 3) -->
+    <string name="status_card_active_title">رفيق شغّال</string>
+    <string name="status_card_active_subtitle">كل الحمايات مفعّلة. اطمّن.</string>
+    <string name="status_card_setup_title">محتاج تفعيل</string>
+    <string name="status_card_setup_subtitle">فيه خطوة لسه محتاجة تتفعّل عشان رفيق يشتغل صح.</string>
+    <string name="status_card_action">ابدأ التفعيل</string>
+    <string name="status_card_icon_desc">حالة رفيق</string>
+
+    <string name="section_setup_steps">خطوات التفعيل</string>
+    <string name="step_protection_title">الحماية</string>
+    <string name="step_protection_desc">فحص الشاشة والنصوص على الجهاز</string>
+    <string name="step_admin_title">صلاحية القفل</string>
+    <string name="step_admin_desc">تسمح لرفيق يقفل الشاشة عند الحاجة</string>
+    <string name="step_dns_title">فلترة المواقع</string>
+    <string name="step_dns_desc">حظر المواقع السيئة</string>
+    <string name="step_done">مفعّل</string>
+    <string name="step_todo">محتاج تفعيل</string>
+
+    <string name="section_settings">الإعدادات</string>
+    <string name="row_fast_scan_title">التطبيقات اللي بنراقبها</string>
+    <string name="row_fast_scan_summary">%1$d تطبيق</string>
+    <string name="row_reflection_title">رسائل التذكير</string>
+    <string name="row_reflection_summary">%1$d رسالة</string>
+    <string name="row_lock_duration_title">مدة القفل</string>
+    <string name="row_lock_duration_summary">%1$d ثانية</string>
+    <string name="lock_duration_dialog_title">مدة القفل (بالثواني)</string>
+
+    <string name="section_developer">للمطورين</string>
+    <string name="version_label">الإصدار %1$s</string>
+    <string name="developer_unlocked">تم فتح قسم المطورين</string>
+    <string name="developer_locked">تم إخفاء قسم المطورين</string>
+
     <string name="yes">نعم</string>
     <string name="no">لا</string>
 </resources>

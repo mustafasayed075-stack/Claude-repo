@@ -1,203 +1,294 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootMain"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:orientation="vertical"
+    android:background="?android:attr/colorBackground">
 
-    <LinearLayout
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:title="@string/app_name"
+        app:titleCentered="true"
+        app:titleTextColor="?attr/colorOnPrimary" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:paddingBottom="8dp" />
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/section_status"
-            android:textStyle="bold"
-            android:paddingTop="8dp"
-            android:paddingBottom="4dp" />
-
-        <TextView
-            android:id="@+id/txtOwnerStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-
-        <TextView
-            android:id="@+id/txtAdminStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-
-        <TextView
-            android:id="@+id/txtVpnStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-
-        <TextView
-            android:id="@+id/txtBlocklistStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-
-        <TextView
-            android:id="@+id/txtScanStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingTop="8dp" />
-
-        <TextView
-            android:id="@+id/txtScanDetails"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/txtTextScanStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingTop="4dp"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/txtLockStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingTop="4dp"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/txtReflectionStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingTop="4dp"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/txtFullScreenIntentStatus"
+        <LinearLayout
+            android:id="@+id/contentMain"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="4dp"
-            android:textSize="12sp"
-            android:text="@string/status_full_screen_intent_off"
-            android:visibility="gone" />
+            android:orientation="vertical"
+            android:padding="16dp">
 
-        <TextView
-            android:id="@+id/txtFastScanStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingTop="4dp"
-            android:textSize="12sp" />
+            <!-- Big status card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp"
+                app:cardBackgroundColor="?attr/colorPrimaryContainer">
 
-        <TextView
-            android:id="@+id/txtNotificationStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:visibility="gone" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
 
-        <TextView
-            android:id="@+id/txtProvisionHint"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingTop="12dp"
-            android:textIsSelectable="true"
-            android:fontFamily="monospace"
-            android:textSize="12sp" />
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
 
-        <Button
-            android:id="@+id/btnEnableVpn"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/btn_enable_vpn" />
+                        <ImageView
+                            android:id="@+id/imgStatus"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:src="@drawable/ic_guardian_shield"
+                            android:contentDescription="@string/status_card_icon_desc"
+                            app:tint="?attr/colorPrimary" />
 
-        <Button
-            android:id="@+id/btnOpenAccessibility"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_open_accessibility" />
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="16dp"
+                            android:orientation="vertical">
 
-        <Button
-            android:id="@+id/btnFastScanApps"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_fast_scan_apps" />
+                            <TextView
+                                android:id="@+id/txtStatusTitle"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textColor="?attr/colorOnPrimaryContainer"
+                                android:textSize="22sp"
+                                android:textStyle="bold"
+                                tools:ignore="SelectableText"
+                                xmlns:tools="http://schemas.android.com/tools" />
 
-        <Button
-            android:id="@+id/btnReflectionSettings"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_reflection_settings" />
+                            <TextView
+                                android:id="@+id/txtStatusSubtitle"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:textColor="?attr/colorOnPrimaryContainer"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+                    </LinearLayout>
 
-        <Button
-            android:id="@+id/btnFullScreenIntentSettings"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_full_screen_intent_settings"
-            android:visibility="gone" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnStatusAction"
+                        style="@style/Widget.Rafiq.Button.Primary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="@string/status_card_action" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-        <Button
-            android:id="@+id/btnRequestAdmin"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_request_admin" />
+            <!-- Setup checklist -->
+            <TextView
+                style="@style/TextAppearance.Rafiq.SectionHeader"
+                android:text="@string/section_setup_steps" />
 
-        <Button
-            android:id="@+id/btnRefreshList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_refresh_list" />
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Rafiq.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
 
-        <Button
-            android:id="@+id/btnStartService"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_start_service" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
 
-        <Button
-            android:id="@+id/btnRefreshStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/btn_refresh_status" />
+                    <LinearLayout android:id="@+id/rowProtection" style="@style/Widget.Rafiq.Row">
+                        <ImageView android:id="@+id/imgProtection" style="@style/Widget.Rafiq.Row.Icon" android:src="@drawable/ic_alert_circle" />
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/step_protection_title" />
+                            <TextView style="@style/Widget.Rafiq.Row.Desc" android:text="@string/step_protection_desc" />
+                        </LinearLayout>
+                        <TextView android:id="@+id/txtProtectionState" style="@style/Widget.Rafiq.Row.State" />
+                    </LinearLayout>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/section_diagnostics"
-            android:textStyle="bold"
-            android:paddingTop="16dp"
-            android:paddingBottom="4dp" />
+                    <View style="@style/Widget.Rafiq.Divider" />
 
-        <TextView
-            android:id="@+id/txtDiagnostics"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:textSize="11sp"
-            android:textIsSelectable="true" />
+                    <LinearLayout android:id="@+id/rowAdmin" style="@style/Widget.Rafiq.Row">
+                        <ImageView android:id="@+id/imgAdmin" style="@style/Widget.Rafiq.Row.Icon" android:src="@drawable/ic_alert_circle" />
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/step_admin_title" />
+                            <TextView style="@style/Widget.Rafiq.Row.Desc" android:text="@string/step_admin_desc" />
+                        </LinearLayout>
+                        <TextView android:id="@+id/txtAdminState" style="@style/Widget.Rafiq.Row.State" />
+                    </LinearLayout>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/section_log"
-            android:textStyle="bold"
-            android:paddingTop="16dp"
-            android:paddingBottom="4dp" />
+                    <View style="@style/Widget.Rafiq.Divider" />
 
-        <TextView
-            android:id="@+id/txtLog"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:textSize="11sp"
-            android:textIsSelectable="true" />
+                    <LinearLayout android:id="@+id/rowDns" style="@style/Widget.Rafiq.Row">
+                        <ImageView android:id="@+id/imgDns" style="@style/Widget.Rafiq.Row.Icon" android:src="@drawable/ic_alert_circle" />
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/step_dns_title" />
+                            <TextView style="@style/Widget.Rafiq.Row.Desc" android:text="@string/step_dns_desc" />
+                        </LinearLayout>
+                        <TextView android:id="@+id/txtDnsState" style="@style/Widget.Rafiq.Row.State" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-    </LinearLayout>
-</ScrollView>
+            <!-- Settings list -->
+            <TextView
+                style="@style/TextAppearance.Rafiq.SectionHeader"
+                android:text="@string/section_settings" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Rafiq.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <LinearLayout android:id="@+id/rowFastScan" style="@style/Widget.Rafiq.Row">
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/row_fast_scan_title" />
+                            <TextView android:id="@+id/txtFastScanSummary" style="@style/Widget.Rafiq.Row.Desc" />
+                        </LinearLayout>
+                        <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
+                    </LinearLayout>
+
+                    <View style="@style/Widget.Rafiq.Divider" />
+
+                    <LinearLayout android:id="@+id/rowReflection" style="@style/Widget.Rafiq.Row">
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/row_reflection_title" />
+                            <TextView android:id="@+id/txtReflectionSummary" style="@style/Widget.Rafiq.Row.Desc" />
+                        </LinearLayout>
+                        <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
+                    </LinearLayout>
+
+                    <View style="@style/Widget.Rafiq.Divider" />
+
+                    <LinearLayout android:id="@+id/rowLockDuration" style="@style/Widget.Rafiq.Row">
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/row_lock_duration_title" />
+                            <TextView android:id="@+id/txtLockDurationSummary" style="@style/Widget.Rafiq.Row.Desc" />
+                        </LinearLayout>
+                        <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Permission warnings (shown only when relevant) -->
+            <TextView
+                android:id="@+id/txtFullScreenIntentStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/status_full_screen_intent_off"
+                android:textColor="@color/rafiq_warn"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnFullScreenIntentSettings"
+                style="@style/Widget.Rafiq.Button.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/btn_full_screen_intent_settings"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/txtNotificationStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/status_notifications_off"
+                android:textColor="@color/rafiq_warn"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <!-- Version (tap 7x to reveal developer section) -->
+            <TextView
+                android:id="@+id/txtVersion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:gravity="center"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="12sp" />
+
+            <!-- Developer section (hidden until 7 taps on the version) -->
+            <LinearLayout
+                android:id="@+id/cardDeveloper"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/TextAppearance.Rafiq.SectionHeader"
+                    android:text="@string/section_developer" />
+
+                <TextView android:id="@+id/txtScanStatus" style="@style/Widget.Rafiq.Mono" />
+                <TextView android:id="@+id/txtScanDetails" style="@style/Widget.Rafiq.Mono" />
+                <TextView android:id="@+id/txtTextScanStatus" style="@style/Widget.Rafiq.Mono" />
+                <TextView android:id="@+id/txtLockStatus" style="@style/Widget.Rafiq.Mono" />
+                <TextView android:id="@+id/txtOwnerStatus" style="@style/Widget.Rafiq.Mono" />
+                <TextView android:id="@+id/txtAdminStatus" style="@style/Widget.Rafiq.Mono" />
+                <TextView android:id="@+id/txtVpnStatus" style="@style/Widget.Rafiq.Mono" />
+                <TextView android:id="@+id/txtBlocklistStatus" style="@style/Widget.Rafiq.Mono" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRefreshList" style="@style/Widget.Rafiq.Button.Secondary"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:text="@string/btn_refresh_list" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnStartService" style="@style/Widget.Rafiq.Button.Secondary"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/btn_start_service" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRefreshStatus" style="@style/Widget.Rafiq.Button.Secondary"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/btn_refresh_status" />
+
+                <TextView
+                    android:id="@+id/txtProvisionHint"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp" android:textIsSelectable="true"
+                    android:fontFamily="monospace" android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurface" />
+
+                <TextView
+                    style="@style/TextAppearance.Rafiq.SectionHeader"
+                    android:text="@string/section_diagnostics" />
+                <TextView
+                    android:id="@+id/txtDiagnostics"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:fontFamily="monospace" android:textSize="11sp" android:textIsSelectable="true"
+                    android:textColor="?attr/colorOnSurface" />
+
+                <TextView
+                    style="@style/TextAppearance.Rafiq.SectionHeader"
+                    android:text="@string/section_log" />
+                <TextView
+                    android:id="@+id/txtLog"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:fontFamily="monospace" android:textSize="11sp" android:textIsSelectable="true"
+                    android:textColor="?attr/colorOnSurface" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>
