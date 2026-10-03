@@ -100,8 +100,9 @@ class ReflectionSettingsActivity : AppCompatActivity() {
             return
         }
         val clamp = ReflectionSettings.setDurationSeconds(this, requested)
-        // The 30-second floor is enforced in code: tell the user when a lower value was raised.
-        val msg = if (clamp.adjusted) clamp.reason ?: getString(R.string.reflection_duration_saved, clamp.seconds)
+        // The 30-second floor is enforced in code (ReflectionSettings); tell the user in
+        // Arabic when a lower value was raised, rather than surfacing the English log reason.
+        val msg = if (clamp.adjusted) getString(R.string.reflection_duration_clamped, clamp.seconds)
         else getString(R.string.reflection_duration_saved, clamp.seconds)
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
         refresh()
@@ -124,7 +125,14 @@ class ReflectionSettingsActivity : AppCompatActivity() {
             val row = convertView?.let { ItemReflectionContentBinding.bind(it) }
                 ?: ItemReflectionContentBinding.inflate(LayoutInflater.from(parent.context), parent, false)
             val item = items[position]
-            row.txtType.text = item.type.label.uppercase()
+            row.txtType.setText(
+                when (item.type) {
+                    ReflectionType.TEXT -> R.string.reflection_type_text
+                    ReflectionType.IMAGE -> R.string.reflection_type_image
+                    ReflectionType.AUDIO -> R.string.reflection_type_audio
+                    ReflectionType.VIDEO -> R.string.reflection_type_video
+                }
+            )
             row.txtLabel.text = item.displayLabel()
             row.btnRemove.contentDescription = getString(R.string.reflection_remove, item.displayLabel())
             row.btnRemove.setOnClickListener {
