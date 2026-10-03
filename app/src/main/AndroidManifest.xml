@@ -60,6 +60,7 @@
         <activity
             android:name=".FastScanAppsActivity"
             android:exported="false"
+            android:theme="@style/Theme.Rafiq.Main"
             android:parentActivityName=".MainActivity" />
 
         <!-- Stage 6: Reflection Mode. The pinned full-screen reminder shown on a lock.

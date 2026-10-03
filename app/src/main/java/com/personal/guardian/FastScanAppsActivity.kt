@@ -16,6 +16,9 @@ import android.widget.BaseAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import com.personal.guardian.databinding.ActivityFastScanAppsBinding
 import com.personal.guardian.databinding.DialogAppPickerBinding
 import com.personal.guardian.databinding.ItemAppPickerBinding
@@ -47,8 +50,8 @@ class FastScanAppsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityFastScanAppsBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        title = getString(R.string.fast_scan_title)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        applyInsets()
+        binding.toolbar.setNavigationOnClickListener { finish() }
 
         binding.txtFastScanIntro.text = getString(
             R.string.fast_scan_intro,
@@ -57,13 +60,17 @@ class FastScanAppsActivity : AppCompatActivity() {
         )
         binding.listFastScanApps.adapter = adapter
         binding.listFastScanApps.emptyView = binding.txtFastScanEmpty
-        binding.fabAddApp.setOnClickListener { showPicker() }
+        binding.btnAddApp.setOnClickListener { showPicker() }
         show(FastScanSettings.get(this))
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        finish()
-        return true
+    private fun applyInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            binding.toolbar.updatePadding(top = bars.top)
+            binding.root.updatePadding(bottom = bars.bottom)
+            insets
+        }
     }
 
     override fun onDestroy() {

@@ -114,5 +114,32 @@ class ScreenshotTest {
     @Test fun reflectionSettingsLight() = reflectionScreen("reflection-settings-light", night = false)
     @Test fun reflectionSettingsDark() = reflectionScreen("reflection-settings-dark", night = true)
     @Test fun reflectionCardsLight() = reflectionCards("reflection-cards-light", night = false)
-    @Test fun fastScanLight() = shot("fast-scan-light", R.layout.activity_fast_scan_apps, night = false)
+
+    /** A couple of watched-app cards, so the preview shows the row + switches design. */
+    private fun fastScanCards(name: String, night: Boolean) {
+        night(night)
+        val container = android.widget.LinearLayout(paparazzi.context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setBackgroundColor(if (night) 0xFF101A19.toInt() else 0xFFF6F3EC.toInt())
+            setPadding(0, 16, 0, 16)
+        }
+        val samples = listOf(
+            Triple("واتساب", "com.whatsapp", true to true),
+            Triple("كروم", "com.android.chrome", true to false),
+            Triple("تيك توك", "com.zhiliaoapp.musically", false to true),
+        )
+        for ((label, pkg, toggles) in samples) {
+            val card = paparazzi.inflate<View>(R.layout.item_fast_scan_app)
+            card.findViewById<TextView>(R.id.txtLabel).text = label
+            card.findViewById<TextView>(R.id.txtDetail).text = pkg
+            card.findViewById<ImageView>(R.id.imgIcon).setImageResource(R.drawable.ic_guardian_shield)
+            card.findViewById<android.widget.CompoundButton>(R.id.chkText).isChecked = toggles.first
+            card.findViewById<android.widget.CompoundButton>(R.id.chkImage).isChecked = toggles.second
+            container.addView(card)
+        }
+        paparazzi.snapshot(container, name)
+    }
+
+    @Test fun fastScanCardsLight() = fastScanCards("fast-scan-cards-light", night = false)
+    @Test fun fastScanCardsDark() = fastScanCards("fast-scan-cards-dark", night = true)
 }
