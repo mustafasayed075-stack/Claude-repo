@@ -7,6 +7,9 @@ package com.personal.guardian.scan
  *  - Fast mode: while a package in [watchedPackages] is in the foreground, one
  *    capture every [fastIntervalMs]. Entering fast mode requests a capture right
  *    away (subject to [minCaptureGapMs]); leaving it reverts to the baseline rate.
+ *    [watchedPackages] are the Fast Scan Apps with image scanning on
+ *    ([FastScanList.imagePackages]) and can change while running
+ *    ([updateWatchedPackages]). The baseline capture runs for every app, listed or not.
  *
  * Foreground changes come from accessibility window-state events. Windows from
  * [overlayPackages] (system UI, keyboards) are drawn over the real app, so their
@@ -16,7 +19,7 @@ package com.personal.guardian.scan
  * without Android. Not thread-safe: use from the scanner's worker thread.
  */
 class CaptureScheduler(
-    private val watchedPackages: Set<String> = ScanConfig.WATCHED_PACKAGES,
+    watchedPackages: Set<String> = emptySet(),
     val baselineIntervalMs: Long = ScanConfig.BASELINE_INTERVAL_MS,
     val fastIntervalMs: Long = ScanConfig.FAST_INTERVAL_MS,
     private val minCaptureGapMs: Long = ScanConfig.MIN_CAPTURE_GAP_MS,
@@ -30,6 +33,21 @@ class CaptureScheduler(
 
     @Volatile
     var overlayPackages: Set<String> = overlayPackages
+
+    /** Packages that get fast capture while in the foreground. */
+    var watchedPackages: Set<String> = watchedPackages
+        private set
+
+    /**
+     * Replaces [watchedPackages] (the user edited the Fast Scan Apps list). Returns
+     * true if this switched between baseline and fast mode for the app currently in
+     * the foreground — the caller should then reschedule with [delayAfterModeChange].
+     */
+    fun updateWatchedPackages(packages: Set<String>): Boolean {
+        val wasFast = isFastMode
+        watchedPackages = packages
+        return wasFast != isFastMode
+    }
 
     /** Package currently believed to be in the foreground (null until first seen). */
     var foregroundPackage: String? = null

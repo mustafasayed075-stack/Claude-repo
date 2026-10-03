@@ -1,6 +1,8 @@
 package com.personal.guardian.text
 
 import com.personal.guardian.scan.DetectionCooldown
+import com.personal.guardian.scan.FastScanApp
+import com.personal.guardian.scan.FastScanDefaults
 import com.personal.guardian.scan.ScanConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -62,7 +64,24 @@ class TextScanTest {
 
     // ---- TextScanTrigger ----
 
-    private val trigger get() = TextScanTrigger(ScanConfig.WATCHED_PACKAGES)
+    private val trigger get() = TextScanTrigger(FastScanDefaults.list().textPackages)
+
+    @Test
+    fun triggerFollowsTheListsTextTogglesLive() {
+        var list = FastScanDefaults.list()
+        val t = TextScanTrigger { list.textPackages }
+        val content = TextScanTrigger.TYPE_WINDOW_CONTENT_CHANGED
+        assertTrue(t.isWatched("com.whatsapp"))
+        list = list.setText("com.whatsapp", false)
+        assertFalse("text off → no text checks", t.isWatched("com.whatsapp"))
+        assertFalse(t.onEvent(content, "com.whatsapp"))
+        list = list.setImage("com.android.chrome", false)
+        assertTrue("image off leaves text on", t.isWatched("com.android.chrome"))
+        list = list.add(FastScanApp("com.example.chat", "Example chat", text = true, image = false))
+        assertTrue("a newly added app triggers", t.onEvent(content, "com.example.chat"))
+        list = list.remove("org.telegram.messenger")
+        assertFalse(t.isWatched("org.telegram.messenger"))
+    }
 
     @Test
     fun onlyContentOrStateChangesInWatchedAppsTrigger() {

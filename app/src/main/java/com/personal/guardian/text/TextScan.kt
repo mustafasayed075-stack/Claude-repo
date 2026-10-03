@@ -56,19 +56,23 @@ object TextExtractor {
 
 /**
  * Decides which accessibility events trigger a text check (Stage 4): window content
- * or window state changes from a watched package only. Bursts of events (typing,
+ * or window state changes from a watched package only — the Fast Scan Apps with text
+ * scanning on ([com.personal.guardian.scan.FastScanList.textPackages]), read through
+ * [watchedPackages] on every event so list edits apply at once. Bursts of events (typing,
  * scrolling) are coalesced: the first event schedules one check after the debounce
  * delay, later events are absorbed until that check starts. Thread-safe (events
  * arrive on the main thread, checks run on the worker).
  */
-class TextScanTrigger(private val watchedPackages: Set<String>) {
+class TextScanTrigger(private val watchedPackages: () -> Set<String>) {
+
+    constructor(packages: Set<String>) : this({ packages })
 
     private val pending = AtomicBoolean(false)
 
     /** True if this event should schedule a (debounced) text check now. */
     fun onEvent(eventType: Int, packageName: String?): Boolean {
         if (eventType != TYPE_WINDOW_CONTENT_CHANGED && eventType != TYPE_WINDOW_STATE_CHANGED) return false
-        if (packageName == null || packageName !in watchedPackages) return false
+        if (packageName == null || packageName !in watchedPackages()) return false
         return pending.compareAndSet(false, true)
     }
 
@@ -77,7 +81,7 @@ class TextScanTrigger(private val watchedPackages: Set<String>) {
         pending.set(false)
     }
 
-    fun isWatched(packageName: String?) = packageName != null && packageName in watchedPackages
+    fun isWatched(packageName: String?) = packageName != null && packageName in watchedPackages()
 
     companion object {
         /** `AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED` (stable API constant). */

@@ -10,11 +10,12 @@ object ScanConfig {
      * Baseline capture interval while the service is active (spec: 6–8 s).
      * Must stay comfortably below [CONFIRMATION_WINDOW_MS]: two consecutive baseline
      * frames are never closer than this (plus timer/classification jitter), so if
-     * it approached the window, apps outside [WATCHED_PACKAGES] could never confirm.
+     * it approached the window, apps without fast capture (not in the Fast Scan Apps
+     * list, or image scanning off) could never confirm.
      */
     const val BASELINE_INTERVAL_MS = 6_000L
 
-    /** Faster capture interval while a watched app is in the foreground (spec: 1–2 s). */
+    /** Faster capture interval while a Fast Scan App with image scanning on is in the foreground (spec: 1–2 s). */
     const val FAST_INTERVAL_MS = 1_500L
 
     /**
@@ -23,33 +24,9 @@ object ScanConfig {
      */
     const val MIN_CAPTURE_GAP_MS = 1_000L
 
-    /**
-     * Apps whose foreground presence switches capture to [FAST_INTERVAL_MS].
-     * Edit freely; matching is on the exact package name.
-     */
-    val WATCHED_PACKAGES: Set<String> = setOf(
-        // Messaging
-        "com.whatsapp",
-        "com.whatsapp.w4b",
-        "org.telegram.messenger",
-        "org.telegram.messenger.web",
-        "org.thunderdog.challegram",   // Telegram X
-        // Browsers
-        "com.android.chrome",
-        "com.chrome.beta",
-        "org.mozilla.firefox",
-        "org.mozilla.firefox_beta",
-        "org.mozilla.focus",
-        "com.sec.android.app.sbrowser", // Samsung Internet
-        "com.microsoft.emmx",           // Edge
-        "com.opera.browser",
-        "com.opera.mini.native",
-        "com.brave.browser",
-        "com.duckduckgo.mobile.android",
-        "com.UCMobile.intl",
-        "com.mi.globalbrowser",
-        "com.android.browser",
-    )
+    // Which apps get fast scanning (text checks, fast capture) is no longer a constant
+    // here: it is the user-editable Fast Scan Apps list (FastScanList, stored by
+    // FastScanSettings; first-run defaults in FastScanDefaults).
 
     /**
      * Packages whose windows sit *on top of* the real foreground app (status bar,

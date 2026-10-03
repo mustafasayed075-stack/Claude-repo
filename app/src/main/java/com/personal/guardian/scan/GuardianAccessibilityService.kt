@@ -36,9 +36,10 @@ import java.util.concurrent.atomic.AtomicInteger
  * Enabled once by the user (Settings → Accessibility → Installed apps → Guardian).
  * While active it:
  *  - captures the screen every [ScanConfig.BASELINE_INTERVAL_MS] (periodic trigger);
- *  - switches to [ScanConfig.FAST_INTERVAL_MS] as soon as a watched app
- *    ([ScanConfig.WATCHED_PACKAGES]) comes to the foreground, and back to the
- *    baseline when it leaves (event trigger);
+ *  - switches to [ScanConfig.FAST_INTERVAL_MS] as soon as a Fast Scan App with
+ *    image scanning on ([FastScanList.imagePackages], edited by the user in
+ *    [FastScanSettings]) comes to the foreground, and back to the baseline when it
+ *    leaves (event trigger). The baseline capture runs in every app;
  *  - classifies each frame on-device ([NsfwClassifier]) twice over: the whole
  *    downscaled screen, and — region scanning — up to
  *    [ScanConfig.REGION_MAX_PER_CAPTURE] image-bearing elements from the active
@@ -51,7 +52,8 @@ import java.util.concurrent.atomic.AtomicInteger
  *    ([DetectionNotifier]) and published on [DetectionBus] for later stages.
  *
  * Stage 4 adds a second, independent path in the same service: on window-content
- * (and window-state) changes in a watched app, the visible text of the active
+ * (and window-state) changes in a Fast Scan App with text scanning on
+ * ([FastScanList.textPackages]), the visible text of the active
  * window's node tree is read (no OCR, no screenshot) and checked on-device by
  * [KeywordMatcher]; matches go through the same pipeline — cooldown, review log
  * (text snippet instead of a thumbnail), GuardianLog, notification, [DetectionBus].
@@ -86,7 +88,15 @@ class GuardianAccessibilityService : AccessibilityService() {
     private val tick = Runnable { onTick() }
 
     // Stage 4: text scanning (worker-thread state, except the thread-safe trigger).
-    private val textTrigger = TextScanTrigger(ScanConfig.WATCHED_PACKAGES)
+    private val textTrigger = TextScanTrigger { fastScanApps.textPackages }
+
+    /** The user's Fast Scan Apps list; replaced (from any thread) when it is edited. */
+    @Volatile
+    private var fastScanApps: FastScanList = FastScanList.EMPTY
+    private val fastScanListener = FastScanSettings.Listener { list ->
+        fastScanApps = list
+        worker?.post { onFastScanAppsChanged(list) }
+    }
     private val textCooldown = DetectionCooldown(cooldownMs = ScanConfig.TEXT_COOLDOWN_MS, maxDistance = 0)
     private var keywordMatcher: KeywordMatcher? = null
     private val textCheck = Runnable { runTextCheck() }
@@ -107,6 +117,10 @@ class GuardianAccessibilityService : AccessibilityService() {
             diagnostic = true
         )
         ProcessDiagnostics.logPreviousExitsIfNew(this)
+
+        fastScanApps = FastScanSettings.get(this)
+        FastScanSettings.addListener(fastScanListener)
+        scheduler.updateWatchedPackages(fastScanApps.imagePackages)
 
         val thread = HandlerThread("guardian-screen-scan").also { it.start() }
         val handler = Handler(thread.looper)
@@ -143,7 +157,7 @@ class GuardianAccessibilityService : AccessibilityService() {
             GuardianLog.i(
                 applicationContext,
                 "Screen scanning active: baseline every ${scheduler.baselineIntervalMs} ms, " +
-                    "fast every ${scheduler.fastIntervalMs} ms for ${ScanConfig.WATCHED_PACKAGES.size} watched apps " +
+                    "fast every ${scheduler.fastIntervalMs} ms for ${scheduler.watchedPackages.size} Fast Scan Apps with image on " +
                     "(thresholds: screen ${ScanConfig.NSFW_THRESHOLD}, region ${ScanConfig.REGION_THRESHOLD}; confirm ${ScanConfig.CONFIRMATION_COUNT} " +
                     "in ${ScanConfig.CONFIRMATION_WINDOW_MS} ms)."
             )
@@ -201,14 +215,24 @@ class GuardianAccessibilityService : AccessibilityService() {
         }
         if (classifier == null) return
         if (!scheduler.onForegroundChanged(pkg)) return
+        onFastModeChanged("$pkg in foreground")
+    }
+
+    /** The user edited the Fast Scan Apps list: the app in front may gain or lose fast capture. */
+    private fun onFastScanAppsChanged(list: FastScanList) {
+        if (!scheduler.updateWatchedPackages(list.imagePackages) || classifier == null) return
+        onFastModeChanged("Fast Scan Apps edited, ${scheduler.foregroundPackage} in foreground")
+    }
+
+    private fun onFastModeChanged(reason: String) {
         val handler = worker ?: return
         val now = SystemClock.elapsedRealtime()
         if (scheduler.isFastMode) {
-            ScanStatus.fastModePackage = pkg
-            GuardianLog.i(applicationContext, "Screen scan: fast capture ON ($pkg in foreground, every ${scheduler.fastIntervalMs} ms).")
+            ScanStatus.fastModePackage = scheduler.foregroundPackage
+            GuardianLog.i(applicationContext, "Screen scan: fast capture ON ($reason, every ${scheduler.fastIntervalMs} ms).")
         } else {
             ScanStatus.fastModePackage = null
-            GuardianLog.i(applicationContext, "Screen scan: fast capture OFF ($pkg in foreground), back to every ${scheduler.baselineIntervalMs} ms.")
+            GuardianLog.i(applicationContext, "Screen scan: fast capture OFF ($reason), back to every ${scheduler.baselineIntervalMs} ms.")
         }
         handler.removeCallbacks(tick)
         handler.postDelayed(tick, scheduler.delayAfterModeChange(now))
@@ -461,7 +485,8 @@ class GuardianAccessibilityService : AccessibilityService() {
                 GuardianLog.i(
                     applicationContext,
                     "Text scanning active: ${list.entries.size} list entries, ${list.exceptions.size} exceptions " +
-                        "(${ScanConfig.KEYWORD_ASSET}); watched apps only, on content changes."
+                        "(${ScanConfig.KEYWORD_ASSET}); Fast Scan Apps with text on " +
+                        "(${fastScanApps.textPackages.size} now), on content changes."
                 )
             }
         } catch (t: Throwable) {
@@ -477,7 +502,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         val root = runCatching { rootInActiveWindow }.getOrNull() ?: return
         val pkg = root.packageName?.toString()
         try {
-            // Only the watched apps' own windows (the event's package could differ from
+            // Only the text-on Fast Scan Apps' own windows (the event's package could differ from
             // what is now in front, e.g. after switching away within the debounce).
             if (!textTrigger.isWatched(pkg) || pkg == null) return
             val texts = TextExtractor.collect(
@@ -570,6 +595,7 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     private fun shutdown() {
+        FastScanSettings.removeListener(fastScanListener)
         ScanStatus.connected = false
         ScanStatus.textEntries = 0
         ScanStatus.modelLoaded = false

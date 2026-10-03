@@ -17,6 +17,7 @@ import com.personal.guardian.blocklist.BlocklistManager
 import com.personal.guardian.blocklist.BlocklistUpdateWorker
 import com.personal.guardian.databinding.ActivityMainBinding
 import com.personal.guardian.scan.DetectionStore
+import com.personal.guardian.scan.FastScanSettings
 import com.personal.guardian.scan.GuardianAccessibilityService
 import com.personal.guardian.scan.ScanStatus
 import com.personal.guardian.service.GuardianForegroundService
@@ -35,6 +36,7 @@ import java.util.Locale
  *    scanning active?),
  *  - let the user grant VPN consent on non-owner installs (interactive prompt),
  *  - manually start the service / force a blocklist refresh while testing,
+ *  - open the Fast Scan Apps list ([FastScanAppsActivity]),
  *  - review the local event log.
  */
 class MainActivity : AppCompatActivity() {
@@ -78,6 +80,9 @@ class MainActivity : AppCompatActivity() {
         binding.btnEnableVpn.setOnClickListener { onEnableVpnClicked() }
         binding.btnOpenAccessibility.setOnClickListener {
             startActivity(GuardianAccessibilityService.settingsIntent())
+        }
+        binding.btnFastScanApps.setOnClickListener {
+            startActivity(Intent(this, FastScanAppsActivity::class.java))
         }
         binding.btnRequestAdmin.setOnClickListener { onRequestAdminClicked() }
         binding.btnRefreshList.setOnClickListener {
@@ -232,6 +237,14 @@ class MainActivity : AppCompatActivity() {
             )
             else -> getString(R.string.status_text_scan_inactive)
         }
+
+        val fastScan = FastScanSettings.get(this)
+        binding.txtFastScanStatus.text = getString(
+            R.string.status_fast_scan_apps,
+            fastScan.size,
+            fastScan.textPackages.size,
+            fastScan.imagePackages.size
+        )
 
         val notificationsOk = NotificationManagerCompat.from(this).areNotificationsEnabled()
         binding.txtNotificationStatus.visibility = if (notificationsOk) View.GONE else View.VISIBLE

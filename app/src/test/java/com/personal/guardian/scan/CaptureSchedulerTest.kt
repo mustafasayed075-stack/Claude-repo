@@ -23,9 +23,43 @@ class CaptureSchedulerTest {
     fun configuredIntervalsAreWithinSpecRanges() {
         assertTrue(ScanConfig.BASELINE_INTERVAL_MS in 6_000L..8_000L)
         assertTrue(ScanConfig.FAST_INTERVAL_MS in 1_000L..2_000L)
-        assertTrue("WhatsApp watched", "com.whatsapp" in ScanConfig.WATCHED_PACKAGES)
-        assertTrue("Telegram watched", "org.telegram.messenger" in ScanConfig.WATCHED_PACKAGES)
-        assertTrue("Chrome watched", "com.android.chrome" in ScanConfig.WATCHED_PACKAGES)
+        val defaults = FastScanDefaults.list().imagePackages
+        assertTrue("WhatsApp fast by default", "com.whatsapp" in defaults)
+        assertTrue("Telegram fast by default", "org.telegram.messenger" in defaults)
+        assertTrue("Chrome fast by default", "com.android.chrome" in defaults)
+    }
+
+    @Test
+    fun withoutAListNoAppGetsFastCapture() {
+        val s = CaptureScheduler()
+        s.onForegroundChanged("com.whatsapp")
+        assertFalse(s.isFastMode)
+        assertEquals(ScanConfig.BASELINE_INTERVAL_MS, s.currentIntervalMs)
+    }
+
+    @Test
+    fun editingTheListSwitchesTheAppInFrontImmediately() {
+        val s = scheduler()
+        s.onForegroundChanged("com.example.gallery")
+        assertFalse(s.isFastMode)
+        assertTrue("added → fast", s.updateWatchedPackages(setOf("com.whatsapp", "com.example.gallery")))
+        assertTrue(s.isFastMode)
+        assertFalse("unrelated edit → no change", s.updateWatchedPackages(setOf("com.example.gallery")))
+        assertTrue("image toggled off → baseline", s.updateWatchedPackages(setOf("com.whatsapp")))
+        assertFalse(s.isFastMode)
+        assertEquals(7_000, s.currentIntervalMs)
+    }
+
+    @Test
+    fun baselineCaptureContinuesForAppsNotInTheList() {
+        val s = scheduler()
+        s.onForegroundChanged("com.example.notes")
+        s.onCaptured(0)
+        // Not listed: still captured, at the baseline rate.
+        assertEquals(TriggerSource.PERIODIC, s.currentSource)
+        assertEquals(7_000, s.delayUntilNextCapture(0))
+        s.updateWatchedPackages(emptySet())
+        assertEquals("an empty list keeps the baseline", 7_000, s.delayUntilNextCapture(0))
     }
 
     @Test

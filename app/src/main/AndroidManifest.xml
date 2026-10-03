@@ -17,6 +17,15 @@
          notifications on Android 13+. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Fast Scan Apps picker: Android 11+ package visibility for launchable apps
+         (their labels and icons), without QUERY_ALL_PACKAGES. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <!-- Device administration (Device Owner is provisioned via ADB, see README). -->
     <uses-feature
         android:name="android.software.device_admin"
@@ -39,6 +48,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".FastScanAppsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
 
         <!-- Stage 1: Device Admin / Device Owner receiver.
              Provisioned with:

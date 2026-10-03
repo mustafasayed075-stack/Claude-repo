@@ -11,7 +11,8 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
   device** — allowed lookups go to a normal public resolver exactly as they would
   without the app; blocked lookups are answered locally with `NXDOMAIN`.
 - **Stage 3 — Screen scanning:** an Accessibility Service takes one-shot
-  screenshots (every 6 s, every 1.5 s while a watched app is in the foreground),
+  screenshots (every 6 s in every app, every 1.5 s while a *Fast Scan App* is in
+  the foreground),
   classifies them — and the image elements on them — **on-device** with a
   TensorFlow Lite NSFW model (viddexa nsfw-detection-2-nano), and — once 2 frames
   with a suggestive/explicit signal (whole screen ≥ 0.15, image region ≥ 0.7) fall
@@ -19,7 +20,7 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
   review thumbnail locally and shows a notification. **Detection and logging only;
   no lock action yet.**
 - **Stage 4 — Text scanning:** the same Accessibility Service reads the **visible
-  text** in watched apps (WhatsApp, Telegram, browsers) whenever their window
+  text** in the *Fast Scan Apps* (by default WhatsApp, Telegram, browsers) whenever their window
   content changes, and checks it **on-device** against a bundled Arabic/English
   keyword list (based on LDNOOBW, extended for Egyptian Arabic and Franco-Arabic).
   Matches go through the same pipeline as image detections (cooldown, local review
@@ -59,6 +60,7 @@ line (see below). Building requires internet access to Google's Maven repo
 ```
 app/src/main/java/com/personal/guardian/
 ├── MainActivity.kt                    Status & manual-control screen
+├── FastScanAppsActivity.kt            Fast Scan Apps screen: "+" app picker, per-app Text/Image toggles, remove
 ├── admin/GuardianDeviceAdminReceiver  Stage 1: DeviceAdminReceiver; logs deactivation attempts
 ├── service/GuardianForegroundService  Stage 1: persistent core service (extension point for later stages)
 ├── vpn/GuardianVpnService             Stage 2: local DNS-filtering VpnService
@@ -68,7 +70,9 @@ app/src/main/java/com/personal/guardian/
 ├── blocklist/BlocklistUpdateWorker    Stage 2: periodic (~48h) unattended refresh
 ├── vpn/DnsForwarder                   Stage 2: concurrent upstream DNS forwarding
 ├── scan/GuardianAccessibilityService  Stage 3: capture triggers, takeScreenshot(), detection pipeline
-├── scan/ScanConfig                    Stage 3: all tunable constants (intervals, watched apps, threshold, N, window)
+├── scan/ScanConfig                    Stage 3: all tunable constants (intervals, thresholds, N, window)
+├── scan/FastScanApps.kt               Fast Scan Apps list: entries, toggles, defaults, file format, store (pure, unit-tested)
+├── scan/FastScanSettings              Fast Scan Apps: load/seed, save, live updates to the service
 ├── scan/CaptureScheduler              Stage 3: baseline vs fast capture timing (pure, unit-tested)
 ├── scan/DetectionConfirmer            Stage 3: threshold + N-positives-in-window rule (pure, unit-tested)
 ├── scan/NsfwPreprocessor              Stage 3: pixels → model input tensor (pure, unit-tested)
@@ -192,9 +196,9 @@ these in order (from the spec):
   - *Periodic:* every `BASELINE_INTERVAL_MS` = **6 s** while the service is active.
     Kept 1 s below the 7 s confirmation window so two normal-mode frames can
     still confirm despite timer/classification jitter.
-  - *Foreground fast capture:* when a `TYPE_WINDOW_STATE_CHANGED` event shows a
-    package from `WATCHED_PACKAGES` (WhatsApp, Telegram, major browsers — edit the
-    list freely) in the foreground, capture immediately and then every
+  - *Foreground fast capture:* when a `TYPE_WINDOW_STATE_CHANGED` event shows an
+    app from the **Fast Scan Apps** list with **Image** on (see *Fast Scan Apps*
+    below) in the foreground, capture immediately and then every
     `FAST_INTERVAL_MS` = **1.5 s**; revert to 6 s when another app comes to the
     foreground. System UI and keyboard windows are ignored so the notification
     shade or keyboard doesn't drop fast mode. Notifications arriving are *not* a
@@ -267,6 +271,54 @@ these in order (from the spec):
   `DetectionBus` event. Different content is reported immediately; the same content
   is reported again after 60 s. The number suppressed is shown on the main screen
   and in the next `CONFIRMED` log line.
+
+### Fast Scan Apps (user-editable; replaces the hard-coded watched-apps list)
+
+Which apps get **fast** scanning used to be a constant, `ScanConfig.WATCHED_PACKAGES`.
+It is now a list the user manages in the app: main screen → **Fast Scan Apps**.
+The one list drives **both** fast paths, and each app has its own toggles:
+
+| Toggle | While the app is in the foreground |
+|---|---|
+| **Text** | Stage 4 text checks on every window-content change |
+| **Image** | Stage 3 fast capture: every 1.5 s instead of 6 s |
+
+Either, both or neither can be on. With both off, the app stays listed but gets
+only the baseline scan.
+
+- **Add:** the **+** button opens a picker of launchable installed apps, with
+  icons, labels and a search box. Only this picker queries PackageManager. The
+  manifest declares a `<queries>` launcher intent for Android 11+ package
+  visibility, without `QUERY_ALL_PACKAGES`. New apps start with Text and Image on.
+- **Remove:** the delete button on each row, after a confirmation.
+- **Saved at once:** the list lives in `files/fast_scan_apps.tsv`, a header line
+  then one `package⇥text⇥image⇥label` line per app. It is written atomically
+  through a temp file and rename, and survives app restarts and reboots. The
+  label is cached in the file, so neither the screen nor the scanner walks
+  PackageManager for it.
+- **Applied live:** the running service follows edits through a listener, with no
+  restart. If the app in front gains or loses Image, fast capture switches on or
+  off at once. The Text trigger reads the list on every event.
+- **First run:** the list is seeded with exactly the previously hard-coded apps,
+  all with Text and Image on, so upgrading changes nothing:
+  - messaging: WhatsApp, WhatsApp Business, Telegram (both builds), Telegram X;
+  - browsers: Chrome, Chrome Beta, Firefox, Firefox Beta, Firefox Focus, Samsung
+    Internet, Edge, Opera, Opera Mini, Brave, DuckDuckGo, UC Browser, Mi Browser,
+    and the AOSP Browser.
+
+  These are ordinary entries that can be edited or removed. Seeding happens only
+  when the file doesn't exist yet, so an emptied list stays empty. If the file is
+  unreadable, the defaults are used until the next edit rewrites it.
+- **Logged:** every add, remove and toggle is written to the event log, with the
+  resulting counts. The main screen shows `Fast Scan Apps: N (text: a, image: b)`.
+
+**Unaffected by the list: the baseline scan.** The periodic whole-screen capture
+every `BASELINE_INTERVAL_MS` (6 s) runs in **every** app, listed or not, with
+both the whole-screen and region passes. It is a separate mechanism from the
+per-app fast capture: the list only decides which apps are captured faster
+(Image) and which get text checks (Text). An app not on the list, or with both
+toggles off, is still scanned for images every 6 s, but its text is not checked.
+Text scanning has never had a baseline timer, so that is unchanged.
 
 ### Region scanning (second detection path)
 
@@ -634,8 +686,9 @@ is easy to recognise as a high *hentai* score with a high *drawing* score.
   worker-thread timer; covered by `CaptureSchedulerTest` (cadence and a simulated
   timeline); visible on-device via "frames scanned" / "last" on the main screen.
 - **Fast capture immediately on watched-app foreground; reverts when it leaves** —
-  `onForegroundChanged` reschedules at once; covered by `CaptureSchedulerTest`;
-  mode switches appear in the event log.
+  "watched" now means on the Fast Scan Apps list with Image on. `onForegroundChanged`
+  (and a list edit, via `onFastScanAppsChanged`) reschedules at once; covered by
+  `CaptureSchedulerTest`; mode switches appear in the event log.
 - **Classified fully on-device, zero network calls** — bundled model + plain
   TFLite runtime (no Play Services, no downloads); `DetectionEventTest` statically
   checks the `scan` package uses no networking APIs.
@@ -665,11 +718,12 @@ time and how many were flagged or suppressed.
 ### How it works
 
 - **Trigger (event-driven only):** a `TYPE_WINDOW_CONTENT_CHANGED` (or window-state)
-  event from a package in `ScanConfig.WATCHED_PACKAGES` — the same list as image
-  scanning. Bursts of events (typing, scrolling, incoming messages) are coalesced:
+  event from an app on the **Fast Scan Apps** list with **Text** on — the same
+  list that drives image fast capture, with its own per-app toggle (see *Fast Scan
+  Apps*). Bursts of events (typing, scrolling, incoming messages) are coalesced:
   the first schedules one check `TEXT_CHECK_DEBOUNCE_MS` (0.75 s) later and the rest
   are absorbed. No timer. Events from other apps are ignored, and the check also
-  verifies the active window still belongs to a watched app.
+  verifies the active window still belongs to a listed app with Text on.
 - **Extraction:** the active window's node tree (`rootInActiveWindow`), text and
   content description of every node visible to the user — no OCR, no screenshot.
   Capped at 2,000 nodes / 50,000 characters per check. Works on every Android
@@ -1277,8 +1331,9 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
 
 ### Stage 4 — Definition of Done → how it's met
 
-- **Runs only within watched apps, on content-changed events** — `TextScanTrigger`
-  accepts only content/state-change events from `WATCHED_PACKAGES`, and the check
+- **Runs only within the Fast Scan Apps with Text on, on content-changed events** —
+  `TextScanTrigger` accepts only content/state-change events from those apps
+  (read live from the list), and the check
   re-verifies the active window's package; the accessibility config requests
   `typeWindowContentChanged` (tests: `TextScanTest`).
 - **Matching fully on-device, zero network calls** — bundled list + pure-Kotlin
@@ -1326,6 +1381,11 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
 - **Rebuilding the model:** `tools/convert_nsfw_model.py` (LiteRT-Torch,
   transformers) reproduces the bundled `.tflite` byte-for-byte, checks it against
   PyTorch and prints its SHA-256.
+- **Fast Scan Apps:** `FastScanAppsTest` (defaults match the old hard-coded list,
+  add/remove, independent Text/Image toggles, picker filter, file format,
+  persistence across store instances, first-run seeding, damaged and interrupted
+  files), plus list-driven cases in `CaptureSchedulerTest` (live edits, baseline
+  for unlisted apps) and `TextScanTest` (text toggle read live) (pure JVM).
 - **Log retention:** `LogFilesTest` (diagnostics survive main-log rotation).
 - **Text scanning:** `KeywordMatcherTest` (matcher + real list + ordinary-text
   spot-check), `KeywordRulesTest` (context rules, restored terms, Arabic/English

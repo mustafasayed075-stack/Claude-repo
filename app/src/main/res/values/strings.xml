@@ -31,7 +31,7 @@
     <string name="diagnostics_empty">No diagnostics logged yet.</string>
 
     <!-- Stage 3: screen scanning -->
-    <string name="accessibility_service_description">Guardian screen scanning: periodically takes a single screenshot and checks it for explicit content with an on-device model, and checks the visible text in messaging apps and browsers against an on-device word list. Nothing leaves the device. Detections are logged locally (a small thumbnail or a short text excerpt) for review.</string>
+    <string name="accessibility_service_description">Guardian screen scanning: periodically takes a single screenshot and checks it for explicit content with an on-device model, and checks the visible text of the apps on your Fast Scan Apps list (messaging apps and browsers by default) against an on-device word list. Nothing leaves the device. Detections are logged locally (a small thumbnail or a short text excerpt) for review.</string>
     <string name="detection_channel_name">Guardian detections</string>
     <string name="detection_channel_desc">Shown when screen scanning confirms flagged content.</string>
     <string name="detection_notification_title">Guardian: flagged content detected</string>
@@ -52,6 +52,30 @@
     <string name="status_scan_no_frames">none yet</string>
     <string name="status_notifications_off">Notifications are off for Guardian: detection alerts will not be shown.</string>
     <string name="btn_open_accessibility">Open Accessibility settings</string>
+
+    <!-- Fast Scan Apps (replaces the hard-coded watched-apps list) -->
+    <string name="btn_fast_scan_apps">Fast Scan Apps</string>
+    <string name="status_fast_scan_apps">Fast Scan Apps: %1$d (text: %2$d, image: %3$d)</string>
+    <string name="fast_scan_title">Fast Scan Apps</string>
+    <string name="fast_scan_intro">While an app on this list is in front, Guardian scans it faster. Text: its on-screen text is checked whenever it changes. Image: the screen is captured every %1$.1f s instead of every %2$d s. Every app, listed or not, still gets the baseline screen scan every %2$d s.</string>
+    <string name="fast_scan_empty">No apps. Tap + to add one.</string>
+    <string name="fast_scan_add">Add app</string>
+    <string name="fast_scan_toggle_text">Text</string>
+    <string name="fast_scan_toggle_image">Image</string>
+    <string name="fast_scan_row_detail">%1$s · %2$s</string>
+    <string name="fast_scan_mode_both">text and image</string>
+    <string name="fast_scan_mode_text">text only</string>
+    <string name="fast_scan_mode_image">image only</string>
+    <string name="fast_scan_mode_off">off: baseline scan only</string>
+    <string name="fast_scan_not_installed">" · not installed"</string>
+    <string name="fast_scan_remove">Remove</string>
+    <string name="fast_scan_remove_title">Remove %1$s?</string>
+    <string name="fast_scan_remove_message">It will no longer get fast text or image scanning, only the baseline screen scan every %1$d s. The change is recorded in the event log.</string>
+    <string name="fast_scan_save_failed">Could not save the change. See the event log.</string>
+    <string name="fast_scan_picker_title">Add an app</string>
+    <string name="fast_scan_picker_search">Search apps</string>
+    <string name="fast_scan_picker_loading">Loading apps…</string>
+    <string name="fast_scan_picker_empty">No other apps to add.</string>
 
     <string name="yes">Yes</string>
     <string name="no">No</string>
