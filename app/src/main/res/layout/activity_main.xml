@@ -185,6 +185,16 @@
                         </LinearLayout>
                         <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
                     </LinearLayout>
+
+                    <View style="@style/Widget.Rafiq.Divider" />
+
+                    <LinearLayout android:id="@+id/rowSensitivity" style="@style/Widget.Rafiq.Row">
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/row_sensitivity_title" />
+                            <TextView android:id="@+id/txtSensitivitySummary" style="@style/Widget.Rafiq.Row.Desc" />
+                        </LinearLayout>
+                        <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

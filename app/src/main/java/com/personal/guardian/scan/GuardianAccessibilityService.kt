@@ -88,6 +88,9 @@ class GuardianAccessibilityService : AccessibilityService() {
     // Worker-thread state.
     private val scheduler = CaptureScheduler()
     private val confirmer = DetectionConfirmer()
+    // Suggestive tier: two suggestive frames within the window lock, independent of the
+    // same-content cooldown and of the explicit confirmer above (Stage 5).
+    private val suggestiveConfirmer = SuggestiveConfirmer()
     private val cooldown = DetectionCooldown()
     private val fingerprintPixels = IntArray(ScreenFingerprint.WIDTH * ScreenFingerprint.HEIGHT)
     // Region scanning (worker thread).
@@ -97,7 +100,7 @@ class GuardianAccessibilityService : AccessibilityService() {
     // Blind-spot escalation: shrinking grace each time Guardian can't read the screen.
     private val blindSpot = BlindSpotPolicy({ SystemClock.elapsedRealtime() })
     private val contentPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
-    // Reused scratch for the whole-screen letterbox crop (Stage 5 — letterbox crop).
+    // Reused scratch for the whole-screen letterbox crop (Screen scanning → letterbox crop).
     private val letterboxPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
     private val letterboxLuma = IntArray(RegionContent.GRID * RegionContent.GRID)
     private val costStats = ScanCostStats()
@@ -264,6 +267,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         // plus one in the new app's first frames used to confirm a detection there.
         if (appSwitch.onWindowStateChanged(pkg, SystemClock.elapsedRealtime(), scheduler.overlayPackages)) {
             confirmer.reset()
+            suggestiveConfirmer.reset()
         }
         if (classifier == null) return
         if (!scheduler.onForegroundChanged(pkg)) return
@@ -305,6 +309,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         if (!isScreenOn()) {
             // Nothing visible: don't capture, and don't let positives span a screen-off.
             confirmer.reset()
+            suggestiveConfirmer.reset()
             scheduler.onCaptured(now) // keep the cadence without spinning
             return
         }
@@ -362,7 +367,7 @@ class GuardianAccessibilityService : AccessibilityService() {
             // Path 1: the whole (downscaled) screen. In a letterboxed media viewer (a big
             // image on black bands with UI chrome around it) the bands and chrome dilute
             // the signal, so classify the cropped-out image when one is found; otherwise
-            // the full frame, unchanged (Stage 5 — letterbox crop). The explicit region
+            // the full frame, unchanged (Screen scanning → letterbox crop). The explicit region
             // path below is untouched.
             val t0 = SystemClock.elapsedRealtime()
             val crop = letterboxCrop(frame)
@@ -383,12 +388,20 @@ class GuardianAccessibilityService : AccessibilityService() {
 
             val verdict = FrameVerdict.combine(whole, regions.scores)
             ScanStatus.onFrame(System.currentTimeMillis(), verdict.score, source)
-            val confirmation = confirmer.onFrame(verdict.score, SystemClock.elapsedRealtime(), source, verdict.positive)
+            val now = SystemClock.elapsedRealtime()
+            val confirmation = confirmer.onFrame(verdict.score, now, source, verdict.positive)
+            // Suggestive tier: judged against the current sensitivity threshold and fed
+            // every frame, independent of the same-content cooldown. Two suggestive frames
+            // within the window lock. An explicit frame (verdict.positive) is already on the
+            // immediate path above, so it isn't also counted here.
+            val suggestiveThreshold = ScanSensitivitySettings.suggestiveThreshold(applicationContext)
+            val suggestive = !verdict.positive && verdict.score >= suggestiveThreshold
+            val suggestiveConfirmed = suggestiveConfirmer.onFrame(now, suggestive)
             if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
                 // TEMPORARY calibration logging (see ScanConfig.LOG_EVERY_FRAME_SCORE).
                 val positives = if (confirmation != null) confirmer.requiredPositives else confirmer.pendingPositives
                 val pkg = scheduler.foregroundPackage
-                val level = NsfwLevel.of(verdict.score, ScanConfig.SUGGESTIVE_THRESHOLD_NORMAL, ScanConfig.REGION_THRESHOLD)
+                val level = NsfwLevel.of(verdict.score, suggestiveThreshold, ScanConfig.REGION_THRESHOLD)
                 GuardianLog.i(
                     applicationContext,
                     ScanLog.frameLine(
@@ -408,6 +421,9 @@ class GuardianAccessibilityService : AccessibilityService() {
                 }
             }
             if (confirmation != null) onConfirmed(confirmation, frame, verdict)
+            // Suggestive tier: locks on its own, after the explicit confirmation above
+            // (so a frame that also confirmed explicitly locks as that first).
+            if (suggestiveConfirmed) onSuggestiveConfirmed(verdict)
             // Stage 5: a borderline text match waiting for an image check (after the
             // confirmation, so a confirmed image detection locks as "image" first).
             lockController?.let { lc ->
@@ -487,7 +503,7 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Stage 5 — letterbox crop. If [frame] is a letterboxed media-viewer screen (a large
+     * Screen scanning → letterbox crop. If [frame] is a letterboxed media-viewer screen (a large
      * image on black bands, with a status bar / header / thumbnail strip around it), this
      * returns that image cropped out, so the black bands and chrome don't dilute the
      * whole-screen signal. Returns null when there's nothing worth cropping (no bands, or
@@ -601,6 +617,33 @@ class GuardianAccessibilityService : AccessibilityService() {
         DetectionBus.publish(event).forEach {
             GuardianLog.e(ctx, "Detection listener failed.", it)
         }
+    }
+
+    /**
+     * Two suggestive frames fell within [ScanConfig.SUGGESTIVE_WINDOW_MS]. Locks through
+     * the same controller as an explicit detection, bypassing the same-content cooldown
+     * (the suggestive counter is deliberately independent of it, so the same image across
+     * two frames still acts). No notification/metadata beyond the lock and this log line,
+     * matching the blind-spot lock path.
+     */
+    private fun onSuggestiveConfirmed(verdict: FrameVerdict.Result) {
+        val ctx = applicationContext
+        val pkg = scheduler.foregroundPackage
+        GuardianLog.w(
+            ctx,
+            "SUGGESTIVE lock: ${ScanConfig.SUGGESTIVE_COUNT} suggestive frames within ${ScanConfig.SUGGESTIVE_WINDOW_MS} ms " +
+                "(signal=${"%.3f".format(verdict.score)}, ${verdict.scores.breakdown()}) " +
+                "scored=${verdict.region?.region?.label ?: "whole screen"} app=${pkg ?: "unknown"}."
+        )
+        ScanStatus.confirmedCount++
+        handleLock(
+            lockController?.onDetection(
+                DetectionEvent(
+                    System.currentTimeMillis(), verdict.score, TriggerSource.EVENT,
+                    pkg, null, verdict.scores, region = verdict.region?.region?.label
+                )
+            )
+        )
     }
 
     // ---- Stage 5: lock ----

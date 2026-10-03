@@ -254,6 +254,30 @@ these in order (from the spec):
   another app comes to the foreground: frames from two different apps never
   combine into one detection (see *Region scanning → false-positive investigation*).
   Both thresholds are calibrated in *Model*.
+- **Suggestive tier (`SuggestiveConfirmer`):** below the explicit thresholds above
+  there is a softer tier for *suggestive* (non-explicit) content — the kind that
+  scores *sexy* ≈ 0.3–0.6 but never reaches the 0.7 image-region bar. A single
+  suggestive frame must **not** lock (it could be an incidental pose, a swimwear ad,
+  a scroll passing through), but **2 suggestive frames within
+  `SUGGESTIVE_WINDOW_MS` = 3 s** do. A frame is suggestive when its signal is at or
+  above the sensitivity threshold but *not* already on the explicit/confirmed path
+  above. The counter is fed **every** frame directly, independent of the
+  same-content cooldown that gates explicit reporting — so the same suggestive image
+  across two frames still locks. The explicit immediate/confirmed path is unchanged.
+  - **Sensitivity** (`ScanSensitivity`, editable in the app under *حساسية المحتوى
+    الإيحائي*): **normal** = `SUGGESTIVE_THRESHOLD_NORMAL` **0.45** (reacts to the
+    clearer suggestive content), **high** = `SUGGESTIVE_THRESHOLD_HIGH` **0.30**
+    (reacts to lighter suggestive content). Persisted in the private files dir.
+- **Letterbox crop (`LetterboxCrop`):** in an in-app media viewer (a Telegram album,
+  etc.) a large image sits on black bands with a status bar, header and thumbnail
+  strip around it; classifying that whole frame dilutes the signal below the screen
+  threshold. Before the whole-screen pass, Guardian finds the real content rectangle —
+  the **largest contiguous band of "rich" rows/columns** (lines where ≥ 50 % of cells
+  are non-black *and* varied, so sparse header text/icons don't count and the shorter
+  thumbnail strip loses to the taller image band) — and classifies that crop instead.
+  Guardrails: the rect must be ≥ 35 % of each axis, the crop must remove ≥ 6 % of one
+  axis, and a screen with no bands yields no crop (classified whole), so apps without
+  black bars are unaffected. The explicit region path is untouched.
 - **Calibration logging (temporary):** with `LOG_EVERY_FRAME_SCORE = true` every
   classified frame is logged, e.g.
   `Scan frame: signal=0.6430 [>= 0.15] sexy=0.612 porn=0.031 hentai=0.000 safe=0.340 drawing=0.017 trigger=event app=com.whatsapp positives=1/2 regions=0`

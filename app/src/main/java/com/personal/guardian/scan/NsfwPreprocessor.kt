@@ -43,7 +43,7 @@ data class NsfwScores(
 
 /**
  * How suggestive a frame's signal is, for logging and the Stage 5 suggestive tier
- * (README "Stage 5 — suggestive tier"):
+ * (README "Screen scanning → suggestive tier"):
  *  - [EXPLICIT]: signal ≥ the explicit threshold (region 0.7) — the existing
  *    immediate/confirmed lock path;
  *  - [SUGGESTIVE]: signal in [suggestive threshold, explicit) — the softer tier;

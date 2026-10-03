@@ -3,7 +3,7 @@ package com.personal.guardian.scan
 /**
  * Finds the real content rectangle inside a letterboxed frame — the large image an
  * in-app media viewer shows on black bands, with a status bar / header / thumbnail
- * strip around it (README "Stage 5 — letterbox crop"). Cropping to it before
+ * strip around it (README "Screen scanning → letterbox crop"). Cropping to it before
  * whole-screen classification stops the black bands and UI chrome from diluting the
  * signal.
  *

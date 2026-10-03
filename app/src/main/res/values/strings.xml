@@ -151,6 +151,13 @@
     <string name="row_lock_duration_title">مدة القفل</string>
     <string name="row_lock_duration_summary">%1$d ثانية</string>
     <string name="lock_duration_dialog_title">مدة القفل (بالثواني)</string>
+    <string name="row_sensitivity_title">حساسية المحتوى الإيحائي</string>
+    <string name="sensitivity_dialog_title">حساسية المحتوى الإيحائي</string>
+    <string name="sensitivity_normal">عادية</string>
+    <string name="sensitivity_high">عالية</string>
+    <string name="sensitivity_normal_desc">عادية — تتفاعل مع المحتوى الإيحائي الأوضح</string>
+    <string name="sensitivity_high_desc">عالية — تتفاعل مع محتوى إيحائي أخف</string>
+    <string name="sensitivity_saved">تم ضبط الحساسية: %1$s</string>
 
     <string name="section_developer">للمطورين</string>
     <string name="version_label">الإصدار %1$s</string>

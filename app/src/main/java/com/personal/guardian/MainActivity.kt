@@ -11,6 +11,7 @@ import android.view.View
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
@@ -29,6 +30,8 @@ import com.personal.guardian.scan.DetectionStore
 import com.personal.guardian.scan.FastScanSettings
 import com.personal.guardian.scan.GuardianAccessibilityService
 import com.personal.guardian.scan.ScanConfig
+import com.personal.guardian.scan.ScanSensitivity
+import com.personal.guardian.scan.ScanSensitivitySettings
 import com.personal.guardian.scan.ScanStatus
 import com.personal.guardian.service.GuardianForegroundService
 import com.personal.guardian.util.GuardianLog
@@ -108,6 +111,7 @@ class MainActivity : AppCompatActivity() {
         binding.rowFastScan.setOnClickListener { startActivity(Intent(this, FastScanAppsActivity::class.java)) }
         binding.rowReflection.setOnClickListener { startActivity(Intent(this, ReflectionSettingsActivity::class.java)) }
         binding.rowLockDuration.setOnClickListener { showLockDurationDialog() }
+        binding.rowSensitivity.setOnClickListener { showSensitivityDialog() }
 
         binding.btnFullScreenIntentSettings.setOnClickListener { ReflectionLauncher.openFullScreenIntentSettings(this) }
 
@@ -218,6 +222,29 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    @StringRes
+    private fun sensitivityLabel(s: ScanSensitivity): Int = when (s) {
+        ScanSensitivity.NORMAL -> R.string.sensitivity_normal_desc
+        ScanSensitivity.HIGH -> R.string.sensitivity_high_desc
+    }
+
+    /** Suggestive-tier sensitivity — normal (0.45) or high (0.30); the explicit path is fixed. */
+    private fun showSensitivityDialog() {
+        val options = listOf(ScanSensitivity.NORMAL, ScanSensitivity.HIGH)
+        val labels = arrayOf(getString(R.string.sensitivity_normal), getString(R.string.sensitivity_high))
+        val current = options.indexOf(ScanSensitivitySettings.get(this)).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.sensitivity_dialog_title)
+            .setSingleChoiceItems(labels, current) { dialog, which ->
+                ScanSensitivitySettings.set(this, options[which])
+                Toast.makeText(this, getString(R.string.sensitivity_saved, labels[which]), Toast.LENGTH_SHORT).show()
+                refreshStatus()
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     private fun onVersionTapped() {
         if (binding.cardDeveloper.visibility == View.VISIBLE) return
         versionTaps++
@@ -251,6 +278,7 @@ class MainActivity : AppCompatActivity() {
         binding.txtFastScanSummary.text = getString(R.string.row_fast_scan_summary, fastScan.size)
         binding.txtReflectionSummary.text = getString(R.string.row_reflection_summary, ReflectionSettings.library(this).size)
         binding.txtLockDurationSummary.text = getString(R.string.row_lock_duration_summary, ReflectionSettings.durationSeconds(this))
+        binding.txtSensitivitySummary.text = getString(sensitivityLabel(ScanSensitivitySettings.get(this)))
 
         // Warnings.
         val fsiMissing = ReflectionLauncher.needsFullScreenIntentGrant(this)
