@@ -97,6 +97,9 @@ class GuardianAccessibilityService : AccessibilityService() {
     // Blind-spot escalation: shrinking grace each time Guardian can't read the screen.
     private val blindSpot = BlindSpotPolicy({ SystemClock.elapsedRealtime() })
     private val contentPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
+    // Reused scratch for the whole-screen letterbox crop (Stage 5 — letterbox crop).
+    private val letterboxPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
+    private val letterboxLuma = IntArray(RegionContent.GRID * RegionContent.GRID)
     private val costStats = ScanCostStats()
     private var classifier: NsfwClassifier? = null
     private var captureInFlight = false
@@ -356,9 +359,18 @@ class GuardianAccessibilityService : AccessibilityService() {
             }
         }
         try {
-            // Path 1: the whole (downscaled) screen, as before.
+            // Path 1: the whole (downscaled) screen. In a letterboxed media viewer (a big
+            // image on black bands with UI chrome around it) the bands and chrome dilute
+            // the signal, so classify the cropped-out image when one is found; otherwise
+            // the full frame, unchanged (Stage 5 — letterbox crop). The explicit region
+            // path below is untouched.
             val t0 = SystemClock.elapsedRealtime()
-            val whole = model.classify(frame)
+            val crop = letterboxCrop(frame)
+            val whole = try {
+                model.classify(crop ?: frame)
+            } finally {
+                if (crop != null && crop !== frame) crop.recycle()
+            }
             val t1 = SystemClock.elapsedRealtime()
             // Path 2: image-bearing elements cropped out of the same frame.
             val regions = if (regionsBefore != null) scoreRegions(model, frame, regionsBefore) else RegionScorer.Pass.NONE
@@ -472,6 +484,43 @@ class GuardianAccessibilityService : AccessibilityService() {
         ContextCompat.getSystemService(this, android.hardware.display.DisplayManager::class.java)
             ?.getDisplay(Display.DEFAULT_DISPLAY)?.getRealMetrics(metrics)
         return Box(0, 0, metrics.widthPixels, metrics.heightPixels)
+    }
+
+    /**
+     * Stage 5 — letterbox crop. If [frame] is a letterboxed media-viewer screen (a large
+     * image on black bands, with a status bar / header / thumbnail strip around it), this
+     * returns that image cropped out, so the black bands and chrome don't dilute the
+     * whole-screen signal. Returns null when there's nothing worth cropping (no bands, or
+     * the crop would be trivial) — then the caller classifies the whole frame unchanged,
+     * so apps without black bars are not affected. The returned bitmap is a new bitmap the
+     * caller recycles. Geometry is in [LetterboxCrop]; here we only build the luma grid
+     * (reusing [RegionContent.GRID] and the same Rec. 601 luma as [ImageRegions]) and map
+     * the result rect back to frame pixels.
+     */
+    private fun letterboxCrop(frame: Bitmap): Bitmap? {
+        val grid = RegionContent.GRID
+        var current = frame
+        for ((w, h) in NsfwPreprocessor.downscaleSteps(frame.width, frame.height, grid)) {
+            val next = Bitmap.createScaledBitmap(current, w, h, true)
+            if (current !== frame && current !== next) current.recycle()
+            current = next
+        }
+        try {
+            current.getPixels(letterboxPixels, 0, grid, 0, 0, grid, grid)
+        } finally {
+            if (current !== frame) current.recycle()
+        }
+        for (i in letterboxPixels.indices) {
+            val p = letterboxPixels[i]
+            letterboxLuma[i] = (((p shr 16) and 0xFF) * 299 + ((p shr 8) and 0xFF) * 587 + (p and 0xFF) * 114) / 1000
+        }
+        val rect = LetterboxCrop.contentRect(letterboxLuma, grid, grid) ?: return null
+        // Grid cells → frame pixels; clamp to the frame and keep at least 1px each way.
+        val left = (rect.left.toLong() * frame.width / grid).toInt().coerceIn(0, frame.width - 1)
+        val top = (rect.top.toLong() * frame.height / grid).toInt().coerceIn(0, frame.height - 1)
+        val right = ((rect.left + rect.width).toLong() * frame.width / grid).toInt().coerceIn(left + 1, frame.width)
+        val bottom = ((rect.top + rect.height).toLong() * frame.height / grid).toInt().coerceIn(top + 1, frame.height)
+        return Bitmap.createBitmap(frame, left, top, right - left, bottom - top)
     }
 
     /** [RegionContent] verdict for a crop, on an area-averaged [RegionContent.GRID]² downsample. */
