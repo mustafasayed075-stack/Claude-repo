@@ -73,6 +73,22 @@
             android:textSize="12sp" />
 
         <TextView
+            android:id="@+id/txtReflectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/txtFullScreenIntentStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:textSize="12sp"
+            android:text="@string/status_full_screen_intent_off"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/txtFastScanStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -113,6 +129,19 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/btn_fast_scan_apps" />
+
+        <Button
+            android:id="@+id/btnReflectionSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_reflection_settings" />
+
+        <Button
+            android:id="@+id/btnFullScreenIntentSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_full_screen_intent_settings"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/btnRequestAdmin"

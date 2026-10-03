@@ -17,6 +17,11 @@
          notifications on Android 13+. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Stage 6: launch Reflection Mode full-screen, over the keyguard, on a lock.
+         Granted at install below Android 14; on 14+ the user confirms it once
+         (ReflectionLauncher.needsFullScreenIntentGrant + the settings-link button). -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- Fast Scan Apps picker: Android 11+ package visibility for launchable apps
          (their labels and icons), without QUERY_ALL_PACKAGES. -->
     <queries>
@@ -51,6 +56,24 @@
 
         <activity
             android:name=".FastScanAppsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
+        <!-- Stage 6: Reflection Mode. The pinned full-screen reminder shown on a lock.
+             excludeFromRecents + singleInstance so it owns the task it pins; shows over
+             the keyguard; its own task so FLAG_ACTIVITY_NEW_TASK launches it clean. -->
+        <activity
+            android:name=".reflection.ReflectionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.Guardian"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <activity
+            android:name=".reflection.ReflectionSettingsActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 

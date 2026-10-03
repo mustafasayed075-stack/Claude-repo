@@ -26,15 +26,21 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
   log with a short text snippet, notification, `DetectionBus`). Each list entry
   is **explicit** or **borderline** tier.
 - **Stage 5 — Lock:** on a confirmed detection Guardian locks the screen
-  (`DevicePolicyManager.lockNow()`, needs an active device admin) for
-  `LOCK_DURATION_MS` = **10 s**, and an unlock during that time locks again.
+  (`DevicePolicyManager.lockNow()`, needs an active device admin), and an unlock
+  during the lock period locks again.
   - **Lock at once:** image detections, and text detections with an explicit-tier
     term.
   - **Borderline-only text:** the screen's images are checked for 3 s first, and
     the device locks only if one of those checks is positive.
   - Notifications and logging are unchanged; the lock is added on top.
+- **Stage 6 — Reflection Mode:** the lock response. In addition to `lockNow()`,
+  Guardian pins **itself** full-screen and shows one reminder picked at random from
+  a library the user builds (text, image, audio or video), for a user-set duration
+  (**30 s minimum**, enforced in code). The back button is a no-op and the app is
+  screen-pinned until the time elapses. Randomised content so a repeated reminder
+  doesn't lose its effect.
 
-Later stages (reminder, persistence) are **intentionally not implemented here**.
+Later stages (persistence) are **intentionally not implemented here**.
 
 ---
 
@@ -90,6 +96,12 @@ app/src/main/java/com/personal/guardian/
 ├── text/TextScan                      Stage 4: text extraction, trigger/debounce (incl. text fields), window choice, fingerprints (pure)
 ├── lock/LockController                Stage 5: lock decision, re-lock on unlock, borderline corroboration window (pure, unit-tested)
 ├── lock/DevicePolicyLock              Stage 5: DevicePolicyManager.lockNow() via the Stage 1 device admin
+├── reflection/ReflectionContent       Stage 6: content model, library, format, 30s-min duration, countdown (pure, unit-tested)
+├── reflection/ReflectionStore         Stage 6: library + duration persistence (pure java.io)
+├── reflection/ReflectionSettings      Stage 6: process-wide library/duration access, persisted URI grants
+├── reflection/ReflectionActivity      Stage 6: pinned full-screen reminder (startLockTask, countdown, back no-op)
+├── reflection/ReflectionLauncher      Stage 6: full-screen-intent notification + random pick + launch
+├── reflection/ReflectionSettingsActivity  Stage 6: content-library + duration settings screen
 ├── boot/BootReceiver                  Restart service + filtering on boot
 └── util/GuardianLog                   Append-only local event log (timestamps)
 
@@ -1453,21 +1465,23 @@ accessibility service:
 | Text with borderline-tier terms only | no lock yet: corroborate |
 
 - **Lock:** `DevicePolicyManager.lockNow()`, logged as
-  `LOCK triggered, duration=10000ms, source=image|text-explicit|text-borderline-corroborated, detectionId=…`.
+  `LOCK triggered, duration=<ms>, source=image|text-explicit|text-borderline-corroborated, detectionId=…`.
   - The `detectionId` (e.g. `text-1790000000123-4`) is also the `"id"` of the
     detection's line in `detections.jsonl`. Text lines also get `"tier"`.
-  - Duration: `LOCK_DURATION_MS` = **10 s** (test phase).
+  - Duration: the **Reflection Mode duration** (Stage 6; user-set, 30 s minimum),
+    read at each lock so a settings change applies to the next one. It is no longer a
+    fixed constant.
 - **Unlock attempts:** a dynamically registered `ACTION_USER_PRESENT` receiver
-  catches an unlock during the 10 s and locks again at once (`LOCK re-applied: …`).
-  After 10 s the unlock stands (`LOCK period over …`). A new detection during a
-  lock restarts the 10 s.
+  catches an unlock during the lock period and locks again at once (`LOCK
+  re-applied: …`). After the duration the unlock stands (`LOCK period over …`). A
+  new detection during a lock restarts the period.
 - **Borderline corroboration:** the device stays fully usable; nothing is locked
   or delayed.
   - The screen is captured **right away** and then every 1 s (the platform's
     minimum gap) for up to `CORROBORATION_WINDOW_MS` = **3 s**, through the
     existing whole-screen and region pipeline.
   - The first single frame over the existing image thresholds (whole screen ≥ 0.15,
-    or a region ≥ 0.7) locks at once with the same 10 s mechanism.
+    or a region ≥ 0.7) locks at once with the same mechanism.
   - If the window expires first, there is no lock for that match:
     `text match uncorroborated, no lock (borderline tier, window expired)`.
   - Below Android 11, or without the model, no image check is possible, so a
@@ -1485,10 +1499,95 @@ accessibility service:
 ### Known limitations
 
 - A lock lives in the accessibility service. If that service restarts during the
-  10 s, the remaining time is forgotten, but the next detection locks again.
+  lock period, the remaining time is forgotten, but the next detection locks again.
 - `lockNow()` only turns the screen off when no secure lock screen is set; it
   isn't a lock in itself. Re-locking then means turning the screen off again on
-  every unlock during the 10 s.
+  every unlock during the lock period. **Stage 6's Reflection Mode is the primary
+  response**; `lockNow()` is kept alongside it (belt and suspenders).
+
+## Stage 6 — Reflection Mode
+
+The lock response is a **full-screen, pinned reminder**, not only the OS screen
+lock. On every lock trigger (image, text-explicit, text-borderline-corroborated —
+the exact Stage 5 decision, unchanged) Guardian, besides calling `lockNow()`, brings
+up `ReflectionActivity`: it pins itself with `startLockTask()`, shows one reminder
+chosen at random, counts down the configured duration, ignores the back button, then
+unpins and finishes. This also folds in the once-planned Stage 6 reminder idea —
+**randomised** content, so the brain doesn't desensitise to one fixed image.
+
+### Content library
+
+Main screen → **Reflection Mode content** (`ReflectionSettingsActivity`). The user
+adds any number of items through the system pickers:
+
+| Type | Source | Shown as |
+|---|---|---|
+| **Text** | typed in | large, centred |
+| **Image** | `ACTION_OPEN_DOCUMENT` | full-screen |
+| **Audio** | `ACTION_OPEN_DOCUMENT` | looped, with a simple pulsing visual |
+| **Video** | `ACTION_OPEN_DOCUMENT` | looped, muted (autoplay-safe) |
+
+- Media is stored as a `content://` URI with a **persisted read grant**
+  (`takePersistableUriPermission`), so it still opens after a reboot; removing an
+  item releases the grant. The same URI can't be added twice.
+- The library is a small local file (`files/reflection_content.tsv`, atomic
+  temp-and-rename), surviving restarts and reboots. Pure-Kotlin model, format and
+  store (`ReflectionContent.kt`, `ReflectionStore.kt`).
+- On each lock, one item is chosen with `ReflectionLibrary.pick(random)` (an
+  injected `Random`, so tests are deterministic). An empty library logs a warning and
+  shows nothing (the device is still locked).
+
+### Duration (30-second minimum, enforced in code)
+
+The same screen sets the duration in seconds, used for every lock trigger. The
+**30-second minimum is enforced in code** (`ReflectionDuration.clampSeconds`), not
+only as a UI hint: a lower value — typed in the UI, or hand-edited into the stored
+file — is raised to 30 with a message, every time it is saved *and* every time it is
+read. There is also a 24-hour sanity cap. It replaces the old fixed
+`LOCK_DURATION_MS` constant; the main screen shows the configured value.
+
+### Launch
+
+- Besides `lockNow()`, the service posts a **high-priority notification with
+  `setFullScreenIntent()`** aimed at `ReflectionActivity`, so it launches at once and
+  shows over the keyguard, and also starts the activity directly (allowed while
+  Guardian's foreground service runs).
+- **`USE_FULL_SCREEN_INTENT`** is declared in the manifest. It is granted at install
+  below Android 14; on **Android 14+** the app must hold the user-granted
+  full-screen-intent permission. When it is missing, the main screen shows a status
+  line and an **Allow full-screen Reflection Mode** button that opens the settings
+  page (handled the same way as the Accessibility and notification permissions).
+  Without the grant the notification still posts; the system may show it as a banner
+  the user taps instead of launching it.
+- `ReflectionActivity` uses `showWhenLocked` / `turnScreenOn`, `singleInstance` and
+  `excludeFromRecents`.
+
+### Logging (auditable)
+
+- `Reflection Mode shown (content=text|image|audio|video, duration=Xs), source=…, detectionId=…`
+- `Reflection Mode ended (elapsed), duration=Xs, detectionId=…` — normal end.
+- `Reflection Mode ended (user escaped via pin-exit) after Ys of Xs, detectionId=…`
+  — the activity was stopped before the time was up (see the limitation below), so
+  escapes are auditable.
+
+### Known, accepted limitation — screen-pinning escape
+
+Without full **Device Owner** mode (deferred until the factory-reset provisioning
+step), Android's screen pinning is the user-exitable kind: it can be left with the
+standard system gesture (**hold Back + Recents/Overview together**). This is an
+OS-level safety feature that **only Device Owner mode can disable** (via
+`setLockTaskPackages`, which makes the pin non-exitable). For this test phase this is
+**expected, not a bug** — the same accepted trade-off as the Device Admin limitation
+(lock can be skipped until admin is active). The pin-exit is logged (above) so it is
+auditable, and once the device is provisioned as Device Owner the pin becomes
+non-exitable with no code change to this stage.
+
+### Other known limitations
+
+- If the accessibility service restarts mid-lock the remaining time is forgotten, as
+  in Stage 5; the next detection shows Reflection Mode again.
+- An empty content library means nothing is shown (the device is still locked); add
+  at least one reminder.
 
 ## Testing individual components
 
@@ -1527,7 +1626,19 @@ accessibility service:
 
   Also `KeywordTierTest` (tier syntax, the bundled borderline set, detection
   tiers), `CaptureSchedulerTest` (corroboration capture rate) and
-  `DetectionEventTest` (ids, tier in JSON).
+  `DetectionEventTest` (ids, tier in JSON). `LockControllerTest` also covers the
+  duration being read per-trigger (a settings change applies to the next lock).
+- **Stage 6 Reflection Mode:** `ReflectionContentTest` (pure JVM):
+  - content library add/remove, media-URI de-duplication, per-type counts;
+  - random selection with a seeded/fake `Random` (deterministic, reaches a forced
+    index, covers every item);
+  - the file format round-trip (escaped text) and persistence across store
+    instances, including a damaged file;
+  - the **30-second minimum enforced in code** — a value below 30 (from the UI or
+    hand-edited into the file) is raised on both save and load — plus the sanity cap;
+  - the countdown and auto-exit on a fake clock, and the back-button no-op until the
+    time elapses;
+  - the auditable log lines and the `startLockTask`/`stopLockTask` wiring.
 - **Text fields:** `TextScanTest`:
   - rapid typing still ends in a check of the final text;
   - live field text is carried with the pending check;
@@ -1551,7 +1662,8 @@ accessibility service:
 
 ## Scope note
 
-This repository contains **Stages 1–5**. Stages 3 and 4 detect → log → notify and
+This repository contains **Stages 1–6**. Stages 3 and 4 detect → log → notify and
 publish on `DetectionBus` (one event type for both, told apart by
-`DetectionEvent.kind`); Stage 5 subscribes to it and locks. The core service keeps its single
-`onServiceReady()` extension point for later stages.
+`DetectionEvent.kind`); Stage 5 subscribes to it and locks; Stage 6 (Reflection
+Mode) pins a randomised full-screen reminder as the lock response. The core service
+keeps its single `onServiceReady()` extension point for later stages.

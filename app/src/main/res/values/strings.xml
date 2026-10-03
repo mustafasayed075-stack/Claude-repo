@@ -59,6 +59,39 @@
     <string name="status_lock_disabled">Lock: disabled in this build (LOCK_ENABLED = false)</string>
     <string name="status_lock_none">none yet</string>
 
+    <!-- Stage 6: Reflection Mode -->
+    <string name="btn_reflection_settings">Reflection Mode content</string>
+    <string name="btn_full_screen_intent_settings">Allow full-screen Reflection Mode</string>
+    <string name="status_reflection">Reflection Mode: %1$d s · %2$d reminder(s) in the library</string>
+    <string name="status_full_screen_intent_off">Full-screen Reflection Mode needs permission on this Android version. Without it, a lock shows a notification you must tap.</string>
+    <string name="reflection_settings_title">Reflection Mode content</string>
+    <string name="reflection_settings_intro">When Guardian locks the screen, it pins itself full-screen and shows one of these reminders, chosen at random so it stays meaningful. Add text, images, audio or video.</string>
+    <string name="reflection_duration_label">Duration (seconds)</string>
+    <string name="reflection_duration_save">Save</string>
+    <string name="reflection_duration_hint">Minimum %1$d seconds (enforced). Applies to every lock.</string>
+    <string name="reflection_duration_saved">Reflection duration set to %1$d seconds.</string>
+    <string name="reflection_duration_invalid">Enter a whole number of seconds.</string>
+    <string name="reflection_library_label">Reminder content</string>
+    <string name="reflection_library_empty">No reminders yet. Add text, an image, audio or a video.</string>
+    <string name="reflection_add_text">Add a text reminder</string>
+    <string name="reflection_add_text_short">Text</string>
+    <string name="reflection_add_image">Image</string>
+    <string name="reflection_add_audio">Audio</string>
+    <string name="reflection_add_video">Video</string>
+    <string name="reflection_text_hint">Type a message to show yourself</string>
+    <string name="reflection_text_empty">Message is empty.</string>
+    <string name="reflection_remove">Remove %1$s</string>
+    <string name="reflection_remove_short">Remove</string>
+    <string name="reflection_countdown">Reflection Mode · %1$d s</string>
+    <string name="reflection_content_error">Reminder content could not be opened.</string>
+    <string name="reflection_image_desc">Reflection reminder image</string>
+    <string name="reflection_audio_desc">Audio playing</string>
+    <string name="reflection_audio_playing">Playing your reminder…</string>
+    <string name="reflection_channel_name">Guardian Reflection Mode</string>
+    <string name="reflection_channel_desc">Full-screen reminder shown when the screen is locked.</string>
+    <string name="reflection_notification_title">Reflection Mode</string>
+    <string name="reflection_notification_text">Take a moment to reflect.</string>
+
     <!-- Fast Scan Apps (replaces the hard-coded watched-apps list) -->
     <string name="btn_fast_scan_apps">Fast Scan Apps</string>
     <string name="status_fast_scan_apps">Fast Scan Apps: %1$d (text: %2$d, image: %3$d)</string>

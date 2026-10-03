@@ -23,6 +23,8 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.personal.guardian.lock.DevicePolicyLock
 import com.personal.guardian.lock.LockController
+import com.personal.guardian.reflection.ReflectionLauncher
+import com.personal.guardian.reflection.ReflectionSettings
 import com.personal.guardian.lock.LockLog
 import com.personal.guardian.lock.LockOutcome
 import com.personal.guardian.text.KeywordList
@@ -549,12 +551,15 @@ class GuardianAccessibilityService : AccessibilityService() {
                         LockLog.Level.ERROR -> GuardianLog.e(ctx, message)
                     }
                 },
-                SystemClock::elapsedRealtime
+                SystemClock::elapsedRealtime,
+                // Reflection Mode duration, read at each lock (30 s minimum enforced in code).
+                { ReflectionSettings.durationMs(ctx) }
             )
             val admin = DevicePolicyLock(ctx).isAdminActive()
             GuardianLog.i(
                 ctx,
-                "Lock armed: duration ${ScanConfig.LOCK_DURATION_MS} ms, borderline text corroboration window " +
+                "Lock armed: Reflection Mode duration ${ReflectionSettings.durationSeconds(ctx)} s " +
+                    "(${ReflectionSettings.library(ctx).size} reminder(s)), borderline text corroboration window " +
                     "${ScanConfig.CORROBORATION_WINDOW_MS} ms; device admin active: ${yesNo(admin)}" +
                     if (admin) "." else " — locks will be skipped until \"Activate device admin\" is pressed."
             )
@@ -580,6 +585,8 @@ class GuardianAccessibilityService : AccessibilityService() {
                 handler.removeCallbacks(corroborationDeadline)
                 handler.removeCallbacks(lockTimer)
                 handler.postDelayed(lockTimer, outcome.untilMs - SystemClock.elapsedRealtime())
+                // Stage 6: show Reflection Mode in addition to lockNow() (belt and suspenders).
+                ReflectionLauncher.launch(applicationContext, outcome.source, outcome.detectionId, outcome.durationMs)
             }
             is LockOutcome.Relocked -> ScanStatus.relockCount++
             is LockOutcome.Skipped -> ScanStatus.lockSkippedCount++

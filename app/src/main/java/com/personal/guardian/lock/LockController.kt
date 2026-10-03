@@ -1,5 +1,6 @@
 package com.personal.guardian.lock
 
+import com.personal.guardian.reflection.ReflectionDuration
 import com.personal.guardian.scan.DetectionEvent
 import com.personal.guardian.scan.DetectionKind
 import com.personal.guardian.scan.ScanConfig
@@ -36,8 +37,8 @@ enum class LockSource(val label: String) {
 sealed class LockOutcome {
     object None : LockOutcome()
 
-    /** The device was locked until [untilMs]. */
-    data class Locked(val source: LockSource, val detectionId: String, val untilMs: Long) : LockOutcome()
+    /** The device was locked until [untilMs]; [durationMs] is the Reflection Mode duration used. */
+    data class Locked(val source: LockSource, val detectionId: String, val untilMs: Long, val durationMs: Long) : LockOutcome()
 
     /** An unlock during the lock period was answered with another lock. */
     data class Relocked(val detectionId: String, val remainingMs: Long) : LockOutcome()
@@ -76,15 +77,24 @@ class LockController(
     private val device: DeviceLock,
     private val log: LockLog,
     private val clock: () -> Long,
-    val lockDurationMs: Long = ScanConfig.LOCK_DURATION_MS,
+    /**
+     * The Reflection Mode duration, read **at each lock** so a settings change applies
+     * to the next trigger without restarting the service. The 30-second minimum is
+     * enforced where it is persisted ([ReflectionDuration]), so this is already clamped.
+     */
+    private val durationMs: () -> Long = { ReflectionDuration.DEFAULT_SECONDS * 1000 },
     val corroborationWindowMs: Long = ScanConfig.CORROBORATION_WINDOW_MS
 ) {
     private class Corroboration(val detectionId: String, val terms: List<String>, val startedMs: Long, val deadlineMs: Long) {
         var checks = 0
     }
 
+    /** The duration configured now (what the next lock would use). */
+    val lockDurationMs: Long get() = durationMs()
+
     private var lockedUntilMs: Long? = null
     private var lockDetectionId: String? = null
+    private var activeDurationMs = 0L
     private var relocks = 0
     private var corroboration: Corroboration? = null
 
@@ -148,7 +158,7 @@ class LockController(
             relocks++
             log.log(
                 LockLog.Level.WARN,
-                "LOCK re-applied: unlock ${lockDurationMs - remaining}ms into the lock, remaining=${remaining}ms, detectionId=$id."
+                "LOCK re-applied: unlock ${activeDurationMs - remaining}ms into the lock, remaining=${remaining}ms, detectionId=$id."
             )
             return LockOutcome.Relocked(id, remaining)
         }
@@ -161,7 +171,7 @@ class LockController(
         if (clock() < until) return LockOutcome.None
         log.log(
             LockLog.Level.INFO,
-            "LOCK period over: duration=${lockDurationMs}ms, detectionId=$lockDetectionId, re-locks after unlock attempts=$relocks."
+            "LOCK period over: duration=${activeDurationMs}ms, detectionId=$lockDetectionId, re-locks after unlock attempts=$relocks."
         )
         lockedUntilMs = null
         lockDetectionId = null
@@ -193,13 +203,15 @@ class LockController(
         corroboration = null
         val failure = apply(detectionId)
         if (failure != null) return LockOutcome.Skipped(detectionId, failure)
-        val until = clock() + lockDurationMs
+        val duration = durationMs()
+        val until = clock() + duration
         lockedUntilMs = until
         lockDetectionId = detectionId
+        activeDurationMs = duration
         relocks = 0
         lockCount++
-        log.log(LockLog.Level.WARN, "LOCK triggered, duration=${lockDurationMs}ms, source=${source.label}, detectionId=$detectionId")
-        return LockOutcome.Locked(source, detectionId, until)
+        log.log(LockLog.Level.WARN, "LOCK triggered, duration=${duration}ms, source=${source.label}, detectionId=$detectionId")
+        return LockOutcome.Locked(source, detectionId, until, duration)
     }
 
     /** Locks the device; returns null on success, else why it didn't (already logged). */

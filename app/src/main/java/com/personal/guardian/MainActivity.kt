@@ -16,6 +16,9 @@ import com.personal.guardian.admin.GuardianDeviceAdminReceiver
 import com.personal.guardian.blocklist.BlocklistManager
 import com.personal.guardian.blocklist.BlocklistUpdateWorker
 import com.personal.guardian.databinding.ActivityMainBinding
+import com.personal.guardian.reflection.ReflectionLauncher
+import com.personal.guardian.reflection.ReflectionSettings
+import com.personal.guardian.reflection.ReflectionSettingsActivity
 import com.personal.guardian.scan.DetectionStore
 import com.personal.guardian.scan.FastScanSettings
 import com.personal.guardian.scan.GuardianAccessibilityService
@@ -84,6 +87,12 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnFastScanApps.setOnClickListener {
             startActivity(Intent(this, FastScanAppsActivity::class.java))
+        }
+        binding.btnReflectionSettings.setOnClickListener {
+            startActivity(Intent(this, ReflectionSettingsActivity::class.java))
+        }
+        binding.btnFullScreenIntentSettings.setOnClickListener {
+            ReflectionLauncher.openFullScreenIntentSettings(this)
         }
         binding.btnRequestAdmin.setOnClickListener { onRequestAdminClicked() }
         binding.btnRefreshList.setOnClickListener {
@@ -246,7 +255,7 @@ class MainActivity : AppCompatActivity() {
                 getString(R.string.status_lock_no_admin, ScanStatus.lockSkippedCount)
             else -> getString(
                 R.string.status_lock_armed,
-                ScanConfig.LOCK_DURATION_MS / 1000,
+                ReflectionSettings.durationSeconds(this),
                 ScanStatus.lockCount,
                 ScanStatus.relockCount,
                 ScanStatus.lastLockSource?.let {
@@ -254,6 +263,17 @@ class MainActivity : AppCompatActivity() {
                 } ?: getString(R.string.status_lock_none)
             )
         }
+
+        // Stage 6: Reflection Mode.
+        val library = ReflectionSettings.library(this)
+        binding.txtReflectionStatus.text = getString(
+            R.string.status_reflection,
+            ReflectionSettings.durationSeconds(this),
+            library.size
+        )
+        val fsiMissing = ReflectionLauncher.needsFullScreenIntentGrant(this)
+        binding.txtFullScreenIntentStatus.visibility = if (fsiMissing) View.VISIBLE else View.GONE
+        binding.btnFullScreenIntentSettings.visibility = if (fsiMissing) View.VISIBLE else View.GONE
 
         val fastScan = FastScanSettings.get(this)
         binding.txtFastScanStatus.text = getString(

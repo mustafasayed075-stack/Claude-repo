@@ -200,11 +200,9 @@ object ScanConfig {
     /** Lock the device on confirmed detections (needs device admin; skipped with a warning otherwise). */
     const val LOCK_ENABLED = true
 
-    /**
-     * How long a lock lasts: an unlock (ACTION_USER_PRESENT) before this has elapsed
-     * locks again at once. 10 s for the test phase.
-     */
-    const val LOCK_DURATION_MS = 10_000L
+    // How long a lock lasts is no longer a constant here: it is the user-configurable
+    // Reflection Mode duration (ReflectionSettings / ReflectionDuration, 30 s minimum
+    // enforced in code), read at each lock.
 
     /**
      * A borderline-only text detection locks only if an image check of the screen

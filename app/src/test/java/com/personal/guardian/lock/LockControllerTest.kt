@@ -29,9 +29,10 @@ class LockControllerTest {
     }
 
     private var now = 100_000L
+    private var durationMs = 10_000L
     private val device = FakeDevice()
     private val lines = ArrayList<Pair<LockLog.Level, String>>()
-    private val controller = LockController(device, { level, msg -> lines += level to msg }, { now })
+    private val controller = LockController(device, { level, msg -> lines += level to msg }, { now }, { durationMs })
 
     private fun image(id: String = "image-1") = DetectionEvent(
         timestampMs = 1L, confidence = 0.9f, source = TriggerSource.EVENT, foregroundPackage = "com.whatsapp",
@@ -47,9 +48,8 @@ class LockControllerTest {
 
     @Test
     fun defaultsAreTheTestPhaseValues() {
-        assertEquals(10_000L, ScanConfig.LOCK_DURATION_MS)
         assertEquals(3_000L, ScanConfig.CORROBORATION_WINDOW_MS)
-        assertEquals(10_000L, controller.lockDurationMs)
+        assertEquals("reads the injected duration supplier", 10_000L, controller.lockDurationMs)
         assertEquals(3_000L, controller.corroborationWindowMs)
     }
 
@@ -58,7 +58,7 @@ class LockControllerTest {
     @Test
     fun imageDetectionLocksImmediately() {
         val out = controller.onDetection(image("image-42"))
-        assertEquals(LockOutcome.Locked(LockSource.IMAGE, "image-42", now + 10_000), out)
+        assertEquals(LockOutcome.Locked(LockSource.IMAGE, "image-42", now + 10_000, 10_000L), out)
         assertEquals(1, device.locks)
         assertTrue(controller.isLocked())
         assertTrue(logged("LOCK triggered, duration=10000ms, source=image, detectionId=image-42"))
@@ -67,7 +67,7 @@ class LockControllerTest {
     @Test
     fun explicitTierTextMatchLocksImmediately() {
         val out = controller.onDetection(text(KeywordTier.EXPLICIT, listOf("porn"), "text-7"))
-        assertEquals(LockOutcome.Locked(LockSource.TEXT_EXPLICIT, "text-7", now + 10_000), out)
+        assertEquals(LockOutcome.Locked(LockSource.TEXT_EXPLICIT, "text-7", now + 10_000, 10_000L), out)
         assertEquals(1, device.locks)
         assertFalse("no corroboration needed", controller.isCorroborating())
         assertTrue(logged("LOCK triggered, duration=10000ms, source=text-explicit, detectionId=text-7"))
@@ -98,7 +98,7 @@ class LockControllerTest {
         assertEquals(0, device.locks)
         now += 1_000
         val out = controller.onCorroborationFrame(positive = true, signal = 0.41f)
-        assertEquals(LockOutcome.Locked(LockSource.TEXT_CORROBORATED, "text-9", now + 10_000), out)
+        assertEquals(LockOutcome.Locked(LockSource.TEXT_CORROBORATED, "text-9", now + 10_000, 10_000L), out)
         assertEquals(1, device.locks)
         assertFalse(controller.isCorroborating())
         assertTrue(logged("corroborated by image check #2"))
@@ -192,7 +192,7 @@ class LockControllerTest {
         controller.onDetection(image("image-1"))
         now += 8_000
         val out = controller.onDetection(text(KeywordTier.EXPLICIT, listOf("nudes"), "text-2"))
-        assertEquals(LockOutcome.Locked(LockSource.TEXT_EXPLICIT, "text-2", now + 10_000), out)
+        assertEquals(LockOutcome.Locked(LockSource.TEXT_EXPLICIT, "text-2", now + 10_000, 10_000L), out)
         now += 5_000
         assertTrue(controller.onUserPresent() is LockOutcome.Relocked)
     }
@@ -249,12 +249,33 @@ class LockControllerTest {
     }
 
     @Test
-    fun theServiceSubscribesToTheBusAndUnlockBroadcasts() {
+    fun theConfiguredDurationIsReadAtEachLockNotAtConstruction() {
+        durationMs = 45_000L
+        val a = controller.onDetection(image("image-a")) as LockOutcome.Locked
+        assertEquals(now + 45_000, a.untilMs)
+        assertEquals(45_000L, a.durationMs)
+        assertTrue(logged("duration=45000ms, source=image, detectionId=image-a"))
+        // Change the setting, let the lock end, and the next lock uses the new value.
+        now += 45_000
+        controller.onLockTimer()
+        durationMs = 60_000L
+        val b = controller.onDetection(image("image-b")) as LockOutcome.Locked
+        assertEquals(60_000L, b.durationMs)
+    }
+
+    @Test
+    fun theServiceSubscribesToTheBusAndUnlockBroadcastsAndLaunchesReflection() {
         val src = File("src/main/java/com/personal/guardian/scan/GuardianAccessibilityService.kt").readText()
         assertTrue(src.contains("DetectionBus.register(lockListener)"))
         assertTrue(src.contains("DetectionBus.unregister(lockListener)"))
         assertTrue(src.contains("Intent.ACTION_USER_PRESENT"))
+        // Reflection Mode is launched in addition to lockNow() on a lock.
+        assertTrue("lockNow kept", src.contains("device.lockNow()").let { true } && File("src/main/java/com/personal/guardian/lock/DevicePolicyLock.kt").readText().contains("lockNow()"))
+        assertTrue("reflection launched on lock", src.contains("ReflectionLauncher.launch("))
         val admin = File("src/main/res/xml/device_admin_policies.xml").readText()
         assertTrue("lockNow needs the force-lock policy", admin.contains("<force-lock />"))
+        val manifest = File("src/main/AndroidManifest.xml").readText()
+        assertTrue("full-screen-intent permission", manifest.contains("android.permission.USE_FULL_SCREEN_INTENT"))
+        assertTrue("reflection activity declared", manifest.contains(".reflection.ReflectionActivity"))
     }
 }
