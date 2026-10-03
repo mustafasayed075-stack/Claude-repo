@@ -78,6 +78,7 @@
         <activity
             android:name=".reflection.ReflectionSettingsActivity"
             android:exported="false"
+            android:theme="@style/Theme.Rafiq.Main"
             android:parentActivityName=".MainActivity" />
 
         <!-- Stage 1: Device Admin / Device Owner receiver.

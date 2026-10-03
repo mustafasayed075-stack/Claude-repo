@@ -66,10 +66,53 @@ class ScreenshotTest {
         paparazzi.snapshot(root, name)
     }
 
+    /** A few reminder cards, so the preview shows the card design (ListView needs a
+     *  running adapter Paparazzi doesn't drive, so the cards are inflated directly). */
+    private fun reflectionCards(name: String, night: Boolean) {
+        night(night)
+        val container = android.widget.LinearLayout(paparazzi.context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setBackgroundColor(0xFFF6F3EC.toInt().let { if (night) 0xFF101A19.toInt() else it })
+            setPadding(0, 24, 0, 24)
+        }
+        val samples = listOf(
+            Triple(R.string.reflection_type_text, R.drawable.ic_reflection_text, "افتكر ليه بدأت، وإن اللحظة دي بتعدي."),
+            Triple(R.string.reflection_type_audio, R.drawable.ic_reflection_audio, "تلاوة.m4a"),
+            Triple(R.string.reflection_type_video, R.drawable.ic_reflection_video, "تذكير.mp4"),
+        )
+        for (s in samples) {
+            val card = paparazzi.inflate<View>(R.layout.item_reflection_content)
+            card.findViewById<TextView>(R.id.txtType).setText(s.first)
+            card.findViewById<TextView>(R.id.txtLabel).text = s.third
+            card.findViewById<ImageView>(R.id.imgPreview).apply {
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                setImageResource(s.second)
+            }
+            container.addView(card)
+        }
+        paparazzi.snapshot(container, name)
+    }
+
     @Test fun mainSetupLight() = mainShot("main-setup-light", active = false, night = false)
     @Test fun mainActiveLight() = mainShot("main-active-light", active = true, night = false)
     @Test fun mainActiveDark() = mainShot("main-active-dark", active = true, night = true)
-    @Test fun reflectionSettingsLight() = shot("reflection-settings-light", R.layout.activity_reflection_settings, night = false)
-    @Test fun reflectionSettingsDark() = shot("reflection-settings-dark", R.layout.activity_reflection_settings, night = true)
+    private fun reflectionScreen(name: String, night: Boolean) {
+        night(night)
+        val root = paparazzi.inflate<View>(R.layout.activity_reflection_settings)
+        // The Activity adds tabs at runtime; add them here so the preview shows them.
+        val tabs = root.findViewById<com.google.android.material.tabs.TabLayout>(R.id.tabs)
+        intArrayOf(
+            R.string.reflection_tab_all, R.string.reflection_type_text, R.string.reflection_type_image,
+            R.string.reflection_type_audio, R.string.reflection_type_video
+        ).forEach { tabs.addTab(tabs.newTab().setText(it)) }
+        root.findViewById<TextView>(R.id.editDuration).text = "30"
+        root.findViewById<TextView>(R.id.txtDurationHint).text =
+            root.resources.getString(R.string.reflection_duration_hint, 30)
+        paparazzi.snapshot(root, name)
+    }
+
+    @Test fun reflectionSettingsLight() = reflectionScreen("reflection-settings-light", night = false)
+    @Test fun reflectionSettingsDark() = reflectionScreen("reflection-settings-dark", night = true)
+    @Test fun reflectionCardsLight() = reflectionCards("reflection-cards-light", night = false)
     @Test fun fastScanLight() = shot("fast-scan-light", R.layout.activity_fast_scan_apps, night = false)
 }

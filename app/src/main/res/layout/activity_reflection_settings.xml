@@ -1,108 +1,124 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootReflection"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:background="?android:attr/colorBackground">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:navigationIcon="@drawable/ic_chevron_start"
+        app:title="@string/reflection_settings_title"
+        app:titleTextColor="?attr/colorOnPrimary" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="16dp"
         android:text="@string/reflection_settings_intro"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="13sp" />
 
-    <LinearLayout
+    <!-- Duration card -->
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.Rafiq.Card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:baselineAligned="false">
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp">
 
-        <EditText
-            android:id="@+id/editDuration"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:autofillHints=""
-            android:hint="@string/reflection_duration_label"
-            android:inputType="number" />
+            android:orientation="vertical"
+            android:padding="16dp">
 
-        <Button
-            android:id="@+id/btnSaveDuration"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/reflection_duration_save" />
-    </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:baselineAligned="false"
+                android:gravity="center_vertical">
+
+                <EditText
+                    android:id="@+id/editDuration"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:autofillHints=""
+                    android:hint="@string/reflection_duration_label"
+                    android:inputType="number" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSaveDuration"
+                    style="@style/Widget.Rafiq.Button.Primary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:text="@string/reflection_duration_save" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/txtDurationHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
     <TextView
-        android:id="@+id/txtDurationHint"
+        style="@style/TextAppearance.Rafiq.SectionHeader"
+        android:layout_marginStart="16dp"
+        android:text="@string/reflection_library_label" />
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabs"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="8dp"
-        android:textSize="12sp" />
+        app:tabMode="scrollable"
+        app:tabGravity="start"
+        app:tabIndicatorColor="?attr/colorPrimary"
+        app:tabSelectedTextColor="?attr/colorPrimary"
+        app:tabTextColor="?attr/colorOnSurfaceVariant" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:padding="16dp"
-        android:text="@string/reflection_library_label"
-        android:textStyle="bold" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp">
-
-        <Button
-            android:id="@+id/btnAddText"
-            style="?attr/buttonBarButtonStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/reflection_add_text_short" />
-
-        <Button
-            android:id="@+id/btnAddImage"
-            style="?attr/buttonBarButtonStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/reflection_add_image" />
-
-        <Button
-            android:id="@+id/btnAddAudio"
-            style="?attr/buttonBarButtonStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/reflection_add_audio" />
-
-        <Button
-            android:id="@+id/btnAddVideo"
-            style="?attr/buttonBarButtonStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/reflection_add_video" />
-    </LinearLayout>
-
-    <ListView
-        android:id="@+id/listContent"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
 
-    <TextView
-        android:id="@+id/txtContentEmpty"
+        <ListView
+            android:id="@+id/listContent"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:divider="@null"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:id="@+id/txtContentEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:padding="24dp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:text="@string/reflection_library_empty" />
+    </FrameLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnAdd"
+        style="@style/Widget.Rafiq.Button.Primary"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:padding="24dp"
-        android:text="@string/reflection_library_empty" />
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        app:icon="@drawable/ic_add"
+        app:iconGravity="textStart"
+        android:text="@string/reflection_add" />
 </LinearLayout>

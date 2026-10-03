@@ -96,6 +96,10 @@
     <string name="reflection_type_image">صورة</string>
     <string name="reflection_type_audio">صوت</string>
     <string name="reflection_type_video">فيديو</string>
+    <string name="reflection_tab_all">الكل</string>
+    <string name="reflection_add">إضافة رسالة</string>
+    <string name="reflection_add_choose_title">اختَر نوع الرسالة</string>
+    <string name="reflection_preview_desc">معاينة الرسالة</string>
 
     <!-- Fast Scan Apps (replaces the hard-coded watched-apps list) -->
     <string name="btn_fast_scan_apps">التطبيقات اللي بنراقبها</string>

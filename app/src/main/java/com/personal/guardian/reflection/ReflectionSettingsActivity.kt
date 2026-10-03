@@ -10,22 +10,39 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import com.google.android.material.tabs.TabLayout
 import com.personal.guardian.R
 import com.personal.guardian.databinding.ActivityReflectionSettingsBinding
 import com.personal.guardian.databinding.ItemReflectionContentBinding
 
 /**
- * Stage 6 settings: build the Reflection Mode content library (text typed in, or
- * image/audio/video picked with the system document picker and kept with a persisted
- * read grant) and set the duration (30-second minimum enforced in code).
+ * Stage 6 settings, redesigned (UI only): build the Reflection Mode content library
+ * (text typed in, or image/audio/video picked with the system document picker and
+ * kept with a persisted read grant) and set the duration (30-second minimum enforced
+ * in code). Type tabs filter the list; preview cards show a thumbnail (image) or the
+ * first line (text); one add button adds the tab's type.
  */
 class ReflectionSettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityReflectionSettingsBinding
     private val adapter = ContentAdapter()
+
+    /** null = the "All" tab; otherwise the type being shown/added. */
+    private val tabTypes = listOf<ReflectionType?>(
+        null, ReflectionType.TEXT, ReflectionType.IMAGE, ReflectionType.AUDIO, ReflectionType.VIDEO
+    )
+    private val tabTitles = listOf(
+        R.string.reflection_tab_all, R.string.reflection_type_text, R.string.reflection_type_image,
+        R.string.reflection_type_audio, R.string.reflection_type_video
+    )
+    private var selectedType: ReflectionType? = null
 
     private fun pickerFor(type: ReflectionType) = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -45,34 +62,76 @@ class ReflectionSettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityReflectionSettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        title = getString(R.string.reflection_settings_title)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        applyInsets()
+
+        binding.toolbar.setNavigationOnClickListener { finish() }
+
+        tabTitles.forEach { binding.tabs.addTab(binding.tabs.newTab().setText(it)) }
+        binding.tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                selectedType = tabTypes[tab.position]
+                refresh()
+            }
+            override fun onTabUnselected(tab: TabLayout.Tab) = Unit
+            override fun onTabReselected(tab: TabLayout.Tab) = Unit
+        })
 
         binding.listContent.adapter = adapter
         binding.listContent.emptyView = binding.txtContentEmpty
-        binding.btnAddText.setOnClickListener { addTextDialog() }
-        binding.btnAddImage.setOnClickListener { pickImage.launch(openDocument("image/*")) }
-        binding.btnAddAudio.setOnClickListener { pickAudio.launch(openDocument("audio/*")) }
-        binding.btnAddVideo.setOnClickListener { pickVideo.launch(openDocument("video/*")) }
+        binding.btnAdd.setOnClickListener { onAddClicked() }
         binding.btnSaveDuration.setOnClickListener { saveDuration() }
         refresh()
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        finish(); return true
+    private fun applyInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            binding.toolbar.updatePadding(top = bars.top)
+            binding.btnAdd.updatePadding(bottom = bars.bottom)
+            insets
+        }
     }
 
     private fun refresh() {
-        adapter.items = ReflectionSettings.library(this).items
+        val all = ReflectionSettings.library(this).items
+        adapter.items = selectedType?.let { t -> all.filter { it.type == t } } ?: all
         adapter.notifyDataSetChanged()
         binding.editDuration.setText(ReflectionSettings.durationSeconds(this).toString())
         binding.txtDurationHint.text = getString(R.string.reflection_duration_hint, ReflectionDuration.MIN_SECONDS)
     }
 
+    /** The add button adds the selected tab's type; on the "All" tab it asks which. */
+    private fun onAddClicked() {
+        when (selectedType) {
+            ReflectionType.TEXT -> addTextDialog()
+            ReflectionType.IMAGE -> pickImage.launch(openDocument("image/*"))
+            ReflectionType.AUDIO -> pickAudio.launch(openDocument("audio/*"))
+            ReflectionType.VIDEO -> pickVideo.launch(openDocument("video/*"))
+            null -> chooseTypeDialog()
+        }
+    }
+
+    private fun chooseTypeDialog() {
+        val labels = arrayOf(
+            getString(R.string.reflection_type_text), getString(R.string.reflection_type_image),
+            getString(R.string.reflection_type_audio), getString(R.string.reflection_type_video)
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.reflection_add_choose_title)
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> addTextDialog()
+                    1 -> pickImage.launch(openDocument("image/*"))
+                    2 -> pickAudio.launch(openDocument("audio/*"))
+                    3 -> pickVideo.launch(openDocument("video/*"))
+                }
+            }
+            .show()
+    }
+
     private fun openDocument(mime: String) = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
         addCategory(Intent.CATEGORY_OPENABLE)
         type = mime
-        // Ask for a grant we can persist, so the file still opens after a reboot.
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
     }
 
@@ -100,8 +159,7 @@ class ReflectionSettingsActivity : AppCompatActivity() {
             return
         }
         val clamp = ReflectionSettings.setDurationSeconds(this, requested)
-        // The 30-second floor is enforced in code (ReflectionSettings); tell the user in
-        // Arabic when a lower value was raised, rather than surfacing the English log reason.
+        // The 30-second floor is enforced in code (ReflectionSettings); show it in Arabic.
         val msg = if (clamp.adjusted) getString(R.string.reflection_duration_clamped, clamp.seconds)
         else getString(R.string.reflection_duration_saved, clamp.seconds)
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
@@ -125,15 +183,9 @@ class ReflectionSettingsActivity : AppCompatActivity() {
             val row = convertView?.let { ItemReflectionContentBinding.bind(it) }
                 ?: ItemReflectionContentBinding.inflate(LayoutInflater.from(parent.context), parent, false)
             val item = items[position]
-            row.txtType.setText(
-                when (item.type) {
-                    ReflectionType.TEXT -> R.string.reflection_type_text
-                    ReflectionType.IMAGE -> R.string.reflection_type_image
-                    ReflectionType.AUDIO -> R.string.reflection_type_audio
-                    ReflectionType.VIDEO -> R.string.reflection_type_video
-                }
-            )
+            row.txtType.setText(typeLabel(item.type))
             row.txtLabel.text = item.displayLabel()
+            bindPreview(row.imgPreview, item)
             row.btnRemove.contentDescription = getString(R.string.reflection_remove, item.displayLabel())
             row.btnRemove.setOnClickListener {
                 ReflectionSettings.remove(this@ReflectionSettingsActivity, item.id)
@@ -141,5 +193,30 @@ class ReflectionSettingsActivity : AppCompatActivity() {
             }
             return row.root
         }
+    }
+
+    /** Image items show a real thumbnail; the others show a type glyph. */
+    private fun bindPreview(img: ImageView, item: ReflectionItem) {
+        if (item.type == ReflectionType.IMAGE) {
+            img.scaleType = ImageView.ScaleType.CENTER_CROP
+            val ok = runCatching { img.setImageURI(Uri.parse(item.value)); img.drawable != null }.getOrDefault(false)
+            if (ok) return
+        }
+        img.scaleType = ImageView.ScaleType.CENTER_INSIDE
+        img.setImageResource(
+            when (item.type) {
+                ReflectionType.TEXT -> R.drawable.ic_reflection_text
+                ReflectionType.IMAGE -> R.drawable.ic_reflection_image
+                ReflectionType.AUDIO -> R.drawable.ic_reflection_audio
+                ReflectionType.VIDEO -> R.drawable.ic_reflection_video
+            }
+        )
+    }
+
+    private fun typeLabel(type: ReflectionType) = when (type) {
+        ReflectionType.TEXT -> R.string.reflection_type_text
+        ReflectionType.IMAGE -> R.string.reflection_type_image
+        ReflectionType.AUDIO -> R.string.reflection_type_audio
+        ReflectionType.VIDEO -> R.string.reflection_type_video
     }
 }
