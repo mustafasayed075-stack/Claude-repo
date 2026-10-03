@@ -39,6 +39,9 @@ class ReflectionActivity : AppCompatActivity() {
     private var lockTaskStarted = false
     private var endedNormally = false
 
+    /** Secret tap gate: the system bars stay hidden until the screen is tapped [threshold] times. */
+    private val secretUnlock = SecretTapUnlock(clock = SystemClock::elapsedRealtime)
+
     private val audioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
     private var audioFocusRequest: AudioFocusRequest? = null
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
@@ -120,8 +123,31 @@ class ReflectionActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         // Re-assert immersive full-screen whenever focus returns (e.g. after a
-        // transient system-bar swipe), so the status/nav bars don't linger.
-        if (hasFocus) hideSystemBars()
+        // transient system-bar swipe), so the status/nav bars don't linger — unless the
+        // secret tap sequence has revealed them.
+        if (hasFocus && !secretUnlock.unlocked) hideSystemBars()
+    }
+
+    /**
+     * Every screen tap counts toward the secret reveal. Until [SecretTapUnlock.threshold]
+     * taps, the bars stay hidden; the crossing tap reveals them (and the OS pin-exit
+     * gesture's affordances) and is logged. Touches still reach the content views.
+     */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        if (ev?.actionMasked == android.view.MotionEvent.ACTION_DOWN && secretUnlock.onTap()) {
+            revealSystemBars()
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun revealSystemBars() {
+        WindowInsetsControllerCompat(window, window.decorView)
+            .show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        GuardianLog.w(
+            this,
+            "Reflection Mode secret unlock: ${secretUnlock.threshold} taps reached; system bars revealed " +
+                "(the OS screen-pinning exit can now be used), detectionId=${intent.getStringExtra(EXTRA_DETECTION_ID)}."
+        )
     }
 
     private fun endNormally() {

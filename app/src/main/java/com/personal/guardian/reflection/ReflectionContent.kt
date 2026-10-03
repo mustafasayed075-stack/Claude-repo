@@ -230,6 +230,61 @@ object ReflectionMedia {
 }
 
 /**
+ * The secret unlock for Reflection Mode's hidden system bars (README "Stage 6 —
+ * Reflection Mode → Secret reveal"). While locked, the status and navigation bars are
+ * hidden and re-hidden, so the exit affordances don't show. Tapping the screen
+ * [threshold] times (default 50) reveals them. Pure logic with an injected clock, so
+ * the gate is unit-tested without Android.
+ *
+ * Taps must be in quick succession: a gap longer than [maxGapMs] resets the count (so
+ * occasional taps over a long reflection can't quietly accumulate to an unlock).
+ */
+class SecretTapUnlock(
+    val threshold: Int = DEFAULT_THRESHOLD,
+    private val maxGapMs: Long = DEFAULT_MAX_GAP_MS,
+    private val clock: () -> Long
+) {
+    init {
+        require(threshold >= 1) { "threshold must be >= 1" }
+    }
+
+    private var count = 0
+    private var lastTapMs: Long? = null
+
+    var unlocked = false
+        private set
+
+    /** Taps still needed, at the current run rate (0 once unlocked). */
+    val remaining: Int get() = if (unlocked) 0 else (threshold - count).coerceAtLeast(0)
+
+    /**
+     * Registers one tap. Returns true **only on the tap that crosses the threshold**
+     * (the unlock moment), so the caller reveals the bars and logs once. Further taps
+     * return false.
+     */
+    fun onTap(): Boolean {
+        if (unlocked) return false
+        val now = clock()
+        val last = lastTapMs
+        count = if (last != null && now - last > maxGapMs) 1 else count + 1
+        lastTapMs = now
+        if (count >= threshold) {
+            unlocked = true
+            return true
+        }
+        return false
+    }
+
+    companion object {
+        /** Secret taps to reveal the exit (owner's choice). */
+        const val DEFAULT_THRESHOLD = 50
+
+        /** A gap longer than this between taps resets the count. */
+        const val DEFAULT_MAX_GAP_MS = 3_000L
+    }
+}
+
+/**
  * The countdown for [ReflectionActivity], with an injected monotonic clock so timing
  * and the back-button rule are tested without Android.
  *

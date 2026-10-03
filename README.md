@@ -1585,6 +1585,24 @@ Mode. Screen pinning (`startLockTask`) additionally blocks the notification shad
 while pinned. Together these remove the *visible* ways out; the one that remains is
 the OS gesture below.
 
+### Secret reveal (tap to show the exit)
+
+The hidden bars only come back through a **secret gesture**: tapping the screen
+**50 times** (`SecretTapUnlock.DEFAULT_THRESHOLD`). Until then the bars are hidden and
+re-hidden on every focus change, so the status bar, the gesture pill and the shade
+handle never appear, however the user swipes. The 50th tap reveals the system bars
+and logs `Reflection Mode secret unlock: 50 taps reached …`.
+
+- Taps must be in quick succession — a gap over 3 s resets the count — so stray taps
+  during a long reflection can't quietly accumulate to a reveal.
+- The gate is pure, injected-clock logic (`SecretTapUnlock`), unit-tested: locked
+  through tap 49, unlocked exactly on tap 50, fires once, and resets after a long gap.
+- **What the reveal controls today:** the *visible affordances*. With non-Device-Owner
+  screen pinning the OS pin-exit gesture is always technically available (see below),
+  so revealing the bars is what surfaces the way out. Once the device is Device Owner,
+  the same 50-tap gate is where pinning would be made exitable (`stopLockTask`) — so
+  the gate becomes a true lock on leaving, with no change to this design.
+
 ### Logging (auditable)
 
 - `Reflection Mode shown (content=text|image|audio|video, duration=Xs), source=…, detectionId=…`

@@ -284,6 +284,63 @@ class ReflectionContentTest {
         assertTrue("abandons audio focus", src.contains("abandonAudioFocus"))
     }
 
+    // ---- secret tap-to-reveal gate ----
+
+    @Test
+    fun defaultSecretThresholdIsFiftyTaps() {
+        assertEquals(50, SecretTapUnlock.DEFAULT_THRESHOLD)
+        assertEquals(50, SecretTapUnlock(clock = { 0L }).threshold)
+    }
+
+    @Test
+    fun barsStayLockedUntilExactlyTheThresholdTap() {
+        var now = 0L
+        val gate = SecretTapUnlock(threshold = 50, clock = { now })
+        repeat(49) {
+            now += 100
+            assertFalse("tap ${it + 1} must not unlock", gate.onTap())
+            assertFalse(gate.unlocked)
+        }
+        assertEquals(1, gate.remaining)
+        now += 100
+        assertTrue("the 50th tap unlocks", gate.onTap())
+        assertTrue(gate.unlocked)
+        assertEquals(0, gate.remaining)
+    }
+
+    @Test
+    fun theUnlockMomentFiresOnceThenFurtherTapsDoNothing() {
+        var now = 0L
+        val gate = SecretTapUnlock(threshold = 3, clock = { now })
+        assertFalse(gate.onTap()); assertFalse(gate.onTap())
+        assertTrue("crossing tap", gate.onTap())
+        assertFalse("already unlocked", gate.onTap())
+        assertFalse(gate.onTap())
+        assertTrue(gate.unlocked)
+    }
+
+    @Test
+    fun aLongGapBetweenTapsResetsTheCount() {
+        var now = 0L
+        val gate = SecretTapUnlock(threshold = 3, maxGapMs = 1_000, clock = { now })
+        gate.onTap() // 1
+        now += 500; gate.onTap() // 2
+        now += 2_000 // gap too long → resets to 1
+        assertFalse(gate.onTap())
+        assertEquals("count restarted at 1", 2, gate.remaining)
+        now += 100; assertFalse(gate.onTap()) // 2
+        now += 100; assertTrue("now the third quick tap unlocks", gate.onTap())
+    }
+
+    @Test
+    fun theActivityGatesTheBarsBehindTheSecretTaps() {
+        val src = File("src/main/java/com/personal/guardian/reflection/ReflectionActivity.kt").readText()
+        assertTrue("counts taps", src.contains("SecretTapUnlock"))
+        assertTrue("taps counted on touch", src.contains("dispatchTouchEvent"))
+        assertTrue("reveal on unlock", src.contains("revealSystemBars"))
+        assertTrue("re-hide only while still locked", src.contains("!secretUnlock.unlocked"))
+    }
+
     // ---- auditable logging and lock-task wiring (source checks; the rest needs a device) ----
 
     @Test
