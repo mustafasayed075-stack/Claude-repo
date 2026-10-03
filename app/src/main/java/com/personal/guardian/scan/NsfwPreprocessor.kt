@@ -34,6 +34,32 @@ data class NsfwScores(
         Locale.US, "sexy=%.3f porn=%.3f hentai=%.3f safe=%.3f drawing=%.3f",
         sexy, porn, hentai, safe, drawing
     )
+
+    /** The highest-scoring class as (name, value) — the frame's dominant label for logs. */
+    fun top(): Pair<String, Float> = listOf(
+        "safe" to safe, "hentai" to hentai, "porn" to porn, "sexy" to sexy, "drawing" to drawing
+    ).maxByOrNull { it.second }!!
+}
+
+/**
+ * How suggestive a frame's signal is, for logging and the Stage 5 suggestive tier
+ * (README "Stage 5 — suggestive tier"):
+ *  - [EXPLICIT]: signal ≥ the explicit threshold (region 0.7) — the existing
+ *    immediate/confirmed lock path;
+ *  - [SUGGESTIVE]: signal in [suggestive threshold, explicit) — the softer tier;
+ *  - [SAFE]: below the suggestive threshold.
+ * Pure; the thresholds are passed in so sensitivity stays configurable.
+ */
+enum class NsfwLevel(val label: String) {
+    SAFE("safe"), SUGGESTIVE("suggestive"), EXPLICIT("explicit");
+
+    companion object {
+        fun of(signal: Float, suggestiveThreshold: Float, explicitThreshold: Float): NsfwLevel = when {
+            signal >= explicitThreshold -> EXPLICIT
+            signal >= suggestiveThreshold -> SUGGESTIVE
+            else -> SAFE
+        }
+    }
 }
 
 /**

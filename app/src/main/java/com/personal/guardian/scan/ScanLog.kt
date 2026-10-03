@@ -27,16 +27,33 @@ object ScanLog {
         positives: Int,
         required: Int,
         regions: String? = null,
-        signal: Float = scores.signal
+        signal: Float = scores.signal,
+        /** safe / suggestive / explicit for this frame (see [NsfwLevel]); null to omit. */
+        level: String? = null,
+        /** Fast-scan membership of the foreground app (e.g. "text+image", "no"); null to omit. */
+        fastScan: String? = null
     ): String {
         val cmp = if (signal >= threshold) ">=" else "<"
-        return String.format(
-            Locale.US,
-            "Scan frame: signal=%.4f [%s %.2f] %s trigger=%s app=%s positives=%d/%d",
-            signal, cmp, threshold, scores.breakdown(), source.label,
-            foregroundPackage ?: "unknown", positives, required
-        ) + (regions?.let { " regions=$it" } ?: "")
+        val (topName, topVal) = scores.top()
+        val head = String.format(
+            Locale.US, "Scan frame: signal=%.4f [%s %.2f] top=%s %.3f", signal, cmp, threshold, topName, topVal
+        )
+        val mid = (level?.let { " level=$it" } ?: "") + (fastScan?.let { " fast=$it" } ?: "")
+        val tail = String.format(
+            Locale.US, " %s trigger=%s app=%s positives=%d/%d",
+            scores.breakdown(), source.label, foregroundPackage ?: "unknown", positives, required
+        )
+        return head + mid + tail + (regions?.let { " regions=$it" } ?: "")
     }
+
+    /**
+     * One line for a capture that produced no usable frame — a failure (screenshot
+     * error, incl. secure window) or a blank/near-black frame — with the app and its
+     * fast-scan membership, e.g.
+     * `Scan capture: FAILED (secure window …) app=org.telegram.messenger fast=text+image`.
+     */
+    fun captureIssueLine(issue: String, foregroundPackage: String?, fastScan: String? = null): String =
+        "Scan capture: $issue app=${foregroundPackage ?: "unknown"}" + (fastScan?.let { " fast=$it" } ?: "")
 
     /**
      * Compact per-capture region summary: count, and each region's signal, kind and

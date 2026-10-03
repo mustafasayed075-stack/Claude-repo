@@ -327,9 +327,12 @@ class GuardianAccessibilityService : AccessibilityService() {
 
             override fun onFailure(errorCode: Int) {
                 captureInFlight = false
+                val pkg = scheduler.foregroundPackage
                 logFailureRateLimited(
                     "screenshot-$errorCode",
-                    "Screen scan: takeScreenshot failed (${screenshotErrorName(errorCode)}); skipping frame.",
+                    ScanLog.captureIssueLine(
+                        "FAILED (${screenshotErrorName(errorCode)})", pkg, fastScanLabel(pkg)
+                    ),
                     null
                 )
                 // A secure / screenshot-protected window: Guardian can't read the screen.
@@ -372,16 +375,25 @@ class GuardianAccessibilityService : AccessibilityService() {
             if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
                 // TEMPORARY calibration logging (see ScanConfig.LOG_EVERY_FRAME_SCORE).
                 val positives = if (confirmation != null) confirmer.requiredPositives else confirmer.pendingPositives
+                val pkg = scheduler.foregroundPackage
+                val level = NsfwLevel.of(verdict.score, ScanConfig.SUGGESTIVE_THRESHOLD_NORMAL, ScanConfig.REGION_THRESHOLD)
                 GuardianLog.i(
                     applicationContext,
                     ScanLog.frameLine(
                         verdict.scores,
                         if (verdict.region != null) ScanConfig.REGION_THRESHOLD else confirmer.threshold,
-                        source, scheduler.foregroundPackage, positives, confirmer.requiredPositives,
+                        source, pkg, positives, confirmer.requiredPositives,
                         if (ScanConfig.REGION_SCAN_ENABLED) ScanLog.regionSummary(regions.scores) else null,
-                        signal = verdict.score
+                        signal = verdict.score,
+                        level = level.label,
+                        fastScan = fastScanLabel(pkg)
                     )
                 )
+                // A blank / near-black whole frame (black media-viewer background, secure
+                // render): worth a distinct line, since its signal reads ~0.
+                if (regionContent(frame) != RegionContent.Verdict.OK) {
+                    GuardianLog.i(applicationContext, ScanLog.captureIssueLine("BLANK frame", pkg, fastScanLabel(pkg)))
+                }
             }
             if (confirmation != null) onConfirmed(confirmation, frame, verdict)
             // Stage 5: a borderline text match waiting for an image check (after the
@@ -580,6 +592,18 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     /** Acts on what the lock controller decided (worker thread). */
+    /** Fast-scan membership of [pkg] for the log: "text+image", "text", "image", "off" or "no". */
+    private fun fastScanLabel(pkg: String?): String {
+        if (pkg == null) return "unknown"
+        val app = FastScanSettings.get(this)[pkg] ?: return "no"
+        return when {
+            app.text && app.image -> "text+image"
+            app.text -> "text"
+            app.image -> "image"
+            else -> "off"
+        }
+    }
+
     /** A frame Guardian could read — drives the blind-spot escalation reset (worker thread). */
     private fun onReadableFrame() {
         if (blindSpot.onVisible() is BlindSpotPolicy.Outcome.LevelReset) {

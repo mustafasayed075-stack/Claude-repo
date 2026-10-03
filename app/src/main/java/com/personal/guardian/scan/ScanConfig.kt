@@ -125,6 +125,20 @@ object ScanConfig {
      */
     const val REGION_THRESHOLD = 0.7f
 
+    /**
+     * Suggestive tier (README "Stage 5 — suggestive tier"): a region/frame whose signal
+     * is at or above one of these but below the explicit [REGION_THRESHOLD] (0.7) counts
+     * as *suggestive* — two suggestive frames within [SUGGESTIVE_WINDOW_MS] lock, one
+     * alone does not. The value in use depends on the owner's sensitivity setting
+     * (normal vs high); the explicit immediate/confirmed path is unchanged.
+     */
+    const val SUGGESTIVE_THRESHOLD_NORMAL = 0.45f
+    const val SUGGESTIVE_THRESHOLD_HIGH = 0.30f
+
+    /** Two suggestive frames within this window lock. */
+    const val SUGGESTIVE_WINDOW_MS = 3_000L
+    const val SUGGESTIVE_COUNT = 2
+
     /** At most this many regions classified per capture: the largest qualifying ones. */
     const val REGION_MAX_PER_CAPTURE = 3
 
