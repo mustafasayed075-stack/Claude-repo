@@ -172,6 +172,16 @@ object ScanConfig {
      */
     const val TEXT_CHECK_DEBOUNCE_MS = 750L
 
+    /**
+     * TEMPORARY diagnostics for text-field detection (README "Text fields"): for every
+     * content-change or text-changed event from a text field in a text-scanned app,
+     * log whether it scheduled a check or was debounced into a pending one, and for
+     * each check that includes such events, what was read and whether it matched.
+     * Lengths only, never the typed text. Roughly one line per keystroke while typing
+     * in a listed app; set to false once field detection is confirmed on-device.
+     */
+    const val LOG_TEXT_FIELD_EVENTS = true
+
     /** Upper bounds per text check, so a huge web page can't stall the scanner. */
     const val TEXT_MAX_NODES = 2_000
     const val TEXT_MAX_CHARS = 50_000
@@ -184,6 +194,33 @@ object ScanConfig {
 
     /** Characters of context kept either side of a match in the review-log snippet. */
     const val TEXT_SNIPPET_RADIUS = 40
+
+    // ---- Stage 5: lock (README "Stage 5 — lock") ----
+
+    /** Lock the device on confirmed detections (needs device admin; skipped with a warning otherwise). */
+    const val LOCK_ENABLED = true
+
+    /**
+     * How long a lock lasts: an unlock (ACTION_USER_PRESENT) before this has elapsed
+     * locks again at once. 10 s for the test phase.
+     */
+    const val LOCK_DURATION_MS = 10_000L
+
+    /**
+     * A borderline-only text detection locks only if an image check of the screen
+     * (whole screen + regions, existing thresholds) is positive within this window;
+     * captures run every [MIN_CAPTURE_GAP_MS] meanwhile. The device stays usable.
+     */
+    const val CORROBORATION_WINDOW_MS = 3_000L
+
+    /**
+     * Also lock on a confirmed detection the same-content cooldown keeps from the
+     * notifications (a repeat within [DETECTION_COOLDOWN_MS] / [TEXT_COOLDOWN_MS]; for text,
+     * explicit tier only — a borderline repeat does not reopen corroboration):
+     * otherwise, after a 10 s lock, the same content could stay on screen for the rest
+     * of the minute. Repeats still get no notification, log entry or review entry.
+     */
+    const val LOCK_ON_SUPPRESSED_REPEATS = true
 
     /**
      * Bundled TFLite model: viddexa/nsfw-detection-2-nano (EfficientNet-B0, 5 classes,

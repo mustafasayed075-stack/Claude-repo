@@ -19,6 +19,7 @@ import com.personal.guardian.databinding.ActivityMainBinding
 import com.personal.guardian.scan.DetectionStore
 import com.personal.guardian.scan.FastScanSettings
 import com.personal.guardian.scan.GuardianAccessibilityService
+import com.personal.guardian.scan.ScanConfig
 import com.personal.guardian.scan.ScanStatus
 import com.personal.guardian.service.GuardianForegroundService
 import com.personal.guardian.util.GuardianLog
@@ -236,6 +237,22 @@ class MainActivity : AppCompatActivity() {
                 ScanStatus.textSuppressedCount
             )
             else -> getString(R.string.status_text_scan_inactive)
+        }
+
+        // Stage 5: lock.
+        binding.txtLockStatus.text = when {
+            !ScanConfig.LOCK_ENABLED -> getString(R.string.status_lock_disabled)
+            !GuardianDeviceAdminReceiver.isAdminActive(this) ->
+                getString(R.string.status_lock_no_admin, ScanStatus.lockSkippedCount)
+            else -> getString(
+                R.string.status_lock_armed,
+                ScanConfig.LOCK_DURATION_MS / 1000,
+                ScanStatus.lockCount,
+                ScanStatus.relockCount,
+                ScanStatus.lastLockSource?.let {
+                    "${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(ScanStatus.lastLockAtMs))} ($it)"
+                } ?: getString(R.string.status_lock_none)
+            )
         }
 
         val fastScan = FastScanSettings.get(this)

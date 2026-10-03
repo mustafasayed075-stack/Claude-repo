@@ -4,12 +4,17 @@
      Stage 4: window-content-changed events trigger text checks in watched apps;
      canRetrieveWindowContent lets the service read the active window's node tree
      (text and content descriptions), and flagIncludeNotImportantViews includes text
-     nodes that apps mark "not important for accessibility" (common in web content). -->
+     nodes that apps mark "not important for accessibility" (common in web content).
+     typeViewTextChanged: typing into a text field (a chat or comment composer) sends
+     this, often with no window-content change, and carries the field's live text.
+     flagRetrieveInteractiveWindows lets the text check read every on-screen window of
+     the app (getWindows()), not just the active one, which is the keyboard while the
+     user is touching it, or misses a composer shown in its own dialog window. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewTextChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews"
+    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
     android:description="@string/accessibility_service_description"

@@ -11,7 +11,11 @@
 #   forms, leetspeak, repeated/spaced/masked letters and affixes are handled by
 #   the matcher.
 
-# --- LDNOOBW en (kept 334 of 403; 65 with context rules) ---
+# Tiers: entries are EXPLICIT (a text detection locks at once) unless inside an
+#   '@tier borderline' block (locks only if an image check corroborates it); '@tier
+#   explicit' ends the block.
+
+# --- LDNOOBW en (kept 334 of 403; 65 with context rules; 2 listed under the borderline tier below) ---
 2g1c
 2 girls 1 cup
 acrotomophilia
@@ -67,7 +71,6 @@ bukkake
 bullet vibe
 bung hole
 bunghole
-busty
 butt ~ kick kicked kicking cigarette cigarettes rifle gun joke jokes heads head dress dresses top tops shirt blouse skirt jeans pants trousers leggings shorts bra bras fit fits fitting fitted size sizes sizing petite xs xl material fabric cotton color colour colors shade wash washed washing laundry dryer pack pair pairs ordered returned store purchase bought neckline waist waistband hem length stretch coverage cover covers covered comfortable swimsuit suit bikini bottoms flattering sweater cardigan jacket coat romper jumpsuit tunic underwear lines cup cups padding padded lined support strapless thong thighs sagging photo model doctor doctors dr physician urologist gynecologist gynaecologist dermatologist obgyn gp clinic hospital medical medically medicine medication medications meds treatment treatments treat treated ointment antibiotic antibiotics antifungal infection infections infected yeast uti std stds sti stis hpv herpes chlamydia gonorrhea syphilis wart warts rash itch itching itchy irritation swelling lump lumps bump bumps pimple pimples cyst cysts cancer tumor tumour biopsy ultrasound test tests tested scan exam examination checkup symptom symptoms diagnosis diagnosed disease condition surgery surgical circumcision circumcised pain painful ache aching sore sores ulcer ulcers lesion lesions discharge bleeding redness burning fungal bacterial viral vaccine smear hernia varicocele hydrocele phimosis balanitis vaginitis vaginosis thrush cervix cervical uterus ovary ovaries ovarian bladder kidney prostate urine urinate urination urinating hormone hormones testosterone estrogen period periods menstrual menstruation pregnancy pregnant fertility infertility sperm hygiene anatomy patient
 buttcheeks
 butthole
@@ -266,7 +269,6 @@ semen
 sex ~ opposite same gender other bias assault offender offenders offence offense discrimination education trafficking
 sexcam
 sexo
-sexy
 sexual ~ harassment assault abuse violence health education orientation identity reproductive transmitted crimes crime misconduct allegations rights minorities humiliation
 sexually ~ harassed assaulted abused transmitted active explicit
 sexuality ~ education identity orientation gender rights human
@@ -657,6 +659,13 @@ adult toys ~ lego puzzle puzzles board game games collectible collectibles figur
 منشطات جنسيه ~ طبيب طبيبه دكتور دكتوره الطبيب الدكتور استشاري اخصائي مستشفي عياده كشف فحص فحوصات تحليل تحاليل اشعه سونار منظار علاج دواء ادويه مرهم مضاد التهاب التهابات عدوي فطريات فطري بكتيريا ميكروب افرازات افراز حكه هرش الم الام وجع اوجاع تورم ورم اورام انتفاخ نزيف حبوب بثور قرحه تقرحات اعراض تشخيص مرض امراض جراحه جراحيه عمليه ختان طهاره دوالي البروستاتا بروستاتا مثانه البول التبول الحمل الدوره الحيض الطمث التبويض الولاده العقم الخصوبه هرمون هرمونات تستوستيرون سرطان ثاليل ثالول هربس زهري سيلان الصحه طبي طبيه نظافه تشوه خلقي ضعف انتصاب منويه رضاعه ماموجرام استشاره المريض القذف اضرار اضراره ضبط مصادره مغشوشه مجهوله المصدر هيئه الدواء وزاره
 ?=هزاز
 
+# ===== BORDERLINE TIER: a text detection made only of these needs image corroboration =====
+@tier borderline
+
+# --- LDNOOBW en: standalone adjectives with an everyday sense (2) ---
+busty
+sexy
+
 # --- English: borderline clothing + aids, added by owner decision (unconditional) (14) ---
 lingerie
 thong
@@ -682,6 +691,9 @@ spanish fly
 ملابس فاضحه
 مزلق
 جل مزلق
+
+@tier explicit
+# ===== end of borderline tier =====
 
 # --- Glued compounds (4 rules): every front + back is an entry (then affixes) ---
 @fuse كس طيز > ام م اخت خت خالت عمت مرات ست اهل ابو دين عرض

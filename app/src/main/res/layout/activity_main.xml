@@ -66,6 +66,13 @@
             android:textSize="12sp" />
 
         <TextView
+            android:id="@+id/txtLockStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:textSize="12sp" />
+
+        <TextView
             android:id="@+id/txtFastScanStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

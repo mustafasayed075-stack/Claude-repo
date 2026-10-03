@@ -53,6 +53,12 @@
     <string name="status_notifications_off">Notifications are off for Guardian: detection alerts will not be shown.</string>
     <string name="btn_open_accessibility">Open Accessibility settings</string>
 
+    <!-- Stage 5: lock -->
+    <string name="status_lock_armed">Lock: Armed (device admin active) · %1$d s per lock · locks: %2$d · re-locks after unlock: %3$d · last: %4$s</string>
+    <string name="status_lock_no_admin">Lock: OFF — device admin not active. Press \"Activate device admin\" to enable locking (detections are still logged and notified; locks skipped: %1$d).</string>
+    <string name="status_lock_disabled">Lock: disabled in this build (LOCK_ENABLED = false)</string>
+    <string name="status_lock_none">none yet</string>
+
     <!-- Fast Scan Apps (replaces the hard-coded watched-apps list) -->
     <string name="btn_fast_scan_apps">Fast Scan Apps</string>
     <string name="status_fast_scan_apps">Fast Scan Apps: %1$d (text: %2$d, image: %3$d)</string>

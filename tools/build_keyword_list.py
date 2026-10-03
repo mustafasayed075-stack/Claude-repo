@@ -402,6 +402,14 @@ OWNER_AIDS_EN = {
     "aphrodisiac": "food writing (oysters, chocolate) and folklore",
     "spanish fly": "a beetle; folklore",
 }
+# Tiers (README "Stage 5 — lock"): everything is the EXPLICIT tier (locks at once)
+# except the owner-added borderline items above and below, plus two standalone
+# LDNOOBW adjectives with an everyday sense. BORDERLINE matches lock only when an
+# on-screen image check corroborates them. The list file marks them with `@tier`.
+BORDERLINE_LDNOOBW_EN = {
+    "sexy": "everyday compliment ('sexy car', 'sexy voice'), fashion copy",
+    "busty": "body-shape / bra-fit talk in clothing reviews",
+}
 OWNER_AIDS_AR = {
     "مزلق": "railway crossing (مزلقان is not matched), playground slide, ramp; medical gel",
     "جل مزلق": "medical lubricating gel",
@@ -482,6 +490,7 @@ def main():
     assert ar_excluded <= set(ar), f"exclusions not in LDNOOBW ar: {sorted(ar_excluded - set(ar))}"
 
     en_kept = [w for w in en if w not in en_excluded]
+    assert set(BORDERLINE_LDNOOBW_EN) <= set(en_kept), "borderline LDNOOBW terms must be kept entries"
     ar_kept = [w for w in ar if w not in ar_excluded]
     en_extra = [w for w in EN_EXTRA if w not in en_kept]
     seen = set(ar_kept)
@@ -503,6 +512,7 @@ def main():
         extend(AR_CONTEXT, t, c)
     sections = []
     listed = set(en_kept + en_extra + ar_kept + ar_extra)
+    borderline_titles = set()
     for title, rules in [("English: genitals / private areas", EN_ANATOMY),
                          ("Arabic: genitals / private areas", AR_ANATOMY),
                          ("English: adult clothing", EN_CLOTHING),
@@ -513,6 +523,8 @@ def main():
                           dict.fromkeys([*OWNER_CLOTHING_EN, *OWNER_AIDS_EN], "")),
                          ("Arabic: borderline clothing + aids, added by owner decision (unconditional)",
                           dict.fromkeys([*OWNER_CLOTHING_AR, *OWNER_AIDS_AR], ""))]:
+        if "borderline" in title:
+            borderline_titles.add(title)
         target = EN_CONTEXT if not any("\u0600" <= ch <= "\u06ff" for ch in title + "".join(rules)) else AR_CONTEXT
         terms = []
         for t, c in rules.items():
@@ -543,8 +555,13 @@ def main():
         "#   forms, leetspeak, repeated/spaced/masked letters and affixes are handled by",
         "#   the matcher.",
         "",
-        f"# --- LDNOOBW en (kept {len(en_kept)} of {len(en)}; {sum(t in EN_CONTEXT for t in en_kept)} with context rules) ---",
-        *[ctx(w, EN_CONTEXT) for w in en_kept],
+        "# Tiers: entries are EXPLICIT (a text detection locks at once) unless inside an",
+        "#   '@tier borderline' block (locks only if an image check corroborates it); '@tier",
+        "#   explicit' ends the block.",
+        "",
+        f"# --- LDNOOBW en (kept {len(en_kept)} of {len(en)}; {sum(t in EN_CONTEXT for t in en_kept)} with context rules; "
+        f"{len(BORDERLINE_LDNOOBW_EN)} listed under the borderline tier below) ---",
+        *[ctx(w, EN_CONTEXT) for w in en_kept if w not in BORDERLINE_LDNOOBW_EN],
         "",
         f"# --- LDNOOBW ar (kept {len(ar_kept)} of {len(ar)}; {sum(t in AR_CONTEXT for t in ar_kept)} with context rules) ---",
         *[ctx(w, AR_CONTEXT) for w in ar_kept],
@@ -555,8 +572,19 @@ def main():
         f"# --- Additions: Egyptian Arabic + Franco-Arabic ({len(ar_extra)}) ---",
         *[ctx(w, AR_CONTEXT) for w in ar_extra],
         "",
-        *[l for title, terms, rules in sections for l in
+        *[l for title, terms, rules in sections if title not in borderline_titles for l in
           ["", f"# --- {title} ({len(terms)}) ---", *[ctx(w, rules) for w in terms]]],
+        "",
+        "# ===== BORDERLINE TIER: a text detection made only of these needs image corroboration =====",
+        "@tier borderline",
+        "",
+        f"# --- LDNOOBW en: standalone adjectives with an everyday sense ({len(BORDERLINE_LDNOOBW_EN)}) ---",
+        *[ctx(w, EN_CONTEXT) for w in en_kept if w in BORDERLINE_LDNOOBW_EN],
+        *[l for title, terms, rules in sections if title in borderline_titles for l in
+          ["", f"# --- {title} ({len(terms)}) ---", *[ctx(w, rules) for w in terms]]],
+        "",
+        "@tier explicit",
+        "# ===== end of borderline tier =====",
         "",
         f"# --- Glued compounds ({len(FUSE)} rules): every front + back is an entry (then affixes) ---",
         *[f"@fuse {f}" for f in FUSE],

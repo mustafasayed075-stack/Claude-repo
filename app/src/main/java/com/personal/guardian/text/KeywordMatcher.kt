@@ -30,6 +30,10 @@ import java.io.BufferedReader
  *  - `!word` — an exception: an innocent word that must never match, even if it looks
  *    like an entry plus affixes (e.g. "زبون" customer); it also applies behind an
  *    Arabic prefix.
+ *  - `@tier borderline` / `@tier explicit` — the [KeywordTier] of the entries that
+ *    follow (including `@root`/`@fuse` forms), until the next `@tier` line. Entries
+ *    are [KeywordTier.EXPLICIT] by default. Stage 5 locks at once on an explicit
+ *    detection; a borderline-only one needs an image check to corroborate it.
  * Entries are normalised with [TextNormalizer], so they can be written in any
  * case/letter form.
  */
@@ -50,7 +54,9 @@ class KeywordList private constructor(
         /** Arabic noun-mode: noun affixes only (see `=word` in the file format). */
         val nounOnly: Boolean = false,
         /** Corroboration-only (see `?word` in the file format). */
-        val weak: Boolean = false
+        val weak: Boolean = false,
+        /** Lock tier (see `@tier` in the file format). */
+        val tier: KeywordTier = KeywordTier.EXPLICIT
     ) {
         /** True if this entry can be suppressed by context (companions or corroboration-only). */
         val hasContextRule: Boolean get() = companions.isNotEmpty() || weak
@@ -63,10 +69,15 @@ class KeywordList private constructor(
             val explicit = LinkedHashMap<List<String>, Entry>()
             val generated = LinkedHashMap<List<String>, Entry>()
             val exceptions = HashSet<String>()
+            var tier = KeywordTier.EXPLICIT
             for (rawLine in lines) {
                 val line = rawLine.substringBefore('#').trim()
                 if (line.isEmpty()) continue
                 when {
+                    line.startsWith("@tier") -> {
+                        val name = line.removePrefix("@tier").trim()
+                        tier = KeywordTier.fromLabel(name) ?: throw IllegalArgumentException("unknown tier: $rawLine")
+                    }
                     line.startsWith("!") ->
                         TextNormalizer.tokenize(line.substring(1)).forEach { exceptions += it.raw }
                     line.startsWith("@fuse") -> {
@@ -79,7 +90,7 @@ class KeywordList private constructor(
                         val backs = words(sides[1])
                         for (form in fuse(fronts, backs)) {
                             val tokens = listOf(form)
-                            if (tokens !in generated) generated[tokens] = Entry(form, tokens, companions, "fuse " + sides[0].trim())
+                            if (tokens !in generated) generated[tokens] = Entry(form, tokens, companions, "fuse " + sides[0].trim(), tier = tier)
                         }
                     }
                     line.startsWith("@root") -> {
@@ -89,7 +100,7 @@ class KeywordList private constructor(
                         val rootLabel = "root " + letters.joinToString(" ")
                         for (form in ArabicMorphology.derive(letters)) {
                             val tokens = listOf(form)
-                            if (tokens !in generated) generated[tokens] = Entry(form, tokens, companions, rootLabel)
+                            if (tokens !in generated) generated[tokens] = Entry(form, tokens, companions, rootLabel, tier = tier)
                         }
                     }
                     else -> {
@@ -99,7 +110,7 @@ class KeywordList private constructor(
                         val (head, companions) = splitContext(rest.removePrefix("="))
                         val tokens = TextNormalizer.tokenize(head).map { it.raw }
                         if (tokens.isNotEmpty()) {
-                            if (tokens !in explicit) explicit[tokens] = Entry(head.trim(), tokens, companions, nounOnly = nounOnly, weak = weak)
+                            if (tokens !in explicit) explicit[tokens] = Entry(head.trim(), tokens, companions, nounOnly = nounOnly, weak = weak, tier = tier)
                         }
                     }
                 }
@@ -165,7 +176,11 @@ class KeywordMatcher(private val list: KeywordList) {
         val start: Int,
         val end: Int,
         val matchedText: String,
-        val suppressedBy: String? = null
+        val suppressedBy: String? = null,
+        /** The entry's lock tier. */
+        val tier: KeywordTier = KeywordTier.EXPLICIT,
+        /** The entry is corroboration-only (`?word`): it never decides a detection's tier. */
+        val corroborationOnly: Boolean = false
     )
 
     val entryCount: Int get() = list.entries.size
@@ -223,10 +238,18 @@ class KeywordMatcher(private val list: KeywordList) {
             if (others.any { o -> o.i >= r.i + r.n || o.i + o.n <= r.i }) r.suppressedBy = null
         }
 
+        // Tier: where an entry matches a word exactly, other entries that reach the same
+        // words only through affixes take its tier ("sexy" is the borderline entry
+        // itself, not explicit "sex" + y). Which matches are reported is unchanged.
+        fun exact(r: Raw) = r.entry.tokens.last() in tokens[r.i + r.n - 1].forms
+        val exactTier = raws.filter { exact(it) }.groupBy { it.i to it.n }
+            .mapValues { (_, rs) -> if (rs.any { it.entry.tier == KeywordTier.EXPLICIT }) KeywordTier.EXPLICIT else KeywordTier.BORDERLINE }
+
         return raws.sortedBy { it.i }.map { r ->
             val start = tokens[r.i].start
             val end = tokens[r.i + r.n - 1].end
-            Match(r.entry.term, start, end, s.substring(start, end), r.suppressedBy)
+            val tier = if (exact(r)) r.entry.tier else exactTier[r.i to r.n] ?: r.entry.tier
+            Match(r.entry.term, start, end, s.substring(start, end), r.suppressedBy, tier, r.entry.weak)
         }.distinctBy { it.term to it.start }
     }
 
@@ -539,5 +562,31 @@ object TextSnippet {
         val body = text.substring(from, to).replace(Regex("\\s+"), " ").trim()
         val clipped = if (body.length > maxLength) body.take(maxLength) else body
         return (if (from > 0) "…" else "") + clipped + (if (to < text.length) "…" else "")
+    }
+}
+
+/**
+ * Lock tier of a keyword entry and of a text detection (Stage 5, README "Stage 5 —
+ * lock"):
+ *  - [EXPLICIT]: the core, unambiguous vocabulary — a detection locks at once;
+ *  - [BORDERLINE]: terms added for maximum sensitivity whose ordinary sense is
+ *    expected to cause false positives (lingerie, thong, lube, standalone "sexy"…) —
+ *    a detection made only of these locks only if an image check of the screen
+ *    corroborates it within the corroboration window.
+ */
+enum class KeywordTier(val label: String) {
+    EXPLICIT("explicit"),
+    BORDERLINE("borderline");
+
+    companion object {
+        fun fromLabel(label: String): KeywordTier? = values().firstOrNull { it.label == label }
+
+        /**
+         * Tier of a detection made of [matches]: [EXPLICIT] if any explicit-tier match
+         * is not corroboration-only, else [BORDERLINE]. A corroboration-only match
+         * (`?word`) only counts next to another term, so that term decides.
+         */
+        fun of(matches: List<KeywordMatcher.Match>): KeywordTier =
+            if (matches.any { it.tier == EXPLICIT && !it.corroborationOnly }) EXPLICIT else BORDERLINE
     }
 }

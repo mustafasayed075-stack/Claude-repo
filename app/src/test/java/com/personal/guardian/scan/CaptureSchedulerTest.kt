@@ -30,6 +30,24 @@ class CaptureSchedulerTest {
     }
 
     @Test
+    fun corroborationCapturesAtTheMinimumGapUntilTheDeadline() {
+        val s = scheduler()
+        s.onForegroundChanged("com.example.shop") // not a fast app: baseline 7 s
+        s.onCaptured(10_000)
+        assertEquals("next capture as soon as the platform allows", 0, s.delayForImmediateCapture(11_000))
+        assertEquals(500, s.delayForImmediateCapture(10_500))
+        s.corroborateUntil(13_000)
+        assertEquals(TriggerSource.CORROBORATION, s.sourceAt(10_500))
+        assertEquals(500, s.delayUntilNextCapture(10_500))
+        s.onCaptured(11_000)
+        assertEquals(1_000, s.delayUntilNextCapture(11_000))
+        // After the deadline: back to the baseline rate and source.
+        assertFalse(s.isCorroborating(13_000))
+        assertEquals(TriggerSource.PERIODIC, s.sourceAt(13_000))
+        assertEquals(5_000, s.delayUntilNextCapture(13_000))
+    }
+
+    @Test
     fun withoutAListNoAppGetsFastCapture() {
         val s = CaptureScheduler()
         s.onForegroundChanged("com.whatsapp")

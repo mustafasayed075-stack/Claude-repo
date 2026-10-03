@@ -4,7 +4,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import com.personal.guardian.text.KeywordTier
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * What caused a detection: the baseline capture timer, fast-mode capture for a
@@ -14,6 +16,8 @@ enum class TriggerSource(val label: String) {
     PERIODIC("periodic"),
     EVENT("event"),
     TEXT("text"),
+    /** Stage 5: an image check made to corroborate a borderline text match. */
+    CORROBORATION("corroboration"),
 }
 
 /** Which detection path produced an event. */
@@ -55,11 +59,24 @@ data class DetectionEvent(
      * Image detections from region scanning: the on-screen element that scored
      * (e.g. `image 540x540@480,900 (ImageView)`); null when the whole screen did.
      */
-    val region: String? = null
+    val region: String? = null,
+    /** Text detections: lock tier — explicit (locks now) or borderline (needs image corroboration). */
+    val textTier: KeywordTier? = null,
+    /** Unique id, also in the LOCK log line, linking the event log to the review log. */
+    val id: String = newId(kind, timestampMs)
 ) {
+    companion object {
+        private val sequence = AtomicLong()
+
+        /** e.g. `image-1730000000000-3`: kind, wall-clock time, per-process sequence. */
+        fun newId(kind: DetectionKind, timestampMs: Long): String =
+            "${kind.label}-$timestampMs-${sequence.incrementAndGet()}"
+    }
+
     /** One JSON object per line for the local review log (no Android JSON dependency). */
     fun toJsonLine(): String = buildString {
-        append("{\"timestamp\":").append(timestampMs)
+        append("{\"id\":").append(jsonString(id))
+        append(",\"timestamp\":").append(timestampMs)
         append(",\"time\":\"").append(isoUtc(timestampMs)).append('"')
         append(",\"confidence\":").append(num(confidence))
         append(",\"kind\":\"").append(kind.label).append('"')
@@ -69,6 +86,7 @@ data class DetectionEvent(
         if (kind == DetectionKind.TEXT) {
             append(",\"terms\":[").append(matchedTerms.joinToString(",") { jsonString(it) }).append(']')
             append(",\"snippet\":").append(jsonString(textSnippet))
+            textTier?.let { append(",\"tier\":\"").append(it.label).append('"') }
         }
         region?.let { append(",\"region\":").append(jsonString(it)) }
         classScores?.let { s ->

@@ -11,6 +11,10 @@ package com.personal.guardian.scan
  *    ([FastScanList.imagePackages]) and can change while running
  *    ([updateWatchedPackages]). The baseline capture runs for every app, listed or not.
  *
+ *  - Corroboration (Stage 5): until [corroborateUntil]'s deadline, one capture
+ *    every [minCaptureGapMs], so a borderline text match gets image checks of the
+ *    screen as fast as the platform allows.
+ *
  * Foreground changes come from accessibility window-state events. Windows from
  * [overlayPackages] (system UI, keyboards) are drawn over the real app, so their
  * events are ignored rather than treated as the app leaving the foreground.
@@ -61,6 +65,23 @@ class CaptureScheduler(
     val currentSource: TriggerSource get() = if (isFastMode) TriggerSource.EVENT else TriggerSource.PERIODIC
 
     private var lastCaptureAtMs: Long? = null
+    private var corroborateUntilMs = Long.MIN_VALUE
+
+    /** Captures at the fastest allowed rate until [deadlineMs] (a borderline text match). */
+    fun corroborateUntil(deadlineMs: Long) {
+        corroborateUntilMs = deadlineMs
+    }
+
+    fun isCorroborating(nowMs: Long): Boolean = nowMs < corroborateUntilMs
+
+    /** Trigger source of a capture taken at [nowMs]. */
+    fun sourceAt(nowMs: Long): TriggerSource = if (isCorroborating(nowMs)) TriggerSource.CORROBORATION else currentSource
+
+    /** Delay until a capture may be taken as soon as possible (only the platform's minimum gap). */
+    fun delayForImmediateCapture(nowMs: Long): Long {
+        val last = lastCaptureAtMs ?: return 0
+        return (last + minCaptureGapMs - nowMs).coerceAtLeast(0)
+    }
 
     /**
      * Records a window-state change to [pkg]. Returns true if this switched between
@@ -82,7 +103,8 @@ class CaptureScheduler(
     /** Delay from [nowMs] until the next capture is due at the current rate. */
     fun delayUntilNextCapture(nowMs: Long): Long {
         val last = lastCaptureAtMs ?: return 0
-        return (last + currentIntervalMs - nowMs).coerceAtLeast(0)
+        val interval = if (isCorroborating(nowMs)) minCaptureGapMs else currentIntervalMs
+        return (last + interval - nowMs).coerceAtLeast(0)
     }
 
     /**
@@ -92,7 +114,6 @@ class CaptureScheduler(
      */
     fun delayAfterModeChange(nowMs: Long): Long {
         if (!isFastMode) return delayUntilNextCapture(nowMs)
-        val last = lastCaptureAtMs ?: return 0
-        return (last + minCaptureGapMs - nowMs).coerceAtLeast(0)
+        return delayForImmediateCapture(nowMs)
     }
 }

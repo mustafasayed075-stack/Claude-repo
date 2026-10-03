@@ -1,5 +1,6 @@
 package com.personal.guardian.scan
 
+import com.personal.guardian.text.KeywordTier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -18,13 +19,14 @@ class DetectionEventTest {
         confidence = 0.93456f,
         source = TriggerSource.EVENT,
         foregroundPackage = "com.whatsapp",
-        thumbnailFile = "detection-1790000000123.jpg"
+        thumbnailFile = "detection-1790000000123.jpg",
+        id = "image-1790000000123-1"
     )
 
     @Test
     fun metadataLineHasTimestampConfidenceAndTrigger() {
         assertEquals(
-            "{\"timestamp\":1790000000123,\"time\":\"2026-09-21T14:13:20.123Z\",\"confidence\":0.9346," +
+            "{\"id\":\"image-1790000000123-1\",\"timestamp\":1790000000123,\"time\":\"2026-09-21T14:13:20.123Z\",\"confidence\":0.9346," +
                 "\"kind\":\"image\",\"trigger\":\"event\",\"foreground\":\"com.whatsapp\",\"thumbnail\":\"detection-1790000000123.jpg\"}",
             event.toJsonLine()
         )
@@ -54,11 +56,23 @@ class DetectionEventTest {
             thumbnailFile = null,
             kind = DetectionKind.TEXT,
             matchedTerms = listOf("send nudes", "horny"),
-            textSnippet = "hey \"you\" send nudes"
+            textSnippet = "hey \"you\" send nudes",
+            textTier = KeywordTier.EXPLICIT
         ).toJsonLine()
         assertTrue(text, text.contains("\"kind\":\"text\",\"trigger\":\"text\""))
         assertTrue(text, text.contains("\"thumbnail\":null"))
-        assertTrue(text, text.endsWith("\"terms\":[\"send nudes\",\"horny\"],\"snippet\":\"hey \\\"you\\\" send nudes\"}"))
+        assertTrue(text, text.endsWith("\"terms\":[\"send nudes\",\"horny\"],\"snippet\":\"hey \\\"you\\\" send nudes\",\"tier\":\"explicit\"}"))
+    }
+
+    @Test
+    fun everyEventGetsAUniqueIdNamingItsKind() {
+        val a = DetectionEvent(1L, 0.5f, TriggerSource.EVENT, null, null)
+        val b = DetectionEvent(1L, 0.5f, TriggerSource.EVENT, null, null)
+        val t = DetectionEvent(1L, 1f, TriggerSource.TEXT, null, null, kind = DetectionKind.TEXT)
+        assertTrue(a.id.startsWith("image-1-"))
+        assertTrue(t.id.startsWith("text-1-"))
+        assertTrue("unique", a.id != b.id)
+        assertEquals("corroboration", TriggerSource.CORROBORATION.label)
     }
 
     @Test

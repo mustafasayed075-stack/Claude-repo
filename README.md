@@ -17,19 +17,24 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
   TensorFlow Lite NSFW model (viddexa nsfw-detection-2-nano), and — once 2 frames
   with a suggestive/explicit signal (whole screen ≥ 0.15, image region ≥ 0.7) fall
   within 7 s (not necessarily in a row) — logs the detection, saves a small
-  review thumbnail locally and shows a notification. **Detection and logging only;
-  no lock action yet.**
+  review thumbnail locally and shows a notification.
 - **Stage 4 — Text scanning:** the same Accessibility Service reads the **visible
   text** in the *Fast Scan Apps* (by default WhatsApp, Telegram, browsers) whenever their window
   content changes, and checks it **on-device** against a bundled Arabic/English
   keyword list (based on LDNOOBW, extended for Egyptian Arabic and Franco-Arabic).
   Matches go through the same pipeline as image detections (cooldown, local review
-  log with a short text snippet, notification, `DetectionBus`). **Detection and
-  logging only.**
+  log with a short text snippet, notification, `DetectionBus`). Each list entry
+  is **explicit** or **borderline** tier.
+- **Stage 5 — Lock:** on a confirmed detection Guardian locks the screen
+  (`DevicePolicyManager.lockNow()`, needs an active device admin) for
+  `LOCK_DURATION_MS` = **10 s**, and an unlock during that time locks again.
+  - **Lock at once:** image detections, and text detections with an explicit-tier
+    term.
+  - **Borderline-only text:** the screen's images are checked for 3 s first, and
+    the device locks only if one of those checks is positive.
+  - Notifications and logging are unchanged; the lock is added on top.
 
-Later stages (lock mechanism, reminder, persistence) are
-**intentionally not implemented here** — they will be layered on top in separate
-specs.
+Later stages (reminder, persistence) are **intentionally not implemented here**.
 
 ---
 
@@ -82,7 +87,9 @@ app/src/main/java/com/personal/guardian/
 ├── scan/DetectionNotifier             Stage 3: temporary stub reaction (local notification)
 ├── text/TextNormalizer                Stage 4: text → normalised tokens (Arabic/Latin, leetspeak…) (pure)
 ├── text/KeywordMatcher                Stage 4: KeywordList (asset parser) + matcher + snippets (pure)
-├── text/TextScan                      Stage 4: node-tree text extraction, trigger/debounce, fingerprints (pure)
+├── text/TextScan                      Stage 4: text extraction, trigger/debounce (incl. text fields), window choice, fingerprints (pure)
+├── lock/LockController                Stage 5: lock decision, re-lock on unlock, borderline corroboration window (pure, unit-tested)
+├── lock/DevicePolicyLock              Stage 5: DevicePolicyManager.lockNow() via the Stage 1 device admin
 ├── boot/BootReceiver                  Restart service + filtering on boot
 └── util/GuardianLog                   Append-only local event log (timestamps)
 
@@ -717,17 +724,22 @@ time and how many were flagged or suppressed.
 
 ### How it works
 
-- **Trigger (event-driven only):** a `TYPE_WINDOW_CONTENT_CHANGED` (or window-state)
-  event from an app on the **Fast Scan Apps** list with **Text** on — the same
-  list that drives image fast capture, with its own per-app toggle (see *Fast Scan
-  Apps*). Bursts of events (typing, scrolling, incoming messages) are coalesced:
-  the first schedules one check `TEXT_CHECK_DEBOUNCE_MS` (0.75 s) later and the rest
-  are absorbed. No timer. Events from other apps are ignored, and the check also
-  verifies the active window still belongs to a listed app with Text on.
-- **Extraction:** the active window's node tree (`rootInActiveWindow`), text and
-  content description of every node visible to the user — no OCR, no screenshot.
-  Capped at 2,000 nodes / 50,000 characters per check. Works on every Android
-  version the app supports (image scanning still needs Android 11+).
+- **Trigger (event-driven only):** an event from an app on the **Fast Scan Apps**
+  list with **Text** on. The list is the same one that drives image fast capture,
+  with its own per-app toggle (see *Fast Scan Apps*). Three event types trigger:
+  - `TYPE_WINDOW_CONTENT_CHANGED` and window-state changes;
+  - `TYPE_VIEW_TEXT_CHANGED`, which is typing in a text field such as a chat or
+    comment composer. See *Text fields* below.
+
+  Bursts of events (typing, scrolling, incoming messages) are coalesced: the first
+  schedules one check `TEXT_CHECK_DEBOUNCE_MS` (0.75 s) later and the rest are
+  absorbed. There is no timer, and events from other apps are ignored.
+- **Extraction:** text and content descriptions of every visible node, from
+  **every on-screen window of that app** (`getWindows()`, active window first,
+  keyboard windows never), plus the live text carried by the latest text-changed
+  event. No OCR, no screenshot. Capped at 2,000 nodes / 50,000 characters per
+  window. An app with no window on screen any more is not checked. Works on every
+  Android version the app supports (image scanning still needs Android 11+).
 - **Matching:** `KeywordMatcher` (pure Kotlin, on-device, no network):
   - text is normalised — Unicode compatibility forms, case, Latin accents, Arabic
     harakat and tatweel removed, letter variants unified (أ/إ/آ→ا, ة→ه, ى→ي),
@@ -755,8 +767,37 @@ time and how many were flagged or suppressed.
   - **notification**: the same "Guardian: flagged content detected" notification
     (text: "Flagged words on screen · app · time"), still alerting only once until
     dismissed;
-  - **event**: a `DetectionEvent` with `kind = TEXT` on the same `DetectionBus` the
-    lock stage will subscribe to. No lock action.
+  - **event**: a `DetectionEvent` with `kind = TEXT` and its **tier** (see below) on
+    the same `DetectionBus` that the Stage 5 lock subscribes to.
+
+### Text fields (composers): investigation and fix
+
+**The report:** typing "porn" in TikTok's comment composer needed 3–4 retries
+before a detection, while the same word sent in a WhatsApp chat was caught the
+first time. Each suspected cause was checked against the code and Android's
+accessibility behaviour, for any app on the Fast Scan Apps list:
+
+| Suspected cause | Finding | Fix |
+|---|---|---|
+| Typing doesn't produce the events the service listens to | **Main cause.** The service subscribed only to window-state and window-content events. Typing into an `EditText` sends `TYPE_VIEW_TEXT_CHANGED`, often with no window-content change. A composer was therefore checked only when something else changed: the send button enabling on the first letter, a video playing behind the comment sheet, a new chat bubble. The check then read whatever had been typed by that moment. WhatsApp worked because *sending* adds a bubble, which is a window-content change. This explains the retries. | The service subscribes to `typeViewTextChanged`, and the trigger accepts it. |
+| Live, uncommitted text isn't exposed | A text-changed event carries the field's full current text, including IME composing text that hasn't been committed. The field's node exposes the same text. Password fields are skipped. | The latest field text is kept with the pending check and matched first. The node-tree walk's 2,000-node limit can't hide a composer at the bottom of a long comment list. |
+| Rapid keystrokes keep resetting the debounce | **Not the cause.** The debounce does not reset. The first event schedules a check 0.75 s later, and later events join it. Once a check starts, the next event schedules another. Typing can't postpone checks, and the last keystroke is always checked within 0.75 s. | None needed. This is now proven by a fake-clock test (`TextScanTest.rapidTypingInAFieldEndsInACheckOfTheFinalText`), which types 20 keystrokes 120 ms apart. |
+| The composer is in another window or overlay | **A real risk.** The check read only the *active* window. While the user's finger is on the keyboard, the active window is the keyboard's. A composer can also be its own dialog or popup window. | The check reads every on-screen window of the app (`flagRetrieveInteractiveWindows`, `TextWindows.select`), active first, never the keyboard. |
+
+**Diagnostics:** while `ScanConfig.LOG_TEXT_FIELD_EVENTS` is on (temporary), the
+event log records:
+- every text-field event in a text-scanned app, with whether it scheduled a check
+  or was debounced into the pending one, e.g.
+  `Text trigger: com.zhiliaoapp.musically TYPE_VIEW_TEXT_CHANGED (EditText, field 4 chars) → debounced into the pending check.`;
+- every check that included field events, with what was read and the result, e.g.
+  `Text check fired for … (6 events, 5 from a text field): field text 4 chars, 2 app window(s) read (active window: com.google.android.inputmethod.latin) → matched [porn].`
+
+Only lengths are logged, never the typed text. Expect about one line per
+keystroke while typing in a listed app.
+
+**Not verified on a device here.** The fix follows from the code and the platform's
+documented event behaviour. These log lines show on-device whether a given app's
+composer now produces text-changed events.
 
 ### Keyword list: source and methodology
 
@@ -797,6 +838,7 @@ time and how many were flagged or suppressed.
   | `@root ن ي ك` (`~ …` optional) | Arabic **verb root**: derived forms are generated |
   | `@fuse كس طيز > ام م اخت` (`~ …` optional) | **glued compounds**: every front + back is an entry (كسم → كسمك) |
   | `!word` | **exception**: never matches (also behind an Arabic prefix) |
+  | `@tier borderline` … `@tier explicit` | **lock tier** of the entries in between (default explicit; see *Stage 5 — Lock*) |
 
 ### Matching rules in detail
 
@@ -1325,6 +1367,9 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
   or in custom canvases (some games, some web content) show nothing.
 - A keyword list can't judge context: explicit words quoted in news or health
   pages in a watched browser will match; innocent new slang won't.
+- A composer that draws its own text without a real text field (some games and
+  canvas-based apps) sends no text-changed events. Its text is seen only when the
+  window content changes.
 - The list covers English, Arabic script (MSA + Egyptian) and Franco-Arabic; other
   languages, and look-alike letters from other scripts (e.g. Cyrillic "ѕ"), aren't
   handled.
@@ -1360,6 +1405,91 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
 
 ---
 
+## Stage 5 — Lock
+
+### Setup
+
+Press **Activate device admin** on the main screen once; a Device Owner
+provisioned per Stage 1 already is one. Locking uses the `force-lock` policy that
+Stage 1 already declares.
+
+**Without an active admin nothing crashes.** Each lock is skipped with a warning
+(`LOCK skipped: device admin is not active …`), while detections are still logged
+and notified. The main screen shows **Lock: Armed** (with lock counts) or **Lock:
+OFF — device admin not active**.
+
+### Keyword tiers (text)
+
+Every entry in `assets/text/keywords.txt` has a tier. It is stored per entry
+(`KeywordList.Entry.tier`) and set in the file with `@tier borderline` … `@tier
+explicit` blocks; entries are explicit by default. The generator
+(`tools/build_keyword_list.py`) writes the blocks.
+
+| Tier | Entries | On a text detection |
+|---|---|---|
+| **explicit** | the core, unambiguous vocabulary: everything except the 24 below (LDNOOBW sexual terms, Egyptian/Franco-Arabic slang, anatomy slang, explicit toys and clothing, roots, glued compounds) | lock at once |
+| **borderline** | terms added for maximum sensitivity where ordinary-context false positives are expected: standalone **sexy** and **busty**; **lingerie, thong, g-string/gstring, garter, babydoll, corset, fishnets, micro bikini, lube, lubricant, magic wand, aphrodisiac, spanish fly**; **لانجري، قميص نوم، بيبي دول، كلوت فتله، بدله رقص، ملابس فاضحه، مزلق، جل مزلق** | image corroboration first (below) |
+
+How a detection's tier is decided (`KeywordTier.of`):
+- **Explicit** if any matched term is explicit-tier, otherwise **borderline**.
+  "sexy lingerie porn" is explicit.
+- **Corroboration-only terms (`?booty`) never decide the tier.** They only count
+  next to another term, and that term decides.
+- **A word that is itself a borderline entry stays borderline** even if an
+  explicit stem also reaches it through morphology. "sexy" is not explicit "sex"
+  plus "-y".
+
+  This changes only the reported tier. Which words are detected is unchanged.
+
+### The lock decision
+
+`LockController` (pure Kotlin) subscribes to `DetectionBus` inside the
+accessibility service:
+
+| Detection | Action |
+|---|---|
+| Image (confirmed: sexy/porn/hentai over the existing thresholds, 2 frames in 7 s) | lock now |
+| Text with an explicit-tier term | lock now |
+| Text with borderline-tier terms only | no lock yet: corroborate |
+
+- **Lock:** `DevicePolicyManager.lockNow()`, logged as
+  `LOCK triggered, duration=10000ms, source=image|text-explicit|text-borderline-corroborated, detectionId=…`.
+  - The `detectionId` (e.g. `text-1790000000123-4`) is also the `"id"` of the
+    detection's line in `detections.jsonl`. Text lines also get `"tier"`.
+  - Duration: `LOCK_DURATION_MS` = **10 s** (test phase).
+- **Unlock attempts:** a dynamically registered `ACTION_USER_PRESENT` receiver
+  catches an unlock during the 10 s and locks again at once (`LOCK re-applied: …`).
+  After 10 s the unlock stands (`LOCK period over …`). A new detection during a
+  lock restarts the 10 s.
+- **Borderline corroboration:** the device stays fully usable; nothing is locked
+  or delayed.
+  - The screen is captured **right away** and then every 1 s (the platform's
+    minimum gap) for up to `CORROBORATION_WINDOW_MS` = **3 s**, through the
+    existing whole-screen and region pipeline.
+  - The first single frame over the existing image thresholds (whole screen ≥ 0.15,
+    or a region ≥ 0.7) locks at once with the same 10 s mechanism.
+  - If the window expires first, there is no lock for that match:
+    `text match uncorroborated, no lock (borderline tier, window expired)`.
+  - Below Android 11, or without the model, no image check is possible, so a
+    borderline match never locks.
+- **Repeats within the cooldown:** the same-content cooldown keeps a repeat from
+  notifying again, but a repeat of an image or explicit-tier detection **still
+  locks** (`LOCK_ON_SUPPRESSED_REPEATS`). Without this, the same content could
+  stay on screen for the rest of the minute after a 10 s lock.
+  - A borderline repeat does not reopen corroboration, so a lingering shopping
+    page doesn't keep image checks running every second. The regular image scan
+    still covers it.
+- **Unchanged:** notifications, the event log, the review log and thumbnails work
+  exactly as before; the lock is added on top. `LOCK_ENABLED = false` turns it off.
+
+### Known limitations
+
+- A lock lives in the accessibility service. If that service restarts during the
+  10 s, the remaining time is forgotten, but the next detection locks again.
+- `lockNow()` only turns the screen off when no secure lock screen is set; it
+  isn't a lock in itself. Re-locking then means turning the screen off again on
+  every unlock during the 10 s.
+
 ## Testing individual components
 
 - **Blocklist parsing & matching:** `BlocklistManagerTest` (pure JVM), including a
@@ -1386,6 +1516,23 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
   persistence across store instances, first-run seeding, damaged and interrupted
   files), plus list-driven cases in `CaptureSchedulerTest` (live edits, baseline
   for unlisted apps) and `TextScanTest` (text toggle read live) (pure JVM).
+- **Stage 5 lock:** `LockControllerTest` (fake clock, fake device lock, fake
+  image-check results):
+  - image and explicit-tier text lock at once;
+  - borderline text: locked on corroboration within the window, no lock after it
+    expires;
+  - re-lock on unlock during the 10 s;
+  - device admin not active, and a refused lock;
+  - bus wiring.
+
+  Also `KeywordTierTest` (tier syntax, the bundled borderline set, detection
+  tiers), `CaptureSchedulerTest` (corroboration capture rate) and
+  `DetectionEventTest` (ids, tier in JSON).
+- **Text fields:** `TextScanTest`:
+  - rapid typing still ends in a check of the final text;
+  - live field text is carried with the pending check;
+  - text-changed events trigger checks;
+  - the window selection never reads the keyboard.
 - **Log retention:** `LogFilesTest` (diagnostics survive main-log rotation).
 - **Text scanning:** `KeywordMatcherTest` (matcher + real list + ordinary-text
   spot-check), `KeywordRulesTest` (context rules, restored terms, Arabic/English
@@ -1404,7 +1551,7 @@ and on about 1.4M words of new text chosen where the new terms have innocent use
 
 ## Scope note
 
-This repository contains **Stages 1–4**. Stages 3 and 4 stop at detect → log →
-notify; the lock stage will subscribe to `DetectionBus` (one event type for both,
-told apart by `DetectionEvent.kind`). The core service keeps its single
+This repository contains **Stages 1–5**. Stages 3 and 4 detect → log → notify and
+publish on `DetectionBus` (one event type for both, told apart by
+`DetectionEvent.kind`); Stage 5 subscribes to it and locks. The core service keeps its single
 `onServiceReady()` extension point for later stages.

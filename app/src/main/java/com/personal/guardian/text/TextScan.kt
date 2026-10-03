@@ -1,7 +1,5 @@
 package com.personal.guardian.text
 
-import java.util.concurrent.atomic.AtomicBoolean
-
 /**
  * Minimal view of an accessibility node for text extraction. The Android adapter
  * wraps `AccessibilityNodeInfo`; tests use plain objects.
@@ -55,31 +53,84 @@ object TextExtractor {
 }
 
 /**
- * Decides which accessibility events trigger a text check (Stage 4): window content
- * or window state changes from a watched package only — the Fast Scan Apps with text
- * scanning on ([com.personal.guardian.scan.FastScanList.textPackages]), read through
- * [watchedPackages] on every event so list edits apply at once. Bursts of events (typing,
- * scrolling) are coalesced: the first event schedules one check after the debounce
- * delay, later events are absorbed until that check starts. Thread-safe (events
- * arrive on the main thread, checks run on the worker).
+ * Decides which accessibility events trigger a text check (Stage 4), and coalesces
+ * bursts of them.
+ *
+ * Triggers: window content or window state changes, and **view text changes** (a
+ * text field being edited: typing into a composer sends `TYPE_VIEW_TEXT_CHANGED`,
+ * often with no window-content change at all), from a watched package only — the
+ * Fast Scan Apps with text scanning on
+ * ([com.personal.guardian.scan.FastScanList.textPackages]), read through
+ * [watchedPackages] on every event so list edits apply at once.
+ *
+ * Coalescing is a **non-resetting** debounce: the first event schedules one check
+ * after the debounce delay and later events are absorbed until that check starts.
+ * Continuous typing therefore can't postpone the check indefinitely, and because
+ * any event after a check has started schedules a new one, the last change is
+ * always checked within one debounce delay (`TextScanTest.rapidTypingInAFieldEndsInACheckOfTheFinalText`
+ * in the tests).
+ *
+ * A text-changed event carries the field's live text (including uncommitted IME
+ * composing text); the latest one is kept with the pending check ([Pending.fieldText])
+ * so the check sees it even if the field is not where the node-tree walk looks.
+ * Thread-safe (events arrive on the main thread, checks run on the worker).
  */
 class TextScanTrigger(private val watchedPackages: () -> Set<String>) {
 
     constructor(packages: Set<String>) : this({ packages })
 
-    private val pending = AtomicBoolean(false)
-
-    /** True if this event should schedule a (debounced) text check now. */
-    fun onEvent(eventType: Int, packageName: String?): Boolean {
-        if (eventType != TYPE_WINDOW_CONTENT_CHANGED && eventType != TYPE_WINDOW_STATE_CHANGED) return false
-        if (packageName == null || packageName !in watchedPackages()) return false
-        return pending.compareAndSet(false, true)
+    /** What an event did. */
+    enum class Decision {
+        /** Not a trigger (other event type, or not a text-scanned app). */
+        IGNORED,
+        /** No check was pending: the caller schedules one after the debounce delay. */
+        SCHEDULED,
+        /** A check is already pending; this event is absorbed into it. */
+        COALESCED
     }
 
-    /** Call when the scheduled check starts (or is abandoned), so later events schedule again. */
-    fun onCheckStarted() {
-        pending.set(false)
+    /** The pending check, handed to it when it starts. */
+    class Pending(
+        /** Package of the latest triggering event: the app to check. */
+        val packageName: String,
+        /** Latest live text of an edited field in [packageName], if a text-changed event carried one. */
+        val fieldText: String?,
+        /** Triggering events coalesced into this check, and how many were text-field edits. */
+        val events: Int,
+        val fieldEvents: Int
+    )
+
+    private val lock = Any()
+    private var pending: Pending? = null
+
+    /**
+     * Records one accessibility event. [fieldText] is the edited field's text for a
+     * `TYPE_VIEW_TEXT_CHANGED` event (null otherwise, or for password fields).
+     */
+    fun onEvent(eventType: Int, packageName: String?, fieldText: CharSequence? = null): Decision {
+        if (eventType !in TRIGGER_TYPES) return Decision.IGNORED
+        if (packageName == null || packageName !in watchedPackages()) return Decision.IGNORED
+        val isField = eventType == TYPE_VIEW_TEXT_CHANGED
+        val text = if (isField) fieldText?.toString() else null
+        synchronized(lock) {
+            val p = pending
+            return if (p == null) {
+                pending = Pending(packageName, text, 1, if (isField) 1 else 0)
+                Decision.SCHEDULED
+            } else {
+                // The latest event decides the app; a field text only stays with its own app.
+                val keptField = text ?: p.fieldText.takeIf { p.packageName == packageName }
+                pending = Pending(packageName, keptField, p.events + 1, p.fieldEvents + if (isField) 1 else 0)
+                Decision.COALESCED
+            }
+        }
     }
+
+    /**
+     * Call when the scheduled check starts (or is abandoned): returns what it should
+     * check and clears it, so later events schedule a new check.
+     */
+    fun onCheckStarted(): Pending? = synchronized(lock) { pending.also { pending = null } }
 
     fun isWatched(packageName: String?) = packageName != null && packageName in watchedPackages()
 
@@ -88,7 +139,35 @@ class TextScanTrigger(private val watchedPackages: () -> Set<String>) {
         const val TYPE_WINDOW_STATE_CHANGED = 0x00000020
         /** `AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED` (stable API constant). */
         const val TYPE_WINDOW_CONTENT_CHANGED = 0x00000800
+        /** `AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED` (stable API constant). */
+        const val TYPE_VIEW_TEXT_CHANGED = 0x00000010
+
+        private val TRIGGER_TYPES = setOf(TYPE_WINDOW_STATE_CHANGED, TYPE_WINDOW_CONTENT_CHANGED, TYPE_VIEW_TEXT_CHANGED)
+
+        /** True for events from a text field: a text-changed event, or a change whose source is an EditText. */
+        fun isFieldEvent(eventType: Int, className: CharSequence?): Boolean =
+            eventType == TYPE_VIEW_TEXT_CHANGED || className?.contains("EditText") == true
     }
+}
+
+/**
+ * Which on-screen windows a text check reads for an app (pure, unit-tested).
+ *
+ * The check used to read only the *active* window (`rootInActiveWindow`). While the
+ * user is touching the keyboard the active window is the keyboard's, and a composer
+ * can live in its own dialog or popup window — either way the field being typed in
+ * wasn't read. Now every on-screen window of the app is read (the active one first),
+ * input-method windows never are, and an app with no window on screen isn't checked.
+ */
+object TextWindows {
+
+    class Candidate(val packageName: String?, val isInputMethod: Boolean, val isActive: Boolean)
+
+    /** Indices into [windows] to read for [packageName], active window first; empty if the app isn't on screen. */
+    fun select(windows: List<Candidate>, packageName: String): List<Int> =
+        windows.indices
+            .filter { !windows[it].isInputMethod && windows[it].packageName == packageName }
+            .sortedByDescending { windows[it].isActive }
 }
 
 /**

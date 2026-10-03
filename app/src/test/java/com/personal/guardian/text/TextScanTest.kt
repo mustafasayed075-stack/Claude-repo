@@ -7,6 +7,7 @@ import com.personal.guardian.scan.ScanConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -74,47 +75,147 @@ class TextScanTest {
         assertTrue(t.isWatched("com.whatsapp"))
         list = list.setText("com.whatsapp", false)
         assertFalse("text off → no text checks", t.isWatched("com.whatsapp"))
-        assertFalse(t.onEvent(content, "com.whatsapp"))
+        assertEquals(TextScanTrigger.Decision.IGNORED, t.onEvent(content, "com.whatsapp"))
         list = list.setImage("com.android.chrome", false)
         assertTrue("image off leaves text on", t.isWatched("com.android.chrome"))
         list = list.add(FastScanApp("com.example.chat", "Example chat", text = true, image = false))
-        assertTrue("a newly added app triggers", t.onEvent(content, "com.example.chat"))
+        assertEquals("a newly added app triggers", TextScanTrigger.Decision.SCHEDULED, t.onEvent(content, "com.example.chat"))
         list = list.remove("org.telegram.messenger")
         assertFalse(t.isWatched("org.telegram.messenger"))
     }
 
+    private val scheduled = TextScanTrigger.Decision.SCHEDULED
+    private val coalesced = TextScanTrigger.Decision.COALESCED
+    private val ignored = TextScanTrigger.Decision.IGNORED
+
     @Test
-    fun onlyContentOrStateChangesInWatchedAppsTrigger() {
+    fun contentStateAndTextFieldChangesInWatchedAppsTrigger() {
         val content = TextScanTrigger.TYPE_WINDOW_CONTENT_CHANGED
         val state = TextScanTrigger.TYPE_WINDOW_STATE_CHANGED
-        assertFalse(trigger.onEvent(content, "com.example.notes"))
-        assertFalse(trigger.onEvent(content, null))
-        assertFalse("view-clicked is not a trigger", trigger.onEvent(0x00000001, "com.whatsapp"))
-        assertTrue(trigger.onEvent(content, "com.whatsapp"))
-        assertTrue(trigger.onEvent(state, "org.telegram.messenger"))
-        assertTrue(trigger.onEvent(content, "com.android.chrome"))
+        val typed = TextScanTrigger.TYPE_VIEW_TEXT_CHANGED
+        assertEquals(ignored, trigger.onEvent(content, "com.example.notes"))
+        assertEquals(ignored, trigger.onEvent(typed, "com.example.notes", "porn"))
+        assertEquals(ignored, trigger.onEvent(content, null))
+        assertEquals("view-clicked is not a trigger", ignored, trigger.onEvent(0x00000001, "com.whatsapp"))
+        assertEquals(scheduled, trigger.onEvent(content, "com.whatsapp"))
+        assertEquals(scheduled, trigger.onEvent(state, "org.telegram.messenger"))
+        assertEquals("typing in a composer triggers", scheduled, trigger.onEvent(typed, "com.android.chrome", "p"))
     }
 
     @Test
     fun eventConstantsMatchTheAndroidApi() {
         assertEquals(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, TextScanTrigger.TYPE_WINDOW_CONTENT_CHANGED)
         assertEquals(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, TextScanTrigger.TYPE_WINDOW_STATE_CHANGED)
+        assertEquals(android.view.accessibility.AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED, TextScanTrigger.TYPE_VIEW_TEXT_CHANGED)
+        assertEquals(android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD, 2)
     }
 
     @Test
     fun burstsOfEventsScheduleOneCheckUntilItStarts() {
         val t = trigger
         val content = TextScanTrigger.TYPE_WINDOW_CONTENT_CHANGED
-        assertTrue(t.onEvent(content, "com.whatsapp"))
-        repeat(20) { assertFalse("absorbed while a check is pending", t.onEvent(content, "com.whatsapp")) }
-        t.onCheckStarted()
-        assertTrue("next change schedules again", t.onEvent(content, "com.whatsapp"))
+        assertEquals(scheduled, t.onEvent(content, "com.whatsapp"))
+        repeat(20) { assertEquals("absorbed while a check is pending", coalesced, t.onEvent(content, "com.whatsapp")) }
+        val p = t.onCheckStarted()!!
+        assertEquals(21, p.events)
+        assertNull("nothing pending once started", t.onCheckStarted())
+        assertEquals("next change schedules again", scheduled, t.onEvent(content, "com.whatsapp"))
     }
 
     @Test
-    fun accessibilityConfigRequestsContentChangedEventsAndWindowContent() {
+    fun thePendingCheckCarriesTheLatestFieldTextOfItsApp() {
+        val t = trigger
+        val typed = TextScanTrigger.TYPE_VIEW_TEXT_CHANGED
+        val content = TextScanTrigger.TYPE_WINDOW_CONTENT_CHANGED
+        t.onEvent(typed, "com.whatsapp", "p")
+        t.onEvent(typed, "com.whatsapp", "po")
+        t.onEvent(content, "com.whatsapp") // e.g. the send button enabling: keeps the field text
+        t.onEvent(typed, "com.whatsapp", "porn")
+        val p = t.onCheckStarted()!!
+        assertEquals("com.whatsapp", p.packageName)
+        assertEquals("porn", p.fieldText)
+        assertEquals(4, p.events)
+        assertEquals(3, p.fieldEvents)
+
+        t.onEvent(typed, "com.whatsapp", "hello")
+        t.onEvent(content, "com.android.chrome")
+        val q = t.onCheckStarted()!!
+        assertEquals("the latest app is checked", "com.android.chrome", q.packageName)
+        assertNull("another app's field text is not carried over", q.fieldText)
+    }
+
+    @Test
+    fun fieldEventsAreTextChangesOrEditTextSources() {
+        assertTrue(TextScanTrigger.isFieldEvent(TextScanTrigger.TYPE_VIEW_TEXT_CHANGED, null))
+        assertTrue(TextScanTrigger.isFieldEvent(TextScanTrigger.TYPE_WINDOW_CONTENT_CHANGED, "android.widget.EditText"))
+        assertTrue(TextScanTrigger.isFieldEvent(TextScanTrigger.TYPE_WINDOW_CONTENT_CHANGED, "androidx.appcompat.widget.AppCompatEditText"))
+        assertFalse(TextScanTrigger.isFieldEvent(TextScanTrigger.TYPE_WINDOW_CONTENT_CHANGED, "android.widget.FrameLayout"))
+    }
+
+    /**
+     * Reproduces typing into a composer: one text-changed event per keystroke, 120 ms
+     * apart, on the same field, with a fake clock standing in for the worker's
+     * postDelayed. The debounce must neither starve while typing continues nor miss
+     * the final text once typing stops.
+     */
+    @Test
+    fun rapidTypingInAFieldEndsInACheckOfTheFinalText() {
+        val t = trigger
+        val debounce = ScanConfig.TEXT_CHECK_DEBOUNCE_MS
+        val word = "so I typed porn here"
+        val keystrokeMs = 120L
+        var checkDueAt: Long? = null
+        val checks = ArrayList<Pair<Long, String?>>() // (time, field text read)
+        fun runDueCheck(now: Long) {
+            val due = checkDueAt ?: return
+            if (due <= now) {
+                checkDueAt = null
+                checks += due to t.onCheckStarted()!!.fieldText
+            }
+        }
+        var now = 0L
+        for (i in 1..word.length) {
+            now = i * keystrokeMs
+            runDueCheck(now)
+            val d = t.onEvent(TextScanTrigger.TYPE_VIEW_TEXT_CHANGED, "com.whatsapp", word.take(i))
+            if (d == scheduled) checkDueAt = now + debounce
+        }
+        val lastKeystroke = now
+        runDueCheck(Long.MAX_VALUE)
+
+        // While typing (2.4 s), checks keep firing at the debounce interval, never starved.
+        val during = checks.filter { it.first <= lastKeystroke }
+        assertTrue("checks fire while typing: $checks", during.size >= (lastKeystroke / (debounce + keystrokeMs)).toInt())
+        // Once typing settles, one check fires within one debounce delay and reads the final text.
+        val final = checks.last()
+        assertTrue("final check after the last keystroke", final.first >= lastKeystroke)
+        assertTrue("final check within ${debounce} ms", final.first - lastKeystroke <= debounce)
+        assertEquals(word, final.second)
+        val matcher = KeywordMatcher(File("src/main/assets/text/keywords.txt").bufferedReader().use { KeywordList.parse(it) })
+        assertTrue("the final check's text matches", matcher.containsMatch(final.second!!))
+    }
+
+    @Test
+    fun textChecksReadEveryWindowOfTheAppButNeverTheKeyboard() {
+        val c = TextWindows::Candidate
+        // The user is touching the keyboard: it's the active window.
+        val typing = listOf(c("com.example.app", false, false), c("com.google.android.inputmethod.latin", true, true))
+        assertEquals(listOf(0), TextWindows.select(typing, "com.example.app"))
+        // A composer in its own dialog window, plus the main window behind it.
+        val dialog = listOf(c("com.example.app", false, false), c("com.android.systemui", false, false), c("com.example.app", false, true))
+        assertEquals("active window first", listOf(2, 0), TextWindows.select(dialog, "com.example.app"))
+        // The app left the screen within the debounce.
+        assertTrue(TextWindows.select(listOf(c("com.other", false, true)), "com.example.app").isEmpty())
+        assertTrue("an IME is never read even if its package is listed",
+            TextWindows.select(listOf(c("com.example.app", true, true)), "com.example.app").isEmpty())
+    }
+
+    @Test
+    fun accessibilityConfigRequestsTextEventsAndAllWindows() {
         val xml = File("src/main/res/xml/accessibility_service_config.xml").readText()
         assertTrue(xml.contains("typeWindowContentChanged"))
+        assertTrue("composer typing events", xml.contains("typeViewTextChanged"))
+        assertTrue("every on-screen window, not just the active one", xml.contains("flagRetrieveInteractiveWindows"))
         assertTrue(xml.contains("canRetrieveWindowContent=\"true\""))
     }
 
