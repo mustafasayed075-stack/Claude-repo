@@ -115,6 +115,7 @@ class MainActivity : AppCompatActivity() {
         binding.rowLockDuration.setOnClickListener { showLockDurationDialog() }
         binding.rowSensitivity.setOnClickListener { showSensitivityDialog() }
         binding.rowBlindSpot.setOnClickListener { startActivity(Intent(this, BlindSpotAppsActivity::class.java)) }
+        binding.rowLog.setOnClickListener { startActivity(Intent(this, LogViewerActivity::class.java)) }
 
         binding.btnFullScreenIntentSettings.setOnClickListener { ReflectionLauncher.openFullScreenIntentSettings(this) }
 

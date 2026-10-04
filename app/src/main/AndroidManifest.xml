@@ -74,6 +74,12 @@
             android:theme="@style/Theme.Rafiq.Main"
             android:parentActivityName=".MainActivity" />
 
+        <activity
+            android:name=".LogViewerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Rafiq.Main"
+            android:parentActivityName=".MainActivity" />
+
         <!-- Stage 6: Reflection Mode. The pinned full-screen reminder shown on a lock.
              excludeFromRecents + singleInstance so it owns the task it pins; shows over
              the keyguard; its own task so FLAG_ACTIVITY_NEW_TASK launches it clean. -->

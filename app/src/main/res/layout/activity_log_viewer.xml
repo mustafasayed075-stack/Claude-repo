@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/rootFastScan"
+    android:id="@+id/rootLogViewer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -15,48 +15,39 @@
         android:background="?attr/colorPrimary"
         app:navigationIcon="@drawable/ic_chevron_start"
         app:navigationIconTint="?attr/colorOnPrimary"
-        app:title="@string/fast_scan_title"
+        app:title="@string/log_viewer_title"
         app:titleTextColor="?attr/colorOnPrimary" />
 
-    <TextView
-        android:id="@+id/txtFastScanIntro"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="16dp"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="13sp" />
-
-    <FrameLayout
+    <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:fillViewport="true">
 
-        <ListView
-            android:id="@+id/listFastScanApps"
-            android:layout_width="match_parent"
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:divider="@null"
-            android:paddingTop="4dp"
-            android:paddingBottom="8dp" />
+            android:fillViewport="true">
 
-        <TextView
-            android:id="@+id/txtFastScanEmpty"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:padding="24dp"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:text="@string/fast_scan_empty" />
-    </FrameLayout>
+            <TextView
+                android:id="@+id/txtLog"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:fontFamily="monospace"
+                android:textSize="11sp"
+                android:textIsSelectable="true"
+                android:textColor="?attr/colorOnSurface" />
+        </androidx.core.widget.NestedScrollView>
+    </HorizontalScrollView>
 
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnAddApp"
+        android:id="@+id/btnShareLog"
         style="@style/Widget.Rafiq.Button.Primary"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
-        app:icon="@drawable/ic_add"
-        app:iconGravity="textStart"
-        android:text="@string/fast_scan_add" />
+        android:text="@string/btn_share_log" />
 </LinearLayout>

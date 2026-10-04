@@ -120,6 +120,17 @@ class DetectionCooldownTest {
         }
 
     @Test
+    fun clearForgetsRecentlyReportedContentSoItReportsAgain() {
+        val cooldown = DetectionCooldown(cooldownMs = 60_000, maxDistance = 10)
+        val fp = 0x0123456789abcdefL
+        assertTrue(cooldown.shouldReport(1_000, fp))
+        assertFalse("same content within cooldown is suppressed", cooldown.shouldReport(2_000, fp))
+        cooldown.clear()
+        assertTrue("after clear the same content reports again", cooldown.shouldReport(3_000, fp))
+        assertEquals(0, cooldown.suppressedSinceLastReport)
+    }
+
+    @Test
     fun identicalFramesHaveDistanceZero() {
         val img = image { x, y -> (x * 23 + y * 7) % 256 }
         assertEquals(0, ScreenFingerprint.distance(ScreenFingerprint.dHash(img), ScreenFingerprint.dHash(img.copyOf())))

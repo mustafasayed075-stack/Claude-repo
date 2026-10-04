@@ -805,7 +805,29 @@ class GuardianAccessibilityService : AccessibilityService() {
             is LockOutcome.Relocked -> ScanStatus.relockCount++
             is LockOutcome.Skipped -> ScanStatus.lockSkippedCount++
             is LockOutcome.CorroborationStarted -> startCorroborationChecks(handler, outcome.deadlineMs)
+            is LockOutcome.LockEnded -> onLockEnded()
             else -> Unit
+        }
+    }
+
+    /**
+     * A lock period finished. Re-arm so that if the same suspect content is still on
+     * screen it is evaluated afresh and can lock again: clear the confirmers (their
+     * positives were consumed by the lock), drop the region cache and the same-content
+     * cooldown memory (so repeat-suppression can't block the next lock), and take a
+     * capture right away instead of waiting for the next tick. Does not change any
+     * threshold or the confirmation rules. Worker thread.
+     */
+    private fun onLockEnded() {
+        val handler = worker ?: return
+        confirmer.reset()
+        suggestiveConfirmer.reset()
+        regionCache.clear()
+        cooldown.clear()
+        GuardianLog.i(applicationContext, "Lock ended: re-armed; still-visible suspect content will be re-evaluated.")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            handler.removeCallbacks(tick)
+            handler.post(tick)
         }
     }
 

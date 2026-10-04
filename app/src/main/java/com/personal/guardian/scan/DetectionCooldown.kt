@@ -67,6 +67,16 @@ class DetectionCooldown(
     fun resetSuppressedCount() {
         suppressedSinceLastReport = 0
     }
+
+    /**
+     * Forgets all recently-reported content (e.g. when a lock period ends), so the same
+     * content still on screen is reported and can lock again rather than being
+     * suppressed as a repeat.
+     */
+    fun clear() {
+        recent.clear()
+        suppressedSinceLastReport = 0
+    }
 }
 
 /**

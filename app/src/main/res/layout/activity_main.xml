@@ -10,7 +10,8 @@
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
         android:background="?attr/colorPrimary"
         app:title="@string/app_name"
         app:titleCentered="true"
@@ -20,6 +21,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:clipToPadding="false"
         android:fillViewport="true">
 
         <LinearLayout
@@ -202,6 +204,16 @@
                         <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
                             <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/row_blind_spot_title" />
                             <TextView android:id="@+id/txtBlindSpotSummary" style="@style/Widget.Rafiq.Row.Desc" />
+                        </LinearLayout>
+                        <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
+                    </LinearLayout>
+
+                    <View style="@style/Widget.Rafiq.Divider" />
+
+                    <LinearLayout android:id="@+id/rowLog" style="@style/Widget.Rafiq.Row">
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/row_log_title" />
+                            <TextView style="@style/Widget.Rafiq.Row.Desc" android:text="@string/row_log_summary" />
                         </LinearLayout>
                         <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
                     </LinearLayout>
