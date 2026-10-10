@@ -22,7 +22,13 @@ interface TextNode {
  */
 object TextExtractor {
 
-    fun collect(root: TextNode, maxNodes: Int, maxChars: Int): List<String> {
+    /** Extracted text plus cheap counts for the diagnostic log (no raw content needed). */
+    data class Extraction(val texts: List<String>, val nodesVisited: Int, val chars: Int)
+
+    fun collect(root: TextNode, maxNodes: Int, maxChars: Int): List<String> =
+        collectDetailed(root, maxNodes, maxChars).texts
+
+    fun collectDetailed(root: TextNode, maxNodes: Int, maxChars: Int): Extraction {
         val out = LinkedHashSet<String>()
         var chars = 0
         var visited = 0
@@ -48,7 +54,7 @@ object TextExtractor {
         }
         // Anything left on the stack (limits reached) still needs releasing.
         while (stack.isNotEmpty()) stack.removeLast().let { if (it !== root) it.release() }
-        return out.toList()
+        return Extraction(out.toList(), visited, chars)
     }
 }
 

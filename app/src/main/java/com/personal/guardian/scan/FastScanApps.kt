@@ -125,6 +125,8 @@ object FastScanDefaults {
         FastScanApp("com.UCMobile.intl", "UC Browser"),
         FastScanApp("com.mi.globalbrowser", "Mi Browser"),
         FastScanApp("com.android.browser", "Browser"),
+        // Search (query text + results, a common content vector)
+        FastScanApp("com.google.android.googlequicksearchbox", "Google"),
     )
 
     fun list(): FastScanList = FastScanList(APPS)

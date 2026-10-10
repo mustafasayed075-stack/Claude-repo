@@ -235,6 +235,19 @@ class GuardianAccessibilityService : AccessibilityService() {
                 (fieldText?.let { ", field ${it.length} chars" } ?: "") + ") → $what."
             handler?.post { GuardianLog.i(applicationContext, line) }
         }
+        // A text-field edit in an app that is NOT in the text-scan list: say so (rate-limited
+        // per app), so "typed in app X but nothing happened" is explained, not silent.
+        if (ScanConfig.LOG_TEXT_FIELD_EVENTS && decision == TextScanTrigger.Decision.IGNORED &&
+            type == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED && pkg != null
+        ) {
+            handler?.post {
+                logFailureRateLimited(
+                    "text-unwatched-$pkg",
+                    "Text trigger ignored: $pkg typed in a text field but it is not in the text-scan list.",
+                    null
+                )
+            }
+        }
     }
 
     override fun onInterrupt() {
@@ -876,8 +889,15 @@ class GuardianAccessibilityService : AccessibilityService() {
         val matcher = keywordMatcher ?: return
         val pkg = pending.packageName
         // The app may have had text scanning switched off within the debounce.
-        if (!textTrigger.isWatched(pkg)) return
-        val diagnose = ScanConfig.LOG_TEXT_FIELD_EVENTS && pending.fieldEvents > 0
+        if (!textTrigger.isWatched(pkg)) {
+            if (ScanConfig.LOG_TEXT_FIELD_EVENTS) GuardianLog.i(
+                applicationContext,
+                "Text check for $pkg skipped: app is not in the text-scan list."
+            )
+            return
+        }
+        // Per-check diagnostics (no raw text): package, windows, nodes, chars, result.
+        val diagnose = ScanConfig.LOG_TEXT_FIELD_EVENTS
         val windows = textWindows(pkg)
         try {
             if (windows.roots.isEmpty()) {
@@ -892,17 +912,25 @@ class GuardianAccessibilityService : AccessibilityService() {
             // The live field text first (it may be outside the walk's node/char limits),
             // then every on-screen window of the app.
             val texts = LinkedHashSet<String>()
-            pending.fieldText?.trim()?.takeIf { it.isNotEmpty() }?.let { texts += it.take(ScanConfig.TEXT_MAX_CHARS) }
+            var nodes = 0
+            var chars = 0
+            pending.fieldText?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                val clipped = it.take(ScanConfig.TEXT_MAX_CHARS)
+                if (texts.add(clipped)) chars += clipped.length
+            }
             for (root in windows.roots) {
-                texts += TextExtractor.collect(AccessibilityTextNode(root), ScanConfig.TEXT_MAX_NODES, ScanConfig.TEXT_MAX_CHARS)
+                val e = TextExtractor.collectDetailed(AccessibilityTextNode(root), ScanConfig.TEXT_MAX_NODES, ScanConfig.TEXT_MAX_CHARS)
+                texts += e.texts
+                nodes += e.nodesVisited
+                chars += e.chars
             }
             ScanStatus.onTextCheck(System.currentTimeMillis())
             val found = texts.flatMap { t -> matcher.find(t).map { m -> t to m } }
             if (diagnose) GuardianLog.i(
                 applicationContext,
                 "Text check fired for $pkg (${pending.events} events, ${pending.fieldEvents} from a text field): " +
-                    "field text ${pending.fieldText?.length ?: 0} chars, ${windows.roots.size} app window(s) read " +
-                    "(active window: ${windows.activePackage ?: "none"}) → " +
+                    "field text ${pending.fieldText?.length ?: 0} chars, ${windows.roots.size} app window(s), " +
+                    "$nodes nodes, $chars chars read (active window: ${windows.activePackage ?: "none"}) → " +
                     if (found.isEmpty()) "no match." else "matched [${found.map { it.second.term }.distinct().joinToString()}]."
             )
             if (found.isNotEmpty()) onTextMatched(pkg, found)

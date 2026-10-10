@@ -27,6 +27,7 @@ class FastScanAppsTest {
         "org.mozilla.firefox_beta", "org.mozilla.focus", "com.sec.android.app.sbrowser", "com.microsoft.emmx",
         "com.opera.browser", "com.opera.mini.native", "com.brave.browser", "com.duckduckgo.mobile.android",
         "com.UCMobile.intl", "com.mi.globalbrowser", "com.android.browser",
+        "com.google.android.googlequicksearchbox",
     )
 
     private val wa = FastScanApp("com.whatsapp", "WhatsApp")

@@ -63,6 +63,19 @@ class TextScanTest {
         assertTrue("every child node released", kids.all { it.released })
     }
 
+    @Test
+    fun collectDetailedReportsNodesVisitedAndCharsRead() {
+        val tree = Node(children = listOf(
+            Node(text = "abcd"),                                   // 4 chars
+            Node(isVisibleToUser = false, text = "hidden"),        // visited but contributes no text
+            Node(text = "ef")                                      // 2 chars
+        ))
+        val e = TextExtractor.collectDetailed(tree, 100, 1000)
+        assertEquals(listOf("abcd", "ef"), e.texts)
+        assertEquals(6, e.chars)
+        assertEquals(4, e.nodesVisited) // root + 3 children
+    }
+
     // ---- TextScanTrigger ----
 
     private val trigger get() = TextScanTrigger(FastScanDefaults.list().textPackages)
