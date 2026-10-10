@@ -173,7 +173,9 @@
 
     <!-- Log viewer (visible, for sending the log for tuning) -->
     <string name="row_log_title">سجل الأحداث</string>
-    <string name="row_log_summary">عرض ومشاركة اللوج للتشخيص</string>
+    <string name="row_log_summary">عرض ونسخ اللوج للتشخيص</string>
+    <string name="btn_copy_log">نسخ اللوج</string>
+    <string name="log_copied">تم نسخ آخر 300 سطر</string>
     <string name="log_viewer_title">سجل الأحداث</string>
     <string name="log_viewer_truncated">— بيُعرض آخر جزء من اللوج فقط —</string>
 
