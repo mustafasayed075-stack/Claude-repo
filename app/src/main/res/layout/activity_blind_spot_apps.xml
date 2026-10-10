@@ -52,6 +52,16 @@
     </FrameLayout>
 
     <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnOverlayPermission"
+        style="@style/Widget.Rafiq.Button.Secondary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:visibility="gone"
+        android:text="@string/blind_spot_overlay_permission" />
+
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnAddApp"
         style="@style/Widget.Rafiq.Button.Primary"
         android:layout_width="match_parent"

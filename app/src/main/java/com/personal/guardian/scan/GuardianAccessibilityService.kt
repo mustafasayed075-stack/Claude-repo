@@ -101,6 +101,8 @@ class GuardianAccessibilityService : AccessibilityService() {
     private val blindSpot = BlindSpotPolicy({ SystemClock.elapsedRealtime() })
     // Consecutive unreadable captures (secure/blank), for the black-frame guardrail.
     private var consecutiveUnreadable = 0
+    // Small on-screen countdown shown while blind in a listed app.
+    private val blindOverlay by lazy { BlindSpotOverlay(this) }
     private val contentPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
     // Reused scratch for the whole-screen letterbox crop (Screen scanning → letterbox crop).
     private val letterboxPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
@@ -284,6 +286,13 @@ class GuardianAccessibilityService : AccessibilityService() {
             confirmer.reset()
             suggestiveConfirmer.reset()
         }
+        // Returning to another app while a lock is still notionally active (e.g. the user
+        // left Reflection Mode early with the system gesture): re-arm so the same content,
+        // if still shown, is re-evaluated and can lock again — repeat-suppression aside.
+        if (pkg != packageName && lockController?.isLocked() == true) {
+            GuardianLog.i(applicationContext, "Foreground changed to $pkg while a lock was active — re-evaluating.")
+            rearmAfterLock("returned to $pkg during a lock")
+        }
         if (classifier == null) return
         if (!scheduler.onForegroundChanged(pkg)) return
         onFastModeChanged("$pkg in foreground")
@@ -325,6 +334,8 @@ class GuardianAccessibilityService : AccessibilityService() {
             // Nothing visible: don't capture, and don't let positives span a screen-off.
             confirmer.reset()
             suggestiveConfirmer.reset()
+            consecutiveUnreadable = 0
+            blindOverlay.hide()
             scheduler.onCaptured(now) // keep the cadence without spinning
             return
         }
@@ -755,12 +766,14 @@ class GuardianAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** A readable capture: clears the black-frame guardrail and drives the 1-hour reset. */
+    /** A readable capture: clears the black-frame guardrail, hides the overlay, resets the 1-hour timer. */
     private fun onCaptureReadable(pkg: String?, type: String, blackFrac: Double) {
+        val wasBlind = consecutiveUnreadable > 0 || blindSpot.isBlind
         consecutiveUnreadable = 0
         if (ScanConfig.LOG_EVERY_FRAME_SCORE && pkg != null && BlindSpotSettings.get(this).contains(pkg)) {
             GuardianLog.i(applicationContext, captureReadabilityLine(pkg, type, blackFrac, listed = true))
         }
+        if (wasBlind) blindOverlay.hide() // visibility returned
         onReadableFrame()
     }
 
@@ -803,15 +816,20 @@ class GuardianAccessibilityService : AccessibilityService() {
      */
     private fun onBlindFrame() {
         when (val o = blindSpot.onBlind()) {
-            is BlindSpotPolicy.Outcome.GraceStarted -> GuardianLog.w(
-                applicationContext,
-                "Blind-spot: can't read the screen (entry #${o.episode}); grace ${o.graceMs / 1000}s before locking."
-            )
+            is BlindSpotPolicy.Outcome.GraceStarted -> {
+                GuardianLog.w(
+                    applicationContext,
+                    "Blind-spot: can't read the screen (entry #${o.episode}); grace ${o.graceMs / 1000}s before locking."
+                )
+                // Show the visible countdown for this grace.
+                blindOverlay.show(SystemClock.elapsedRealtime() + o.graceMs)
+            }
             is BlindSpotPolicy.Outcome.Act -> {
                 GuardianLog.w(
                     applicationContext,
                     "Blind-spot lock: grace elapsed while the screen stayed unreadable (entry #${o.episode})."
                 )
+                blindOverlay.hide() // the lock + Reflection take over
                 handleLock(
                     lockController?.onDetection(
                         DetectionEvent(
@@ -854,13 +872,23 @@ class GuardianAccessibilityService : AccessibilityService() {
      * capture right away instead of waiting for the next tick. Does not change any
      * threshold or the confirmation rules. Worker thread.
      */
-    private fun onLockEnded() {
+    private fun onLockEnded() = rearmAfterLock("lock period over")
+
+    /**
+     * Re-arm after a lock so still-visible suspect content is evaluated afresh and can
+     * lock again: clear the confirmers (their positives were consumed by the lock), drop
+     * the region cache and the same-content cooldown memory (so repeat-suppression can't
+     * block the next lock), and take a capture right away. Covers both the timed end and
+     * the user leaving the lock early (returning to the app). Does not change any
+     * threshold or the confirmation rules. Worker thread.
+     */
+    private fun rearmAfterLock(reason: String) {
         val handler = worker ?: return
         confirmer.reset()
         suggestiveConfirmer.reset()
         regionCache.clear()
         cooldown.clear()
-        GuardianLog.i(applicationContext, "Lock ended: re-armed; still-visible suspect content will be re-evaluated.")
+        GuardianLog.i(applicationContext, "Lock re-arm ($reason): still-visible suspect content will be re-evaluated.")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             handler.removeCallbacks(tick)
             handler.post(tick)
@@ -1094,6 +1122,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         ScanStatus.textEntries = 0
         ScanStatus.modelLoaded = false
         ScanStatus.fastModePackage = null
+        blindOverlay.hide()
         val handler = worker ?: return
         worker = null
         handler.removeCallbacksAndMessages(null)

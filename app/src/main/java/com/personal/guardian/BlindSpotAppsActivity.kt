@@ -3,8 +3,10 @@ package com.personal.guardian
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.text.Editable
@@ -54,7 +56,22 @@ class BlindSpotAppsActivity : AppCompatActivity() {
         binding.listBlindSpotApps.adapter = adapter
         binding.listBlindSpotApps.emptyView = binding.txtBlindSpotEmpty
         binding.btnAddApp.setOnClickListener { showPicker() }
+        binding.btnOverlayPermission.setOnClickListener {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        }
         show(BlindSpotSettings.get(this))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Offer the overlay permission only while it is missing (needed for the countdown).
+        val needed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)
+        binding.btnOverlayPermission.visibility = if (needed) View.VISIBLE else View.GONE
     }
 
     private fun applyInsets() {

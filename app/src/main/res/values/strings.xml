@@ -170,6 +170,8 @@
     <string name="blind_spot_remove">إزالة</string>
     <string name="blind_spot_remove_title">إزالة %1$s؟</string>
     <string name="blind_spot_save_failed">تعذّر حفظ التغيير.</string>
+    <string name="blind_spot_overlay_countdown">رفيق: القفل خلال %1$d ث</string>
+    <string name="blind_spot_overlay_permission">اسمح بالعرض فوق التطبيقات (للعدّاد)</string>
 
     <!-- Log viewer (visible, for sending the log for tuning) -->
     <string name="row_log_title">سجل الأحداث</string>

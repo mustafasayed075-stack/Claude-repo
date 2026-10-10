@@ -13,6 +13,9 @@
     <!-- Restart everything after a reboot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Small on-screen countdown shown while Guardian can't read a blind-spot app. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Ongoing notification for the core service and Stage 3 detection
          notifications on Android 13+. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
