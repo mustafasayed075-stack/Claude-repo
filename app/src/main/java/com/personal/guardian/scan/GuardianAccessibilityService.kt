@@ -360,7 +360,7 @@ class GuardianAccessibilityService : AccessibilityService() {
                     null
                 )
                 // A secure / screenshot-protected window: Guardian can't read the screen.
-                if (errorCode == ERROR_TAKE_SCREENSHOT_SECURE_WINDOW) onCaptureUnreadable(pkg)
+                if (errorCode == ERROR_TAKE_SCREENSHOT_SECURE_WINDOW) onCaptureUnreadable(pkg, "error-secure-window", null)
             }
         })
     }
@@ -407,9 +407,18 @@ class GuardianAccessibilityService : AccessibilityService() {
             val now = SystemClock.elapsedRealtime()
             val pkg = scheduler.foregroundPackage
             // Readable vs blank/near-black (a black media-viewer background, a secure
-            // render): drives the blind-spot path and its black-frame guardrail.
-            val readable = regionContent(frame) == RegionContent.Verdict.OK
-            if (readable) onCaptureReadable() else onCaptureUnreadable(pkg)
+            // render): drives the blind-spot path and its black-frame guardrail. Judged on
+            // the content band too, so a bright status bar / nav bar over black content
+            // (WhatsApp view-once, Telegram no-screenshot) still reads as unreadable.
+            val frameVerdict = regionContent(frame) // fills contentPixels (48x48 ARGB)
+            val blackFrac = FrameReadability.contentBlackFraction(contentPixels, RegionContent.GRID, RegionContent.GRID)
+            val readable = frameVerdict == RegionContent.Verdict.OK && blackFrac < FrameReadability.MOSTLY_BLACK_FRACTION
+            val captureType = when {
+                readable -> "normal"
+                frameVerdict != RegionContent.Verdict.OK -> "blank/${frameVerdict.name.lowercase()}"
+                else -> "black-content"
+            }
+            if (readable) onCaptureReadable(pkg, captureType, blackFrac) else onCaptureUnreadable(pkg, captureType, blackFrac)
 
             val confirmation = confirmer.onFrame(verdict.score, now, source, verdict.positive)
             // Additive per-class layer: raw-class rules on top of the combined paths.
@@ -437,9 +446,7 @@ class GuardianAccessibilityService : AccessibilityService() {
                         fastScan = fastScanLabel(pkg)
                     )
                 )
-                if (!readable) {
-                    GuardianLog.i(applicationContext, ScanLog.captureIssueLine("BLANK frame", pkg, fastScanLabel(pkg)))
-                }
+                // (Unreadable frames are logged by onCaptureUnreadable with more detail.)
                 // Per-class "suspect" frames are logged (not locked) so the thresholds can
                 // be tuned from the log.
                 if (perClass.suspect && !perClass.pornImmediate && !suggestive) {
@@ -749,21 +756,37 @@ class GuardianAccessibilityService : AccessibilityService() {
     }
 
     /** A readable capture: clears the black-frame guardrail and drives the 1-hour reset. */
-    private fun onCaptureReadable() {
+    private fun onCaptureReadable(pkg: String?, type: String, blackFrac: Double) {
         consecutiveUnreadable = 0
+        if (ScanConfig.LOG_EVERY_FRAME_SCORE && pkg != null && BlindSpotSettings.get(this).contains(pkg)) {
+            GuardianLog.i(applicationContext, captureReadabilityLine(pkg, type, blackFrac, listed = true))
+        }
         onReadableFrame()
     }
 
     /**
      * An unreadable capture — a secure/screenshot-protected window, or a blank/near-black
-     * frame. Only acts when the foreground app is on the blind-spot list, and only after
+     * frame (incl. black content under a bright status/nav bar). Only acts when the
+     * foreground app is on the blind-spot list, and only after
      * [ScanConfig.BLIND_SPOT_CONFIRM_FRAMES] *consecutive* unreadable captures, so a single
      * transient blank (a media viewer loading a frame) is ignored. Worker thread.
      */
-    private fun onCaptureUnreadable(pkg: String?) {
+    private fun onCaptureUnreadable(pkg: String?, type: String, blackFrac: Double?) {
         consecutiveUnreadable++
-        if (pkg == null || !BlindSpotSettings.get(this).contains(pkg)) return
+        val listed = pkg != null && BlindSpotSettings.get(this).contains(pkg)
+        if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
+            GuardianLog.i(applicationContext, captureReadabilityLine(pkg, type, blackFrac, listed))
+        }
+        if (!listed) return
         if (consecutiveUnreadable >= ScanConfig.BLIND_SPOT_CONFIRM_FRAMES) onBlindFrame()
+    }
+
+    /** One diagnostic line per capture (blind-spot context): type, black %, package, counter state. */
+    private fun captureReadabilityLine(pkg: String?, type: String, blackFrac: Double?, listed: Boolean): String {
+        val black = blackFrac?.let { "${(it * 100).toInt()}%" } ?: "n/a"
+        return "Scan capture: type=$type black=$black app=${pkg ?: "unknown"} listed=${yesNo(listed)} " +
+            "blind(consec=$consecutiveUnreadable/${ScanConfig.BLIND_SPOT_CONFIRM_FRAMES} " +
+            "level=${blindSpot.level} isBlind=${yesNo(blindSpot.isBlind)} nextGrace=${blindSpot.graceForNextEntryMs() / 1000}s)"
     }
 
     /** A frame Guardian could read — drives the blind-spot escalation reset (worker thread). */
