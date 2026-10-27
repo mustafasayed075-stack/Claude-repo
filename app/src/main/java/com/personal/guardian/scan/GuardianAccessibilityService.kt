@@ -39,6 +39,7 @@ import com.personal.guardian.text.TextSnippet
 import com.personal.guardian.util.GuardianLog
 import com.personal.guardian.util.ProcessDiagnostics
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -336,9 +337,24 @@ class GuardianAccessibilityService : AccessibilityService() {
 
     private fun onTick() {
         val handler = worker ?: return
+        applyBlindSpotResetIfRequested()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) captureIfPossible()
         handler.removeCallbacks(tick)
         handler.postDelayed(tick, scheduler.delayUntilNextCapture(SystemClock.elapsedRealtime()))
+    }
+
+    /** Developer "reset escalation" (see [requestBlindSpotReset]), applied on the worker thread. */
+    private fun applyBlindSpotResetIfRequested() {
+        if (!blindSpotResetRequested.getAndSet(false)) return
+        val before = blindSpot.level
+        blindSpot.reset()
+        consecutiveUnreadable = 0
+        blindOverlay.hide()
+        GuardianLog.i(
+            applicationContext,
+            "Blind-spot escalation reset from the developer section (was level $before); " +
+                "next entry gets ${blindSpot.graceForNextEntryMs() / 1000}s."
+        )
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
@@ -1244,6 +1260,20 @@ class GuardianAccessibilityService : AccessibilityService() {
 
     companion object {
         private val instanceCounter = AtomicInteger()
+
+        /** Set by the developer section; the running service applies it on its next tick. */
+        private val blindSpotResetRequested = AtomicBoolean(false)
+
+        /**
+         * Asks the scanning service to reset the blind-spot escalation to its first step
+         * (60 s). Applied on the service's next capture tick (within the capture interval).
+         * Returns whether the service is currently running; if it isn't, the next start
+         * begins at 60 s anyway (the escalation is not persisted).
+         */
+        fun requestBlindSpotReset(): Boolean {
+            blindSpotResetRequested.set(true)
+            return ScanStatus.connected
+        }
 
         /** Recycles a node on Android < 13 (a no-op / deprecated from 13 on). */
         @Suppress("DEPRECATION")

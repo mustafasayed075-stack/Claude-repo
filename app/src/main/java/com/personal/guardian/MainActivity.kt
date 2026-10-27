@@ -132,6 +132,16 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnRefreshStatus.setOnClickListener { refreshStatus() }
         binding.btnShareLog.setOnClickListener { shareLog() }
+        binding.btnResetEscalation.setOnClickListener {
+            // Blind-spot escalation back to its first step (60 s); applied by the service.
+            val running = GuardianAccessibilityService.requestBlindSpotReset()
+            GuardianLog.i(this, "Developer: blind-spot escalation reset requested (service running: $running).")
+            Toast.makeText(
+                this,
+                if (running) R.string.reset_escalation_done else R.string.reset_escalation_service_off,
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     /** Exports the local event log as a file through a share sheet (no network). */

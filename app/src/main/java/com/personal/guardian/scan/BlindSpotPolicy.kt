@@ -47,6 +47,19 @@ class BlindSpotPolicy(
 
     val isBlind: Boolean get() = blind
 
+    /**
+     * Back to the start of the schedule (the next entry gets the first grace, 60 s) and
+     * out of any blind episode — e.g. from the developer section after testing has
+     * escalated it to "lock at once".
+     */
+    fun reset() {
+        level = 0
+        blind = false
+        acted = false
+        deadlineMs = 0L
+        visibleSinceMs = null
+    }
+
     /** Grace the next *new* blind entry would get (0 once the schedule is exhausted). */
     fun graceForNextEntryMs(): Long = graceScheduleMs.getOrElse(level) { 0L }
 

@@ -301,6 +301,11 @@
                     android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:text="@string/btn_share_log" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnResetEscalation" style="@style/Widget.Rafiq.Button.Secondary"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/btn_reset_escalation" />
+
                 <TextView
                     android:id="@+id/txtProvisionHint"
                     android:layout_width="match_parent" android:layout_height="wrap_content"

@@ -42,6 +42,26 @@ class BlindSpotPolicyTest {
     }
 
     @Test
+    fun resetReturnsAnEscalatedPolicyToSixtySeconds() {
+        val p = policy()
+        // Escalate past the schedule: 60 → 30 → 10 → immediate.
+        repeat(4) { p.onBlind(); p.onVisible() }
+        assertEquals(4, p.level)
+        assertEquals(0L, p.graceForNextEntryMs())
+        val acted = p.onBlind()
+        assertTrue("schedule exhausted: acts at once", acted is BlindSpotPolicy.Outcome.Act)
+        assertTrue(p.isBlind)
+
+        p.reset()
+        assertEquals(0, p.level)
+        assertFalse("reset also ends the blind episode", p.isBlind)
+        assertEquals(60_000L, p.graceForNextEntryMs())
+        val started = p.onBlind() as BlindSpotPolicy.Outcome.GraceStarted
+        assertEquals(60_000L, started.graceMs)
+        assertEquals(1, started.episode)
+    }
+
+    @Test
     fun graceShrinksOnEachReentry() {
         val p = policy()
         // 1st: 60 s
