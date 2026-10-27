@@ -31,6 +31,12 @@ object ScanConfig {
      */
     const val CAPTURE_TIMEOUT_MS = 3_000L
 
+    /**
+     * Re-arm after leaving a lock early: at most once per this interval, and never for
+     * system UI / launcher / keyboard / Rafiq window events (see RearmGate).
+     */
+    const val REARM_MIN_INTERVAL_MS = 2_000L
+
     // Which apps get fast scanning (text checks, fast capture) is no longer a constant
     // here: it is the user-editable Fast Scan Apps list (FastScanList, stored by
     // FastScanSettings; first-run defaults in FastScanDefaults).

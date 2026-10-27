@@ -112,6 +112,10 @@ class GuardianAccessibilityService : AccessibilityService() {
     private var captureInFlight = false
     // Ends a screenshot request whose callback never arrives (see ScanConfig.CAPTURE_TIMEOUT_MS).
     private val captureWatchdog = CaptureWatchdog()
+    // Re-arm after a lock only for real returns to an app, spaced out (see RearmGate).
+    private val rearmGate = RearmGate()
+    // The device's home app(s), resolved once; their windows never trigger a re-arm.
+    private val homePackages: Set<String> by lazy { resolveHomePackages() }
     private val lastFailureLogAt = HashMap<String, Long>()
 
     private val tick = Runnable { onTick() }
@@ -291,9 +295,19 @@ class GuardianAccessibilityService : AccessibilityService() {
         // Returning to another app while a lock is still notionally active (e.g. the user
         // left Reflection Mode early with the system gesture): re-arm so the same content,
         // if still shown, is re-evaluated and can lock again — repeat-suppression aside.
-        if (pkg != packageName && lockController?.isLocked() == true) {
-            GuardianLog.i(applicationContext, "Foreground changed to $pkg while a lock was active — re-evaluating.")
-            rearmAfterLock("returned to $pkg during a lock")
+        // System UI / launcher / keyboard / Rafiq windows don't count, and re-arms are
+        // spaced by REARM_MIN_INTERVAL_MS (RearmGate); skipped events are only counted.
+        val decision = rearmGate.decide(
+            pkg, lockController?.isLocked() == true,
+            { RearmGate.isIgnored(it, packageName, homePackages, scheduler.overlayPackages) },
+            SystemClock.elapsedRealtime()
+        )
+        if (decision == RearmGate.Decision.REARM) {
+            val skipped = rearmGate.takeSkipped()
+            rearmAfterLock(
+                "returned to $pkg during a lock" +
+                    if (skipped > 0) "; $skipped system/throttled window events ignored since the last re-arm" else ""
+            )
         }
         if (classifier == null) return
         if (!scheduler.onForegroundChanged(pkg)) return
@@ -1196,6 +1210,13 @@ class GuardianAccessibilityService : AccessibilityService() {
 
     private fun isScreenOn(): Boolean =
         ContextCompat.getSystemService(this, PowerManager::class.java)?.isInteractive != false
+
+    /** Packages that handle the HOME intent (the launcher), for ignoring their windows. */
+    private fun resolveHomePackages(): Set<String> = runCatching {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        @Suppress("DEPRECATION")
+        packageManager.queryIntentActivities(home, 0).mapNotNull { it.activityInfo?.packageName }.toSet()
+    }.getOrNull().orEmpty()
 
     private fun enabledKeyboardPackages(): Set<String> = runCatching {
         ContextCompat.getSystemService(this, InputMethodManager::class.java)

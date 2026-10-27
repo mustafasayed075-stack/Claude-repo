@@ -32,6 +32,11 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Re-arm after a lock: resolve the device's home app(s) to ignore launcher windows. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
     </queries>
 
     <!-- Device administration (Device Owner is provisioned via ADB, see README). -->
