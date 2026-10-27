@@ -110,6 +110,8 @@ class GuardianAccessibilityService : AccessibilityService() {
     private val costStats = ScanCostStats()
     private var classifier: NsfwClassifier? = null
     private var captureInFlight = false
+    // Ends a screenshot request whose callback never arrives (see ScanConfig.CAPTURE_TIMEOUT_MS).
+    private val captureWatchdog = CaptureWatchdog()
     private val lastFailureLogAt = HashMap<String, Long>()
 
     private val tick = Runnable { onTick() }
@@ -328,8 +330,20 @@ class GuardianAccessibilityService : AccessibilityService() {
     @RequiresApi(Build.VERSION_CODES.R)
     private fun captureIfPossible() {
         val handler = worker ?: return
-        if (classifier == null || captureInFlight) return
         val now = SystemClock.elapsedRealtime()
+        if (classifier == null) {
+            logFailureRateLimited("capture-skip-model", "Scan capture: skipped (model not loaded).", null)
+            return
+        }
+        if (captureInFlight) {
+            // Rate-limited: says why a tick took no picture (the watchdog ends a lost request).
+            logFailureRateLimited(
+                "capture-skip-inflight",
+                "Scan capture: skipped (previous request in flight for ${captureWatchdog.pendingForMs(now) ?: 0} ms).",
+                null
+            )
+            return
+        }
         if (!isScreenOn()) {
             // Nothing visible: don't capture, and don't let positives span a screen-off.
             confirmer.reset()
@@ -337,6 +351,7 @@ class GuardianAccessibilityService : AccessibilityService() {
             consecutiveUnreadable = 0
             blindOverlay.hide()
             scheduler.onCaptured(now) // keep the cadence without spinning
+            logFailureRateLimited("capture-skip-screen-off", "Scan capture: skipped (screen off).", null)
             return
         }
 
@@ -346,34 +361,74 @@ class GuardianAccessibilityService : AccessibilityService() {
         // not while a window transition is still settling.
         val regionsBefore = if (ScanConfig.REGION_SCAN_ENABLED && appSwitch.isSettled(now)) readRegions() else null
         captureInFlight = true
-        val onWorker = Executor { handler.post(it) }
-        takeScreenshot(Display.DEFAULT_DISPLAY, onWorker, object : TakeScreenshotCallback {
-            override fun onSuccess(result: ScreenshotResult) {
-                try {
-                    // Readability (and the blind-spot reset) is decided inside, once we know
-                    // whether the frame is blank/near-black.
-                    processScreenshot(result, source, regionsBefore)
-                } catch (t: Throwable) {
-                    logFailureRateLimited("processing", "Screen scan: frame processing failed.", t)
-                } finally {
-                    captureInFlight = false
-                }
-            }
-
-            override fun onFailure(errorCode: Int) {
+        val token = captureWatchdog.start(now)
+        // Watchdog: a request with no callback within CAPTURE_TIMEOUT_MS is treated as lost,
+        // so one dropped callback can't leave captureInFlight set and stop all scanning.
+        val timeout = Runnable {
+            val t = SystemClock.elapsedRealtime()
+            if (captureWatchdog.expire(token, t)) {
                 captureInFlight = false
                 val pkg = scheduler.foregroundPackage
-                logFailureRateLimited(
-                    "screenshot-$errorCode",
-                    ScanLog.captureIssueLine(
-                        "FAILED (${screenshotErrorName(errorCode)})", pkg, fastScanLabel(pkg)
-                    ),
-                    null
+                GuardianLog.w(
+                    applicationContext,
+                    "Scan capture: capture timeout (no callback in ${captureWatchdog.timeoutMs} ms, " +
+                        "app=${pkg ?: "unknown"}, timeouts so far=${captureWatchdog.timeouts}); continuing."
                 )
-                // A secure / screenshot-protected window: Guardian can't read the screen.
-                if (errorCode == ERROR_TAKE_SCREENSHOT_SECURE_WINDOW) onCaptureUnreadable(pkg, "error-secure-window", null)
             }
-        })
+        }
+        handler.postDelayed(timeout, captureWatchdog.timeoutMs)
+        val onWorker = Executor { handler.post(it) }
+        val requested = runCatching {
+            takeScreenshot(Display.DEFAULT_DISPLAY, onWorker, object : TakeScreenshotCallback {
+                override fun onSuccess(result: ScreenshotResult) {
+                    handler.removeCallbacks(timeout)
+                    if (!captureWatchdog.complete(token)) {
+                        // Arrived after its timeout (or a newer request started): stale, and it
+                        // must not clear the newer request's in-flight flag.
+                        result.hardwareBuffer.close()
+                        logFailureRateLimited("capture-late", "Scan capture: late result after timeout ignored.", null)
+                        return
+                    }
+                    try {
+                        // Readability (and the blind-spot reset) is decided inside, once we know
+                        // whether the frame is blank/near-black.
+                        processScreenshot(result, source, regionsBefore)
+                    } catch (t: Throwable) {
+                        logFailureRateLimited("processing", "Screen scan: frame processing failed.", t)
+                    } finally {
+                        captureInFlight = false
+                    }
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    handler.removeCallbacks(timeout)
+                    if (!captureWatchdog.complete(token)) return // late: already timed out
+                    onCaptureFailure(errorCode)
+                }
+            })
+        }
+        requested.exceptionOrNull()?.let { t ->
+            // The request itself threw: no callback will come, so end it now.
+            handler.removeCallbacks(timeout)
+            captureWatchdog.complete(token)
+            captureInFlight = false
+            logFailureRateLimited("capture-request", "Scan capture: request failed to start.", t)
+        }
+    }
+
+    /** A screenshot request failed (worker thread). */
+    private fun onCaptureFailure(errorCode: Int) {
+        captureInFlight = false
+        val pkg = scheduler.foregroundPackage
+        logFailureRateLimited(
+            "screenshot-$errorCode",
+            ScanLog.captureIssueLine(
+                "FAILED (${screenshotErrorName(errorCode)})", pkg, fastScanLabel(pkg)
+            ),
+            null
+        )
+        // A secure / screenshot-protected window: Guardian can't read the screen.
+        if (errorCode == ERROR_TAKE_SCREENSHOT_SECURE_WINDOW) onCaptureUnreadable(pkg, "error-secure-window", null)
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
@@ -890,8 +945,10 @@ class GuardianAccessibilityService : AccessibilityService() {
         cooldown.clear()
         GuardianLog.i(applicationContext, "Lock re-arm ($reason): still-visible suspect content will be re-evaluated.")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // As soon as allowed, not instantly: honour the minimum gap between screenshots
+            // (MIN_CAPTURE_GAP_MS) so a re-arm can't fire back-to-back requests.
             handler.removeCallbacks(tick)
-            handler.post(tick)
+            handler.postDelayed(tick, scheduler.delayForImmediateCapture(SystemClock.elapsedRealtime()))
         }
     }
 

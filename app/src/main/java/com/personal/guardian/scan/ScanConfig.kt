@@ -24,6 +24,13 @@ object ScanConfig {
      */
     const val MIN_CAPTURE_GAP_MS = 1_000L
 
+    /**
+     * Capture watchdog: if a takeScreenshot() request gets neither callback within this
+     * long, it is treated as lost — the in-flight flag is cleared and "capture timeout"
+     * is logged — so one dropped callback can't stop all scanning.
+     */
+    const val CAPTURE_TIMEOUT_MS = 3_000L
+
     // Which apps get fast scanning (text checks, fast capture) is no longer a constant
     // here: it is the user-editable Fast Scan Apps list (FastScanList, stored by
     // FastScanSettings; first-run defaults in FastScanDefaults).
