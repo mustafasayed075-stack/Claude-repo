@@ -47,7 +47,18 @@ class ReflectionStore(private val contentFile: File, private val durationFile: F
         return ReflectionDuration.clampSeconds(raw ?: ReflectionDuration.DEFAULT_SECONDS).seconds
     }
 
-    /** Clamps [requestedSeconds] (30 s minimum enforced here) and persists it; returns the clamp result. */
+    /** The duration exactly as stored (not clamped), or null if missing/unreadable. */
+    fun storedDurationSeconds(): Long? {
+        val f = durationFile
+        if (!f.exists() && tmp(f).exists()) tmp(f).renameTo(f)
+        return try {
+            if (f.exists()) f.readText(Charsets.UTF_8).trim().toLongOrNull() else null
+        } catch (e: IOException) {
+            null
+        }
+    }
+
+    /** Clamps [requestedSeconds] (60 s minimum enforced here) and persists it; returns the clamp result. */
     fun saveDurationSeconds(requestedSeconds: Long): ReflectionDuration.Clamp {
         val clamp = ReflectionDuration.clampSeconds(requestedSeconds)
         write(durationFile, clamp.seconds.toString())

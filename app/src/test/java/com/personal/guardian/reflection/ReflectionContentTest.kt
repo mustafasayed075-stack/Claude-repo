@@ -114,26 +114,33 @@ class ReflectionContentTest {
         assertEquals(ReflectionLibrary.EMPTY, ReflectionFormat.decode(ReflectionFormat.encode(ReflectionLibrary.EMPTY)))
     }
 
-    // ---- duration: 30-second minimum enforced in code ----
+    // ---- duration: 60-second minimum enforced in code ----
 
     @Test
-    fun durationBelowThirtySecondsIsRaisedToThirty() {
-        for (low in listOf(0L, 1L, 5L, 29L)) {
+    fun minimumAndDefaultAreSixtySeconds() {
+        assertEquals(60L, ReflectionDuration.MIN_SECONDS)
+        assertEquals(60L, ReflectionDuration.DEFAULT_SECONDS)
+    }
+
+    @Test
+    fun durationBelowSixtySecondsIsRaisedToSixty() {
+        for (low in listOf(0L, 1L, 5L, 29L, 30L, 59L)) {
             val c = ReflectionDuration.clampSeconds(low)
-            assertEquals("requested $low", 30L, c.seconds)
+            assertEquals("requested $low", 60L, c.seconds)
             assertTrue(c.adjusted)
-            assertTrue(c.reason!!.contains("30"))
+            assertTrue(c.reason!!.contains("60"))
         }
     }
 
     @Test
-    fun durationAtOrAboveThirtyIsKept() {
-        for (ok in listOf(30L, 31L, 120L, 600L)) {
+    fun durationAtOrAboveSixtyIsKept() {
+        for (ok in listOf(60L, 61L, 120L, 600L)) {
             val c = ReflectionDuration.clampSeconds(ok)
             assertEquals(ok, c.seconds)
             assertFalse(c.adjusted)
         }
-        assertEquals(30_000L, ReflectionDuration.clampMillis(30))
+        assertEquals(60_000L, ReflectionDuration.clampMillis(60))
+        assertEquals("a 30 s request becomes 60 s", 60_000L, ReflectionDuration.clampMillis(30))
     }
 
     @Test
@@ -175,11 +182,11 @@ class ReflectionContentTest {
     @Test
     fun durationPersistsAndIsAlwaysClampedWhenSavedOrLoaded() {
         val s = store()
-        assertEquals("default before any save", 30L, s.loadDurationSeconds())
+        assertEquals("default before any save", 60L, s.loadDurationSeconds())
         val clamp = s.saveDurationSeconds(10) // below minimum from the UI
-        assertEquals(30L, clamp.seconds)
+        assertEquals(60L, clamp.seconds)
         assertTrue(clamp.adjusted)
-        assertEquals("stored value is the clamped one", 30L, store().loadDurationSeconds())
+        assertEquals("stored value is the clamped one", 60L, store().loadDurationSeconds())
 
         s.saveDurationSeconds(90)
         assertEquals(90L, store().loadDurationSeconds())
@@ -188,13 +195,24 @@ class ReflectionContentTest {
     @Test
     fun aHandEditedDurationBelowTheMinimumIsStillClampedOnRead() {
         File(tmp.root, "reflection_duration.txt").writeText("5")
-        assertEquals("cannot be bypassed by editing the file", 30L, store().loadDurationSeconds())
+        assertEquals("cannot be bypassed by editing the file", 60L, store().loadDurationSeconds())
+    }
+
+    @Test
+    fun aDurationSavedUnderTheOldThirtySecondMinimumReadsAsSixty() {
+        // Existing installs saved 30 s; it must read (and lock) as 60 s after the update.
+        File(tmp.root, "reflection_duration.txt").writeText("30")
+        assertEquals("raw value is still visible to the migration", 30L, store().storedDurationSeconds())
+        assertEquals(60L, store().loadDurationSeconds())
+        // What ReflectionSettings does on read: persist the raised value.
+        store().saveDurationSeconds(store().loadDurationSeconds())
+        assertEquals(60L, store().storedDurationSeconds())
     }
 
     @Test
     fun anUnparseableDurationFileFallsBackToDefault() {
         File(tmp.root, "reflection_duration.txt").writeText("soon")
-        assertEquals(30L, store().loadDurationSeconds())
+        assertEquals(60L, store().loadDurationSeconds())
     }
 
     // ---- countdown + back no-op ----

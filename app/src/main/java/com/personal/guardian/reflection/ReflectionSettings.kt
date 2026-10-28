@@ -13,7 +13,7 @@ import java.util.Random
  *
  * Media items are `content://` URIs; the app keeps a **persisted read grant** for
  * each so it can still open them after a reboot, and releases the grant when the item
- * is removed. The 30-second duration minimum is enforced in [ReflectionStore] /
+ * is removed. The 60-second duration minimum is enforced in [ReflectionStore] /
  * [ReflectionDuration], not just in the UI.
  */
 object ReflectionSettings {
@@ -109,7 +109,19 @@ object ReflectionSettings {
         synchronized(this) {
             cachedDurationSeconds?.let { return it }
             val seconds = try {
-                store(context.applicationContext).loadDurationSeconds()
+                val st = store(context.applicationContext)
+                val stored = st.storedDurationSeconds()
+                val clamped = st.loadDurationSeconds()
+                // A value saved under an older, lower minimum (e.g. 30 s) is raised on read;
+                // persist the raised value so the file agrees with what every lock uses.
+                if (stored != null && stored < ReflectionDuration.MIN_SECONDS) {
+                    st.saveDurationSeconds(clamped)
+                    GuardianLog.i(
+                        context.applicationContext,
+                        "Reflection Mode: saved duration ${stored}s is below the ${ReflectionDuration.MIN_SECONDS}s minimum; raised to ${clamped}s."
+                    )
+                }
+                clamped
             } catch (t: Throwable) {
                 GuardianLog.e(context.applicationContext, "Reflection Mode: could not read the duration; using the default.", t)
                 ReflectionDuration.DEFAULT_SECONDS
@@ -122,7 +134,7 @@ object ReflectionSettings {
     fun durationMs(context: Context): Long = durationSeconds(context) * 1000
 
     /**
-     * Persists [requestedSeconds] after the code-level 30-second clamp; returns the
+     * Persists [requestedSeconds] after the code-level 60-second clamp; returns the
      * clamp so the UI can report that a too-low value was raised.
      */
     fun setDurationSeconds(context: Context, requestedSeconds: Long): ReflectionDuration.Clamp {

@@ -249,7 +249,7 @@ object ScanConfig {
     const val LOCK_ENABLED = true
 
     // How long a lock lasts is no longer a constant here: it is the user-configurable
-    // Reflection Mode duration (ReflectionSettings / ReflectionDuration, 30 s minimum
+    // Reflection Mode duration (ReflectionSettings / ReflectionDuration, 60 s minimum
     // enforced in code), read at each lock.
 
     /**

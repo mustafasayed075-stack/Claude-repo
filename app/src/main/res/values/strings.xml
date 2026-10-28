@@ -71,7 +71,7 @@
     <string name="reflection_duration_hint">أقل مدة %1$d ثانية (إجبارية). بتنطبق على كل قفل.</string>
     <string name="reflection_duration_saved">اتحطّت مدة الرسائل %1$d ثانية.</string>
     <string name="reflection_duration_clamped">المدة أقل من الحد الأدنى؛ رفعناها لـ %1$d ثانية.</string>
-    <string name="reflection_duration_invalid">اكتب رقم صحيح بالثواني.</string>
+    <string name="reflection_duration_invalid">اكتب رقم صحيح بالثواني (أقل مدة %1$d ثانية).</string>
     <string name="reflection_library_label">الرسائل</string>
     <string name="reflection_library_empty">لسه مفيش رسائل. ضيف نص أو صورة أو صوت أو فيديو.</string>
     <string name="reflection_add_text">إضافة رسالة نصية</string>

@@ -24,6 +24,7 @@ import com.personal.guardian.admin.GuardianDeviceAdminReceiver
 import com.personal.guardian.blocklist.BlocklistManager
 import com.personal.guardian.blocklist.BlocklistUpdateWorker
 import com.personal.guardian.databinding.ActivityMainBinding
+import com.personal.guardian.reflection.ReflectionDuration
 import com.personal.guardian.reflection.ReflectionLauncher
 import com.personal.guardian.reflection.ReflectionSettings
 import com.personal.guardian.reflection.ReflectionSettingsActivity
@@ -235,7 +236,7 @@ class MainActivity : AppCompatActivity() {
         adminLauncher.launch(intent)
     }
 
-    /** Lock/Reflection duration — the same persisted value, with the 30 s floor in code. */
+    /** Lock/Reflection duration — the same persisted value, with the 60 s floor in code. */
     private fun showLockDurationDialog() {
         val input = EditText(this).apply {
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
@@ -243,11 +244,12 @@ class MainActivity : AppCompatActivity() {
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.lock_duration_dialog_title)
+            .setMessage(getString(R.string.reflection_duration_hint, ReflectionDuration.MIN_SECONDS))
             .setView(input)
             .setPositiveButton(R.string.reflection_duration_save) { _, _ ->
                 val requested = input.text?.toString()?.trim()?.toLongOrNull()
                 if (requested == null) {
-                    Toast.makeText(this, R.string.reflection_duration_invalid, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.reflection_duration_invalid, ReflectionDuration.MIN_SECONDS), Toast.LENGTH_SHORT).show()
                 } else {
                     val clamp = ReflectionSettings.setDurationSeconds(this, requested)
                     val msg = if (clamp.adjusted) getString(R.string.reflection_duration_clamped, clamp.seconds)

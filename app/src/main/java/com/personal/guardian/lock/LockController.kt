@@ -79,7 +79,7 @@ class LockController(
     private val clock: () -> Long,
     /**
      * The Reflection Mode duration, read **at each lock** so a settings change applies
-     * to the next trigger without restarting the service. The 30-second minimum is
+     * to the next trigger without restarting the service. The 60-second minimum is
      * enforced where it is persisted ([ReflectionDuration]), so this is already clamped.
      */
     private val durationMs: () -> Long = { ReflectionDuration.DEFAULT_SECONDS * 1000 },

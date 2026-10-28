@@ -158,15 +158,16 @@ object ReflectionFormat {
 }
 
 /**
- * The Reflection Mode duration rule. The **30-second minimum is enforced here, in
+ * The Reflection Mode duration rule — every lock (content, blind-spot, suggestive)
+ * uses this one duration. The **60-second minimum is enforced here, in
  * code** — not only in the UI — so a value typed below it is raised, never stored as
  * given. [clampSeconds] is the single gate the settings store runs every input
  * through.
  */
 object ReflectionDuration {
 
-    const val MIN_SECONDS = 30L
-    const val DEFAULT_SECONDS = 30L
+    const val MIN_SECONDS = 60L
+    const val DEFAULT_SECONDS = 60L
 
     /** A sanity cap so a typo can't pin the device for days. */
     const val MAX_SECONDS = 86_400L // 24 h

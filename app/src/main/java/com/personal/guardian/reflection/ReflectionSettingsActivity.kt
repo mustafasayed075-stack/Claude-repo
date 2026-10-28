@@ -25,7 +25,7 @@ import com.personal.guardian.databinding.ItemReflectionContentBinding
 /**
  * Stage 6 settings, redesigned (UI only): build the Reflection Mode content library
  * (text typed in, or image/audio/video picked with the system document picker and
- * kept with a persisted read grant) and set the duration (30-second minimum enforced
+ * kept with a persisted read grant) and set the duration (60-second minimum enforced
  * in code). Type tabs filter the list; preview cards show a thumbnail (image) or the
  * first line (text); one add button adds the tab's type.
  */
@@ -155,11 +155,11 @@ class ReflectionSettingsActivity : AppCompatActivity() {
     private fun saveDuration() {
         val requested = binding.editDuration.text?.toString()?.trim()?.toLongOrNull()
         if (requested == null) {
-            Toast.makeText(this, R.string.reflection_duration_invalid, Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.reflection_duration_invalid, ReflectionDuration.MIN_SECONDS), Toast.LENGTH_SHORT).show()
             return
         }
         val clamp = ReflectionSettings.setDurationSeconds(this, requested)
-        // The 30-second floor is enforced in code (ReflectionSettings); show it in Arabic.
+        // The 60-second floor is enforced in code (ReflectionSettings); show it in Arabic.
         val msg = if (clamp.adjusted) getString(R.string.reflection_duration_clamped, clamp.seconds)
         else getString(R.string.reflection_duration_saved, clamp.seconds)
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()

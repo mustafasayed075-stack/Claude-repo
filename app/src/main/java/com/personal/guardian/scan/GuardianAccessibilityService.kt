@@ -855,7 +855,7 @@ class GuardianAccessibilityService : AccessibilityService() {
                     }
                 },
                 SystemClock::elapsedRealtime,
-                // Reflection Mode duration, read at each lock (30 s minimum enforced in code).
+                // Reflection Mode duration, read at each lock (60 s minimum enforced in code).
                 { ReflectionSettings.durationMs(ctx) }
             )
             val admin = DevicePolicyLock(ctx).isAdminActive()

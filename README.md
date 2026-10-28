@@ -36,7 +36,7 @@ A **personal, on-device** accountability tool for Android. It is a single-user a
 - **Stage 6 — Reflection Mode:** the lock response. In addition to `lockNow()`,
   Guardian pins **itself** full-screen and shows one reminder picked at random from
   a library the user builds (text, image, audio or video), for a user-set duration
-  (**30 s minimum**, enforced in code). The back button is a no-op and the app is
+  (**60 s minimum**, enforced in code). The back button is a no-op and the app is
   screen-pinned until the time elapses. Randomised content so a repeated reminder
   doesn't lose its effect.
 
@@ -96,7 +96,7 @@ app/src/main/java/com/personal/guardian/
 ├── text/TextScan                      Stage 4: text extraction, trigger/debounce (incl. text fields), window choice, fingerprints (pure)
 ├── lock/LockController                Stage 5: lock decision, re-lock on unlock, borderline corroboration window (pure, unit-tested)
 ├── lock/DevicePolicyLock              Stage 5: DevicePolicyManager.lockNow() via the Stage 1 device admin
-├── reflection/ReflectionContent       Stage 6: content model, library, format, 30s-min duration, countdown (pure, unit-tested)
+├── reflection/ReflectionContent       Stage 6: content model, library, format, 60s-min duration, countdown (pure, unit-tested)
 ├── reflection/ReflectionStore         Stage 6: library + duration persistence (pure java.io)
 ├── reflection/ReflectionSettings      Stage 6: process-wide library/duration access, persisted URI grants
 ├── reflection/ReflectionActivity      Stage 6: pinned full-screen reminder (startLockTask, countdown, back no-op)
@@ -1514,7 +1514,7 @@ accessibility service:
   `LOCK triggered, duration=<ms>, source=image|text-explicit|text-borderline-corroborated, detectionId=…`.
   - The `detectionId` (e.g. `text-1790000000123-4`) is also the `"id"` of the
     detection's line in `detections.jsonl`. Text lines also get `"tier"`.
-  - Duration: the **Reflection Mode duration** (Stage 6; user-set, 30 s minimum),
+  - Duration: the **Reflection Mode duration** (Stage 6; user-set, 60 s minimum),
     read at each lock so a settings change applies to the next one. It is no longer a
     fixed constant.
 - **Unlock attempts:** a dynamically registered `ACTION_USER_PRESENT` receiver
@@ -1583,13 +1583,15 @@ adds any number of items through the system pickers:
   injected `Random`, so tests are deterministic). An empty library logs a warning and
   shows nothing (the device is still locked).
 
-### Duration (30-second minimum, enforced in code)
+### Duration (60-second minimum, enforced in code)
 
 The same screen sets the duration in seconds, used for every lock trigger. The
-**30-second minimum is enforced in code** (`ReflectionDuration.clampSeconds`), not
+**60-second minimum is enforced in code** (`ReflectionDuration.clampSeconds`), not
 only as a UI hint: a lower value — typed in the UI, or hand-edited into the stored
-file — is raised to 30 with a message, every time it is saved *and* every time it is
-read. There is also a 24-hour sanity cap. It replaces the old fixed
+file — is raised to 60 with a message, every time it is saved *and* every time it is
+read. The same duration applies to every kind of lock (content, blind-spot,
+suggestive). A value saved under the earlier 30-second minimum reads as 60 and the
+raised value is written back. There is also a 24-hour sanity cap. It replaces the old fixed
 `LOCK_DURATION_MS` constant; the main screen shows the configured value.
 
 ### Launch
@@ -1728,7 +1730,7 @@ to this stage.
     index, covers every item);
   - the file format round-trip (escaped text) and persistence across store
     instances, including a damaged file;
-  - the **30-second minimum enforced in code** — a value below 30 (from the UI or
+  - the **60-second minimum enforced in code** — a value below 60 (from the UI or
     hand-edited into the file) is raised on both save and load — plus the sanity cap;
   - the countdown and auto-exit on a fake clock, and the back-button no-op until the
     time elapses;
