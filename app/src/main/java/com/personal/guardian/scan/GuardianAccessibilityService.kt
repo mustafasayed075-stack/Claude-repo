@@ -23,6 +23,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.personal.guardian.lock.DevicePolicyLock
 import com.personal.guardian.lock.LockController
+import com.personal.guardian.reflection.ReflectionActivity
 import com.personal.guardian.reflection.ReflectionLauncher
 import com.personal.guardian.reflection.ReflectionSettings
 import com.personal.guardian.lock.LockLog
@@ -99,9 +100,7 @@ class GuardianAccessibilityService : AccessibilityService() {
     private val regionScorer = RegionScorer(regionCache) { SystemClock.elapsedRealtime() }
     private val appSwitch = AppSwitchTracker()
     // Blind-spot escalation: shrinking grace each time Guardian can't read the screen.
-    private val blindSpot = BlindSpotPolicy({ SystemClock.elapsedRealtime() })
-    // Consecutive unreadable captures (secure/blank), for the black-frame guardrail.
-    private var consecutiveUnreadable = 0
+    private val blindSpot = BlindSpotTracker(BlindSpotPolicy({ SystemClock.elapsedRealtime() }))
     // Small on-screen countdown shown while blind in a listed app.
     private val blindOverlay by lazy { BlindSpotOverlay(this) }
     private val contentPixels = IntArray(RegionContent.GRID * RegionContent.GRID)
@@ -287,6 +286,19 @@ class GuardianAccessibilityService : AccessibilityService() {
     // ---- worker thread ----
 
     private fun onForegroundChanged(pkg: String) {
+        // Rafiq's own windows (the blind-spot countdown overlay above all) are not "the app
+        // in front" unless a lock or Reflection Mode is showing. Counting the overlay made
+        // Rafiq the foreground app, so captures stopped counting for the listed app and the
+        // grace never locked (Build 41). See ForegroundFilter.
+        if (!ForegroundFilter.counts(pkg, packageName, lockController?.isLocked() == true, ReflectionActivity.isShowing)) {
+            logFailureRateLimited(
+                "fg-own-window",
+                "Foreground: ignored a Rafiq window (e.g. the countdown overlay); still treating " +
+                    "${scheduler.foregroundPackage ?: "unknown"} as the app in front.",
+                null
+            )
+            return
+        }
         // Positives must not combine across apps: a positive frame in the previous app
         // plus one in the new app's first frames used to confirm a detection there.
         if (appSwitch.onWindowStateChanged(pkg, SystemClock.elapsedRealtime(), scheduler.overlayPackages)) {
@@ -348,12 +360,11 @@ class GuardianAccessibilityService : AccessibilityService() {
         if (!blindSpotResetRequested.getAndSet(false)) return
         val before = blindSpot.level
         blindSpot.reset()
-        consecutiveUnreadable = 0
         blindOverlay.hide()
         GuardianLog.i(
             applicationContext,
             "Blind-spot escalation reset from the developer section (was level $before); " +
-                "next entry gets ${blindSpot.graceForNextEntryMs() / 1000}s."
+                "next entry gets ${blindSpot.nextGraceMs() / 1000}s."
         )
     }
 
@@ -378,7 +389,7 @@ class GuardianAccessibilityService : AccessibilityService() {
             // Nothing visible: don't capture, and don't let positives span a screen-off.
             confirmer.reset()
             suggestiveConfirmer.reset()
-            consecutiveUnreadable = 0
+            blindSpot.onScreenOff()
             blindOverlay.hide()
             scheduler.onCaptured(now) // keep the cadence without spinning
             logFailureRateLimited("capture-skip-screen-off", "Scan capture: skipped (screen off).", null)
@@ -851,15 +862,23 @@ class GuardianAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** A readable capture: clears the black-frame guardrail, hides the overlay, resets the 1-hour timer. */
+    /** A readable capture: ends any blind episode (cancelling its grace) and drives the 1-hour reset. */
     private fun onCaptureReadable(pkg: String?, type: String, blackFrac: Double) {
-        val wasBlind = consecutiveUnreadable > 0 || blindSpot.isBlind
-        consecutiveUnreadable = 0
+        val r = blindSpot.onReadable()
+        if (r.graceCancelled) {
+            blindOverlay.hide() // visibility returned
+            GuardianLog.i(
+                applicationContext,
+                "Blind-spot: grace cancelled — the screen is readable again (app=${pkg ?: "unknown"}, level ${blindSpot.level})."
+            )
+        }
+        if (r.levelReset) {
+            GuardianLog.i(applicationContext, "Blind-spot: an hour of readable screen — grace reset to ${ScanConfig.BLIND_SPOT_GRACE_MS[0] / 1000}s.")
+        }
+        // Logged after the update, so it shows the state this capture left behind.
         if (ScanConfig.LOG_EVERY_FRAME_SCORE && pkg != null && BlindSpotSettings.get(this).contains(pkg)) {
             GuardianLog.i(applicationContext, captureReadabilityLine(pkg, type, blackFrac, listed = true))
         }
-        if (wasBlind) blindOverlay.hide() // visibility returned
-        onReadableFrame()
     }
 
     /**
@@ -870,37 +889,38 @@ class GuardianAccessibilityService : AccessibilityService() {
      * transient blank (a media viewer loading a frame) is ignored. Worker thread.
      */
     private fun onCaptureUnreadable(pkg: String?, type: String, blackFrac: Double?) {
-        consecutiveUnreadable++
         val listed = pkg != null && BlindSpotSettings.get(this).contains(pkg)
+        val r = blindSpot.onUnreadable(listed)
         if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
             GuardianLog.i(applicationContext, captureReadabilityLine(pkg, type, blackFrac, listed))
         }
-        if (!listed) return
-        if (consecutiveUnreadable >= ScanConfig.BLIND_SPOT_CONFIRM_FRAMES) onBlindFrame()
+        val reason = r.skipReason
+        if (reason != null) {
+            // A running grace that this capture couldn't advance: say why (rate-limited).
+            if (blindSpot.isBlind) logFailureRateLimited(
+                "blind-skip-$reason-$pkg",
+                "Blind-spot: grace not advanced — $reason (app=${pkg ?: "unknown"}).",
+                null
+            )
+            return
+        }
+        r.outcome?.let { onBlindOutcome(it) }
     }
 
     /** One diagnostic line per capture (blind-spot context): type, black %, package, counter state. */
     private fun captureReadabilityLine(pkg: String?, type: String, blackFrac: Double?, listed: Boolean): String {
         val black = blackFrac?.let { "${(it * 100).toInt()}%" } ?: "n/a"
         return "Scan capture: type=$type black=$black app=${pkg ?: "unknown"} listed=${yesNo(listed)} " +
-            "blind(consec=$consecutiveUnreadable/${ScanConfig.BLIND_SPOT_CONFIRM_FRAMES} " +
-            "level=${blindSpot.level} isBlind=${yesNo(blindSpot.isBlind)} nextGrace=${blindSpot.graceForNextEntryMs() / 1000}s)"
-    }
-
-    /** A frame Guardian could read — drives the blind-spot escalation reset (worker thread). */
-    private fun onReadableFrame() {
-        if (blindSpot.onVisible() is BlindSpotPolicy.Outcome.LevelReset) {
-            GuardianLog.i(applicationContext, "Blind-spot: an hour of readable screen — grace reset to ${ScanConfig.BLIND_SPOT_GRACE_MS[0] / 1000}s.")
-        }
+            "blind(consec=${blindSpot.consecutiveUnreadable}/${blindSpot.confirmFrames} " +
+            "level=${blindSpot.level} isBlind=${yesNo(blindSpot.isBlind)} nextGrace=${blindSpot.nextGraceMs() / 1000}s)"
     }
 
     /**
-     * A blind-spot-listed app stayed unreadable. Starts or continues the escalating grace;
-     * locks (via the same path as a detection) once the grace for this entry has elapsed.
-     * Worker thread.
+     * What the escalation decided for an unreadable capture in a listed app: start the
+     * grace (and its countdown), or lock once it has elapsed. Worker thread.
      */
-    private fun onBlindFrame() {
-        when (val o = blindSpot.onBlind()) {
+    private fun onBlindOutcome(o: BlindSpotPolicy.Outcome) {
+        when (o) {
             is BlindSpotPolicy.Outcome.GraceStarted -> {
                 GuardianLog.w(
                     applicationContext,

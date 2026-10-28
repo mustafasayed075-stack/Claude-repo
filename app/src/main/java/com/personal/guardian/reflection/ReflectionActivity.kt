@@ -80,6 +80,7 @@ class ReflectionActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        isShowing = true
         if (!lockTaskStarted) {
             // As Device Owner, allowlist first so startLockTask() enters the
             // non-exitable lock-task mode (no shade, no Back+Recents exit). Without
@@ -115,6 +116,7 @@ class ReflectionActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        isShowing = false
         // If we're stopped before the time is up and not finishing on our own terms,
         // the user escaped the pin (Back+Recents) or otherwise left. Auditable.
         if (!endedNormally && !isFinishing && !countdown.isElapsed()) {
@@ -315,6 +317,15 @@ class ReflectionActivity : AppCompatActivity() {
     }
 
     companion object {
+        /**
+         * True while Reflection Mode is on screen (between onStart and onStop). The
+         * scanner uses it to tell Rafiq's real screens from its other windows (such as
+         * the blind-spot countdown overlay) when deciding which app is in front.
+         */
+        @Volatile
+        var isShowing = false
+            private set
+
         private const val EXTRA_TYPE = "type"
         private const val EXTRA_VALUE = "value"
         private const val EXTRA_DURATION_MS = "duration_ms"
