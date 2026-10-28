@@ -48,8 +48,10 @@ object ReflectionSettings {
                 ReflectionStore.LoadedLibrary(ReflectionLibrary.EMPTY, damaged = true)
             }
             if (loaded.damaged) GuardianLog.w(ctx, "Reflection Mode: stored content library unreadable; starting empty until the next edit.")
-            cachedLibrary = loaded.library
-            return loaded.library
+            // Built-in reminders are added on every read, never stored (ReflectionBuiltIns).
+            val library = loaded.library.withBuiltIns()
+            cachedLibrary = library
+            return library
         }
     }
 
@@ -74,6 +76,11 @@ object ReflectionSettings {
 
     fun remove(context: Context, id: String): ReflectionLibrary {
         val ctx = context.applicationContext
+        if (ReflectionBuiltIns.isBuiltIn(id)) {
+            // Refused in the data layer too, not only by hiding the button.
+            GuardianLog.w(ctx, "Reflection Mode: refused to remove the built-in reminder ($id).")
+            return library(ctx)
+        }
         val item = library(ctx).items.firstOrNull { it.id == id }
         if (item != null && item.type.isMedia) {
             runCatching {
@@ -85,8 +92,8 @@ object ReflectionSettings {
 
     private fun updateLibrary(ctx: Context, description: String, change: (ReflectionLibrary) -> ReflectionLibrary): ReflectionLibrary {
         val updated = synchronized(this) {
-            val next = change(library(ctx))
-            store(ctx).saveLibrary(next)
+            val next = change(library(ctx)).withBuiltIns()
+            store(ctx).saveLibrary(next) // stores the user's items only
             cachedLibrary = next
             next
         }

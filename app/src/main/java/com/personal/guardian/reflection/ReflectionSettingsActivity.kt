@@ -184,8 +184,12 @@ class ReflectionSettingsActivity : AppCompatActivity() {
                 ?: ItemReflectionContentBinding.inflate(LayoutInflater.from(parent.context), parent, false)
             val item = items[position]
             row.txtType.setText(typeLabel(item.type))
-            row.txtLabel.text = item.displayLabel()
+            row.txtLabel.text = if (item.isBuiltIn) getString(R.string.reflection_builtin_label) else item.displayLabel()
             bindPreview(row.imgPreview, item)
+            // Built-in reminders ship with the app: marked, and no delete button (the data
+            // layer refuses the removal too).
+            row.txtBuiltIn.visibility = if (item.isBuiltIn) View.VISIBLE else View.GONE
+            row.btnRemove.visibility = if (item.isBuiltIn) View.GONE else View.VISIBLE
             row.btnRemove.contentDescription = getString(R.string.reflection_remove, item.displayLabel())
             row.btnRemove.setOnClickListener {
                 ReflectionSettings.remove(this@ReflectionSettingsActivity, item.id)

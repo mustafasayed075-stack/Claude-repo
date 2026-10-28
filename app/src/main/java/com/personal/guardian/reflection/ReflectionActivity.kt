@@ -209,7 +209,13 @@ class ReflectionActivity : AppCompatActivity() {
     private fun bindVideo(videoView: android.widget.VideoView, textView: android.widget.TextView, value: String) {
         videoView.visibility = View.VISIBLE
         runCatching {
-            videoView.setVideoURI(Uri.parse(value))
+            val uri = if (ReflectionBuiltIns.isBuiltIn(value)) builtInUri(value) else Uri.parse(value)
+            if (uri == null) {
+                showError(textView)
+                return
+            }
+            // Loops (below), so a clip shorter than the lock replays until the lock ends.
+            videoView.setVideoURI(uri)
             videoView.setOnPreparedListener { mp ->
                 mp.isLooping = true
                 // Play with audio at the device's media volume (not muted). Hold the
@@ -222,6 +228,12 @@ class ReflectionActivity : AppCompatActivity() {
             }
             videoView.setOnErrorListener { _, _, _ -> showError(textView); true }
         }.onFailure { showError(textView) }
+    }
+
+    /** A built-in reminder's `android.resource://` URI inside the APK (`res/raw`), or null if unknown. */
+    private fun builtInUri(id: String): Uri? = when (id) {
+        ReflectionBuiltIns.REMINDER_VIDEO_ID -> Uri.parse("android.resource://$packageName/${R.raw.rafiq_builtin_reminder}")
+        else -> null
     }
 
     private fun bindAudio(audioVisual: View, textView: android.widget.TextView, value: String) {

@@ -1583,6 +1583,17 @@ adds any number of items through the system pickers:
   injected `Random`, so tests are deterministic). An empty library logs a warning and
   shows nothing (the device is still locked).
 
+### Built-in reminder
+
+One reminder ships inside the APK: a ~60.7 s video, `res/raw/rafiq_builtin_reminder.mp4`
+(`ReflectionBuiltIns`). It is always in the library and always part of the random pick
+alongside the user's own content, shown in the list with a **«مدمج»** badge and no
+delete button. It is added when the library is *read*, never seeded into storage, so an
+existing install gets it with the update and a reinstall gets it at once; removing it is
+refused in the data layer (`ReflectionLibrary.remove`), not only hidden in the UI. With
+an empty user library it is what a lock shows, so Reflection Mode never opens blank.
+Videos loop, so a clip shorter than the lock replays until the lock ends.
+
 ### Duration (60-second minimum, enforced in code)
 
 The same screen sets the duration in seconds, used for every lock trigger. The

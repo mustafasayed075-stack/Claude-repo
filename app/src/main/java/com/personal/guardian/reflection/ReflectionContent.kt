@@ -39,6 +39,9 @@ data class ReflectionItem(
     val id: String,
     val label: String = ""
 ) {
+    /** Ships inside the APK ([ReflectionBuiltIns]); can't be removed and is never stored. */
+    val isBuiltIn: Boolean get() = ReflectionBuiltIns.isBuiltIn(id)
+
     /** A short label for the list and logs: the given label, else a trimmed preview. */
     fun displayLabel(): String = label.ifBlank {
         if (type == ReflectionType.TEXT) value.trim().take(40).ifBlank { "(empty)" } else value
@@ -73,10 +76,21 @@ class ReflectionLibrary(items: List<ReflectionItem>) {
     fun countOf(type: ReflectionType): Int = items.count { it.type == type }
 
     fun add(item: ReflectionItem): ReflectionLibrary =
-        if (item.id in this) this else ReflectionLibrary(items + item)
+        if (item.id in this || item.isBuiltIn) this else ReflectionLibrary(items + item)
 
+    /** Removes [id]. A built-in item is refused here, in the data layer (unchanged library). */
     fun remove(id: String): ReflectionLibrary =
-        if (id in this) ReflectionLibrary(items.filter { it.id != id }) else this
+        if (id in this && !ReflectionBuiltIns.isBuiltIn(id)) ReflectionLibrary(items.filter { it.id != id }) else this
+
+    /** The user's own items (what is stored), without the built-ins. */
+    val userItems: List<ReflectionItem> get() = items.filterNot { it.isBuiltIn }
+
+    /**
+     * This library with the built-in reminders in front. Applied every time the library
+     * is read — never stored — so an existing install gets them after an update and a
+     * reinstall gets them at once. Idempotent.
+     */
+    fun withBuiltIns(): ReflectionLibrary = ReflectionLibrary(ReflectionBuiltIns.ITEMS + userItems)
 
     /**
      * One item chosen uniformly at random (injected [random] for deterministic tests),
@@ -95,6 +109,27 @@ class ReflectionLibrary(items: List<ReflectionItem>) {
 }
 
 /**
+ * Reminders that ship inside the APK (`res/raw`), always part of the library and of the
+ * random pick, alongside the user's own content. They are added when the library is
+ * read ([ReflectionLibrary.withBuiltIns]), never seeded into storage, and can't be
+ * removed. With an empty user library the built-in is what a lock shows, so a lock
+ * never opens an empty Reflection screen.
+ */
+object ReflectionBuiltIns {
+
+    const val PREFIX = "builtin:"
+
+    /** The built-in reminder video, `res/raw/rafiq_builtin_reminder.mp4` (~60.7 s). */
+    const val REMINDER_VIDEO_ID = "${PREFIX}rafiq_builtin_reminder"
+
+    val ITEMS: List<ReflectionItem> = listOf(
+        ReflectionItem(ReflectionType.VIDEO, REMINDER_VIDEO_ID, REMINDER_VIDEO_ID)
+    )
+
+    fun isBuiltIn(id: String): Boolean = id.startsWith(PREFIX)
+}
+
+/**
  * Text file format for the library: a header line, then one tab-separated line per
  * item: `type<TAB>id<TAB>label<TAB>value`. Tabs and newlines in text/label/value are
  * escaped so one item is always one line.
@@ -105,7 +140,7 @@ object ReflectionFormat {
 
     fun encode(library: ReflectionLibrary): String = buildString {
         append(HEADER).append('\n')
-        for (item in library.items) {
+        for (item in library.userItems) { // built-ins live in the APK, not in the file
             append(item.type.label).append('\t')
                 .append(esc(item.id)).append('\t')
                 .append(esc(item.label)).append('\t')
@@ -126,6 +161,7 @@ object ReflectionFormat {
             val label = unesc(f[2])
             val value = unesc(f.drop(3).joinToString("\t")) // a stray tab in value survives
             if (id.isBlank() || value.isBlank()) return@mapNotNull null
+            if (ReflectionBuiltIns.isBuiltIn(id)) return@mapNotNull null // can't be shadowed by the file
             ReflectionItem(type, value, id, label)
         }
         return ReflectionLibrary(items)
