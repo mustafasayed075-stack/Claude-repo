@@ -715,7 +715,7 @@ is easy to recognise as a high *hentai* score with a high *drawing* score.
   are skipped and logged (rate-limited) as "secure window". To stop this being a
   hiding place, the **blind-spot lock** (`BlindSpotPolicy`, `BlindSpotSettings`)
   escalates: in an app on the **blind-spot list** (default Telegram + variants,
-  WhatsApp, Chrome, Instagram, Facebook — banks / password managers / wallets are
+  WhatsApp, WhatsApp Business, Chrome, Instagram, Facebook — banks / password managers / wallets are
   *not* listed), staying unreadable past a shrinking grace (60 s → 30 s → 10 s →
   immediate) locks and shows Reflection Mode; the grace resets after an hour of
   continuously readable screen. A **black-frame guardrail** treats a secure window

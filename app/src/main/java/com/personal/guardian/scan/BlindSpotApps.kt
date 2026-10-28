@@ -68,6 +68,7 @@ object BlindSpotDefaults {
         BlindSpotApp("tw.nekomimi.nekogram", "Nekogram"),
         BlindSpotApp("ir.ilmili.telegraph", "Telegraph"),
         BlindSpotApp("com.whatsapp", "WhatsApp"),
+        BlindSpotApp("com.whatsapp.w4b", "WhatsApp Business"),
         BlindSpotApp("com.android.chrome", "Chrome"),
         BlindSpotApp("com.instagram.android", "Instagram"),
         BlindSpotApp("com.facebook.katana", "Facebook"),

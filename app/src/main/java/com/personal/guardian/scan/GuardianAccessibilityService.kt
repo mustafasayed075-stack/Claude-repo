@@ -396,6 +396,9 @@ class GuardianAccessibilityService : AccessibilityService() {
             return
         }
 
+        // Check the app in front against the active window first, so this capture (and
+        // the blind-spot grace) is attributed to the app really on screen.
+        reconcileForeground()
         val source = scheduler.sourceAt(now)
         scheduler.onCaptured(now)
         // Region pass: read the node tree before the screenshot too (see RegionStability);
@@ -455,6 +458,31 @@ class GuardianAccessibilityService : AccessibilityService() {
             captureInFlight = false
             logFailureRateLimited("capture-request", "Scan capture: request failed to start.", t)
         }
+    }
+
+    /**
+     * Corrects the app in front from the active window when no window-state event did
+     * (e.g. back to WhatsApp after a brief launcher peek on gesture navigation). See
+     * [ForegroundReconciler]. Worker thread.
+     */
+    private fun reconcileForeground() {
+        val root = runCatching { rootInActiveWindow }.getOrNull() ?: return
+        val active = try {
+            root.packageName?.toString()
+        } finally {
+            releaseNode(root)
+        }
+        val current = scheduler.foregroundPackage
+        val fix = ForegroundReconciler.correction(
+            current, active, packageName, scheduler.overlayPackages,
+            lockController?.isLocked() == true, ReflectionActivity.isShowing
+        ) ?: return
+        logFailureRateLimited(
+            "fg-correct-$current-$fix",
+            "Foreground corrected: ${current ?: "unknown"} → $fix (the active window; no window-state event said so).",
+            null
+        )
+        onForegroundChanged(fix)
     }
 
     /** A screenshot request failed (worker thread). */

@@ -25,6 +25,7 @@ class BlindSpotAppsTest {
         val pkgs = d.entries.map { it.packageName }.toSet()
         assertTrue("org.telegram.messenger" in pkgs)
         assertTrue("com.whatsapp" in pkgs)
+        assertTrue("WhatsApp Business (view-once too)", "com.whatsapp.w4b" in pkgs)
         assertTrue("com.android.chrome" in pkgs)
         assertTrue("com.instagram.android" in pkgs)
         assertTrue("com.facebook.katana" in pkgs)
