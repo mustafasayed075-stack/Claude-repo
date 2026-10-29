@@ -206,6 +206,11 @@
     <string name="share_log_empty">اللوج فاضي لسه.</string>
     <string name="share_log_failed">تعذّر مشاركة اللوج.</string>
 
+    <string name="btn_stage2_replay">تجربة المرحلة التانية على اللقطات المحفوظة</string>
+    <string name="stage2_replay_running">جاري التجربة…</string>
+    <string name="stage2_replay_result">%1$d لقطة: كانت هتأكد %2$d، وتحوّل لإيحائي %3$d، وتلغي %4$d (فشل %5$d). متوسط الفحص %6$d مللي ثانية. التفاصيل في سجل الأحداث.</string>
+    <string name="stage2_replay_empty">مفيش لقطات محفوظة لسه.</string>
+    <string name="stage2_replay_failed">تعذّرت التجربة (الموديل ما اتحمّلش).</string>
     <string name="section_developer">للمطورين</string>
     <string name="version_label">الإصدار %1$s</string>
     <string name="developer_unlocked">تم فتح قسم المطورين</string>

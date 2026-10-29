@@ -316,6 +316,11 @@
                     android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:text="@string/btn_reset_escalation" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnStage2Replay" style="@style/Widget.Rafiq.Button.Secondary"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/btn_stage2_replay" />
+
                 <TextView
                     android:id="@+id/txtProvisionHint"
                     android:layout_width="match_parent" android:layout_height="wrap_content"

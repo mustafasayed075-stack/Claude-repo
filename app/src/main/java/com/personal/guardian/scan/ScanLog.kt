@@ -87,6 +87,32 @@ object ScanLog {
     fun surfaceLabel(pornSurface: Int, regions: List<RegionScore>, wholeCrop: String): String =
         if (pornSurface == PerClassLayer.WHOLE) "whole screen ($wholeCrop)" else "region ${regions[pornSurface].region.label}"
 
+    /**
+     * The second stage's verdict on one first-stage lock decision (shadow mode), e.g.
+     * `STAGE2 shadow: would VETO first-stage lock=per-class porn (explicit) exposed=none covered=none
+     * ms=212 [crop 74 ms: FACE_MALE 0.840; full 69 ms: FACE_MALE 0.810] app=… — lock unchanged (shadow).`
+     */
+    fun stage2Line(
+        lockedBy: String,
+        trigger: SecondStage.Trigger,
+        result: SecondStage.Result,
+        surfaces: List<Pair<SecondStage.Surface, Long>>,
+        totalMs: Long,
+        foregroundPackage: String?
+    ): String {
+        val parts = surfaces.joinToString("; ") { (s, ms) ->
+            val top = s.detections.take(ScanConfig.STAGE2_LOG_TOP)
+                .joinToString(", ") { String.format(Locale.US, "%s %.3f", it.part.name, it.score) }
+            "${s.name} $ms ms: ${top.ifEmpty { "nothing" }}"
+        }
+        val budget = if (totalMs > ScanConfig.STAGE2_TIMEOUT_MS) {
+            " (over the ${ScanConfig.STAGE2_TIMEOUT_MS} ms budget: enforcement would keep the first-stage lock)"
+        } else ""
+        return "STAGE2 shadow: would ${result.decision.label} first-stage lock=$lockedBy (${trigger.label}) " +
+            "exposed=${SecondStage.hitLabel(result.exposed)} covered=${SecondStage.hitLabel(result.covered)} " +
+            "ms=$totalMs$budget [$parts] app=${foregroundPackage ?: "unknown"} — lock unchanged (shadow)."
+    }
+
     fun perClassLine(whole: NsfwScores, regions: List<RegionScore>, foregroundPackage: String?): String {
         val best = regions.maxByOrNull { maxOf(it.scores.sexy, it.scores.porn, it.scores.hentai) }
         val w = String.format(Locale.US, "whole[sexy=%.3f porn=%.3f hentai=%.3f]", whole.sexy, whole.porn, whole.hentai)

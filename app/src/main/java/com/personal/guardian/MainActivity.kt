@@ -36,6 +36,7 @@ import com.personal.guardian.scan.ScanConfig
 import com.personal.guardian.scan.ScanSensitivity
 import com.personal.guardian.scan.ScanSensitivitySettings
 import com.personal.guardian.scan.ScanStatus
+import com.personal.guardian.scan.Stage2Replay
 import com.personal.guardian.service.GuardianForegroundService
 import com.personal.guardian.util.GuardianLog
 import com.personal.guardian.vpn.BlockedDomainLogSettings
@@ -135,6 +136,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnRefreshStatus.setOnClickListener { refreshStatus() }
         binding.btnShareLog.setOnClickListener { shareLog() }
+        binding.btnStage2Replay.setOnClickListener { replayStage2() }
         binding.btnResetEscalation.setOnClickListener {
             // Blind-spot escalation back to its first step (60 s); applied by the service.
             val running = GuardianAccessibilityService.requestBlindSpotReset()
@@ -145,6 +147,33 @@ class MainActivity : AppCompatActivity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+    }
+
+    /**
+     * Developer: the second stage over the saved review thumbnails ([Stage2Replay]) —
+     * counts only, no image shown. Background thread.
+     */
+    private fun replayStage2() {
+        binding.btnStage2Replay.isEnabled = false
+        Toast.makeText(this, R.string.stage2_replay_running, Toast.LENGTH_SHORT).show()
+        Thread {
+            val summary = runCatching { Stage2Replay.run(this) }
+                .onFailure { GuardianLog.e(this, "STAGE2 replay: failed.", it) }
+                .getOrNull()
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                binding.btnStage2Replay.isEnabled = true
+                val message = when {
+                    summary == null -> getString(R.string.stage2_replay_failed)
+                    summary.images == 0 -> getString(R.string.stage2_replay_empty)
+                    else -> getString(
+                        R.string.stage2_replay_result, summary.images, summary.confirm, summary.downgrade,
+                        summary.veto, summary.failed, summary.medianMs.toInt()
+                    )
+                }
+                AlertDialog.Builder(this).setMessage(message).setPositiveButton(android.R.string.ok, null).show()
+            }
+        }.start()
     }
 
     /** Exports the local event log as a file through a share sheet (no network). */

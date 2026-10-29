@@ -3,6 +3,10 @@
 A **personal, on-device** accountability tool for Android. It is a single-user app
 (not for public distribution) that:
 
+> **Licence:** GNU AGPL-3.0 (`LICENSE`), because it bundles the NudeNet second-stage
+> model (AGPL-3.0, `third_party/nudenet`). The first-stage model is Apache-2.0
+> (`third_party/viddexa_nsfw_detection_2_nano`).
+
 - **Stage 1 — Provisioning:** runs as **Device Owner**, so it cannot be removed
   through normal Settings (only a full factory reset), backed by a persistent core
   foreground service that later stages build on.
@@ -342,6 +346,37 @@ hour (`BlockedDomainLog`, `BlockedDomainLogSettings`, `BlockedSitesActivity`):
   TikTok video (dark graphic on top, a close-up face below) the crop keeps only the
   face band, and the model's porn score rises from ≈0.01 (whole frame) to as much as
   0.84–0.99 on face-only crops.
+- **Second stage — body-part reviewer (Build 48: shadow mode):** the first stage
+  above stays as the fast filter. Whenever it decides to lock (confirmed detection,
+  per-class porn, or the suggestive tier), a second model checks the same frame: is
+  there actually an exposed body part, or e.g. only a close-up face? The model is
+  NudeNet v3 `320n` (YOLOv8n body-part detector, 18 classes; float16 TFLite, 6.1 MB,
+  `third_party/nudenet`, rebuilt byte-for-byte by `tools/convert_nudenet.py`), run
+  on-device with the same TFLite runtime; no network. `BodyPartDecoder` reproduces
+  NudeNet's post-processing (checked against it in `SecondStageTest`), and
+  `SecondStage.decide` is the decision table:
+  - an **exposed** part (female breast, genitalia, buttocks, anus) ≥
+    `STAGE2_EXPOSED_THRESHOLD` 0.45 on any checked surface → **confirm**;
+  - only a **covered intimate** part (breast, genitalia, buttocks) ≥
+    `STAGE2_COVERED_THRESHOLD` 0.50 → **downgrade** an explicit trigger to the
+    two-frame suggestive rule, **confirm** a suggestive one;
+  - anything else — a face alone, a clothed body — → **veto**. An exposed male chest
+    is not counted (owner decision), nor are faces, feet, armpits and bellies.
+
+  Surfaces checked: the letterbox crop (if any), the whole frame, and the region that
+  triggered (if any). **Build 48 does not change any lock** (`STAGE2_ENFORCE = false`):
+  after each first-stage lock decision it logs
+  `STAGE2 shadow: would CONFIRM|DOWNGRADE to suggestive|VETO first-stage lock=… exposed=… covered=… ms=… [crop N ms: …; full N ms: …] … — lock unchanged (shadow).`
+  with the time each check took on the device, plus the model's load time at start.
+  If it fails, it logs that enforcement would keep the first-stage lock (the planned
+  fallback), and it switches itself off for the session after 3 failures in a row.
+  Developer section → "تجربة المرحلة التانية على اللقطات المحفوظة" runs it over the
+  saved review thumbnails of past confirmed detections and shows counts only (no
+  image). Measured off-device (benign content only): of the first stage's 67 locks
+  on COCO people photos and Rico app screens it would have kept 1; on the TikTok
+  close-up-face frames it vetoed all 18. Whether it still catches explicit content is
+  **not** measured off-device (no explicit images are used) — that is what the
+  shadow log is for.
 - **Calibration logging (temporary):** with `LOG_EVERY_FRAME_SCORE = true` every
   classified frame is logged, e.g.
   `Scan frame: signal=0.6430 [>= 0.15] sexy=0.612 porn=0.031 hentai=0.000 safe=0.340 drawing=0.017 trigger=event app=com.whatsapp positives=1/2 regions=0`

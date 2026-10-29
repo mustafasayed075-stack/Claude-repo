@@ -109,6 +109,9 @@ class GuardianAccessibilityService : AccessibilityService() {
     private val letterboxLuma = IntArray(RegionContent.GRID * RegionContent.GRID)
     private val costStats = ScanCostStats()
     private var classifier: NsfwClassifier? = null
+    // Second stage (README "Second stage"); shadow mode in Build 48. Worker thread only.
+    private var bodyParts: BodyPartDetector? = null
+    private var stage2Failures = 0
     private var captureInFlight = false
     // Ends a screenshot request whose callback never arrives (see ScanConfig.CAPTURE_TIMEOUT_MS).
     private val captureWatchdog = CaptureWatchdog()
@@ -202,6 +205,20 @@ class GuardianAccessibilityService : AccessibilityService() {
             }
             ScanStatus.modelLoaded = classifier != null
             if (classifier == null) return@post
+            val loadStart = SystemClock.elapsedRealtime()
+            bodyParts = try {
+                BodyPartDetector.create(applicationContext).also {
+                    GuardianLog.i(
+                        applicationContext,
+                        "Second stage (NudeNet 320n fp16) loaded in ${SystemClock.elapsedRealtime() - loadStart} ms; " +
+                            (if (ScanConfig.STAGE2_ENFORCE) "enforcing." else "shadow mode: it logs its verdict, locks are unchanged."),
+                        diagnostic = true
+                    )
+                }
+            } catch (t: Throwable) {
+                GuardianLog.e(applicationContext, "Second stage: failed to load its model; locks stay first-stage only.", t, diagnostic = true)
+                null
+            }
             scheduler.onForegroundChanged(initialForeground)
             ScanStatus.fastModePackage = if (scheduler.isFastMode) scheduler.foregroundPackage else null
             GuardianLog.i(
@@ -642,6 +659,24 @@ class GuardianAccessibilityService : AccessibilityService() {
             // Suggestive tier: locks on its own, after the explicit confirmation above
             // (so a frame that also confirmed explicitly locks as that first).
             else if (suggestiveConfirmed) onSuggestiveConfirmed(verdict)
+            // Second stage, shadow mode (Build 48): for every first-stage lock decision above,
+            // log what the body-part reviewer would decide. Runs after the lock, so the lock
+            // and its timing are unchanged.
+            val lockedBy = when {
+                confirmation != null -> "confirmed"
+                perClass.pornImmediate -> "per-class porn"
+                suggestiveConfirmed -> "suggestive"
+                else -> null
+            }
+            if (lockedBy != null) {
+                val regionBox = when {
+                    confirmation == null && perClass.pornImmediate ->
+                        perClass.pornSurface?.takeIf { it != PerClassLayer.WHOLE }?.let { regions.scores[it].crop }
+                    else -> verdict.region?.crop
+                }
+                val trigger = if (lockedBy == "suggestive") SecondStage.Trigger.SUGGESTIVE else SecondStage.Trigger.EXPLICIT
+                shadowReview(frame, cropBox, regionBox, lockedBy, trigger, pkg)
+            }
             // Stage 5: a borderline text match waiting for an image check (after the
             // confirmation, so a confirmed image detection locks as "image" first).
             lockController?.let { lc ->
@@ -649,6 +684,51 @@ class GuardianAccessibilityService : AccessibilityService() {
             }
         } finally {
             frame.recycle()
+        }
+    }
+
+    /**
+     * Second stage, shadow mode: runs the body-part reviewer on the letterbox crop (if
+     * any), the whole frame and the triggering region (if any), and logs its would-be
+     * decision with the time each check took on this device. Never locks or unlocks.
+     */
+    private fun shadowReview(frame: Bitmap, cropBox: Box?, regionBox: Box?, lockedBy: String, trigger: SecondStage.Trigger, pkg: String?) {
+        val ctx = applicationContext
+        val detector = bodyParts
+        if (detector == null) {
+            GuardianLog.w(ctx, "STAGE2 shadow: unavailable (model not loaded) for first-stage lock=$lockedBy; enforcement would keep the first-stage lock.")
+            return
+        }
+        val start = SystemClock.elapsedRealtime()
+        try {
+            val surfaces = ArrayList<Pair<SecondStage.Surface, Long>>()
+            fun check(name: String, box: Box?) {
+                val t = SystemClock.elapsedRealtime()
+                val img = if (box == null) frame else Bitmap.createBitmap(frame, box.left, box.top, box.width, box.height)
+                try {
+                    surfaces += SecondStage.Surface(name, detector.detect(img)) to (SystemClock.elapsedRealtime() - t)
+                } finally {
+                    if (img !== frame) img.recycle()
+                }
+            }
+            if (cropBox != null) check("crop", cropBox)
+            check("full", null)
+            if (regionBox != null && !regionBox.isEmpty) check("region", regionBox)
+            val result = SecondStage.decide(trigger, surfaces.map { it.first })
+            GuardianLog.w(ctx, ScanLog.stage2Line(lockedBy, trigger, result, surfaces, SystemClock.elapsedRealtime() - start, pkg))
+            stage2Failures = 0
+        } catch (t: Throwable) {
+            stage2Failures++
+            GuardianLog.e(
+                ctx,
+                "STAGE2 shadow: failed for first-stage lock=$lockedBy after ${SystemClock.elapsedRealtime() - start} ms " +
+                    "(${t.javaClass.name}); enforcement would keep the first-stage lock."
+            )
+            if (stage2Failures >= STAGE2_MAX_FAILURES) {
+                runCatching { detector.close() }
+                bodyParts = null
+                GuardianLog.e(ctx, "Second stage: disabled for this session after $STAGE2_MAX_FAILURES failures in a row.", diagnostic = true)
+            }
         }
     }
 
@@ -1326,6 +1406,8 @@ class GuardianAccessibilityService : AccessibilityService() {
         handler.post {
             classifier?.close()
             classifier = null
+            bodyParts?.close()
+            bodyParts = null
             keywordMatcher = null
             regionCache.clear()
             lockController = null
@@ -1370,6 +1452,9 @@ class GuardianAccessibilityService : AccessibilityService() {
 
     companion object {
         private val instanceCounter = AtomicInteger()
+
+        /** The second stage is switched off for the session after this many failures in a row. */
+        private const val STAGE2_MAX_FAILURES = 3
 
         /** Set by the developer section; the running service applies it on its next tick. */
         private val blindSpotResetRequested = AtomicBoolean(false)

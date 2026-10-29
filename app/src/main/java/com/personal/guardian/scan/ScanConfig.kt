@@ -296,6 +296,30 @@ object ScanConfig {
      */
     const val MODEL_ASSET = "models/viddexa_nsfw_detection_2_nano_224.tflite"
 
+    // ---- Second stage (README "Second stage") ----
+
+    /** NudeNet v3 `320n` body-part detector, float16 TFLite (third_party/nudenet). */
+    const val STAGE2_MODEL_ASSET = "models/nudenet_320n_fp16.tflite"
+
+    /**
+     * Build 48: **shadow mode** — the second stage runs at every first-stage lock decision
+     * and logs what it would decide; the lock happens exactly as before. Enforcement is a
+     * later build, after the shadow log has been reviewed.
+     */
+    const val STAGE2_ENFORCE = false
+
+    /** An exposed part (SecondStage.EXPOSED) at or above this confirms. Measured: a face crop gave a 0.34 false positive. */
+    const val STAGE2_EXPOSED_THRESHOLD = 0.45f
+
+    /** A covered intimate part (SecondStage.COVERED) at or above this counts as suggestive. */
+    const val STAGE2_COVERED_THRESHOLD = 0.50f
+
+    /** Longer than this, enforcement would give up and keep the first-stage lock. */
+    const val STAGE2_TIMEOUT_MS = 1_500L
+
+    /** Detections per surface printed in the shadow line. */
+    const val STAGE2_LOG_TOP = 3
+
     // ---- Blocked-sites log ----
 
     /**

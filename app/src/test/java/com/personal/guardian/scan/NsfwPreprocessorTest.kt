@@ -170,7 +170,11 @@ class NsfwPreprocessorTest {
     fun previousModelAndItsLicencesAreGone() {
         assertFalse(File("src/main/assets/models/nsfw_mobilenet_v2_140_224.tflite").exists())
         assertFalse(File("../third_party/nsfw_model").exists())
-        assertEquals(listOf("viddexa_nsfw_detection_2_nano_224.tflite"), File("src/main/assets/models").list()!!.sorted())
+        // The first-stage classifier, plus the second-stage reviewer (SecondStageTest) — nothing else.
+        assertEquals(
+            listOf("nudenet_320n_fp16.tflite", "viddexa_nsfw_detection_2_nano_224.tflite"),
+            File("src/main/assets/models").list()!!.sorted()
+        )
     }
 
     @Test
