@@ -27,7 +27,21 @@ object PerClassLayer {
      * @param regions each classified region's class scores.
      * @param sexyThreshold the current sensitivity's sexy threshold ([ScanSensitivity]).
      */
-    data class Verdict(val pornImmediate: Boolean, val suggestive: Boolean, val suspect: Boolean)
+    data class Verdict(
+        val pornImmediate: Boolean,
+        val suggestive: Boolean,
+        val suspect: Boolean,
+        /**
+         * Which surface made [pornImmediate]: [WHOLE] for the whole screen, else the index
+         * in `regions`; the highest porn at or above the threshold. Null when none did.
+         * The lock log prints this surface — it can differ from the frame's combined
+         * verdict surface (Build 45 log: "PER-CLASS lock: porn" with porn=0.270 printed).
+         */
+        val pornSurface: Int? = null
+    )
+
+    /** [Verdict.pornSurface] value for the whole screen. */
+    const val WHOLE = -1
 
     fun evaluate(
         whole: NsfwScores,
@@ -40,6 +54,10 @@ object PerClassLayer {
         val surfaces = regions + whole
         // porn: whole screen + regions, immediate.
         val pornImmediate = surfaces.any { it.porn >= pornThreshold }
+        val pornSurface = if (!pornImmediate) null else {
+            val best = surfaces.indices.filter { surfaces[it].porn >= pornThreshold }.maxBy { surfaces[it].porn }
+            if (best == regions.size) WHOLE else best
+        }
         // sexy: whole screen + regions, suggestive.
         val sexySuggestive = surfaces.any { it.sexy >= sexyThreshold }
         // hentai: regions only (the whole UI screen floods hentai), suggestive.
@@ -50,7 +68,8 @@ object PerClassLayer {
         return Verdict(
             pornImmediate = pornImmediate,
             suggestive = sexySuggestive || hentaiSuggestive,
-            suspect = suspect
+            suspect = suspect,
+            pornSurface = pornSurface
         )
     }
 }

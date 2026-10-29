@@ -191,6 +191,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         scheduler.overlayPackages = ScanConfig.OVERLAY_PACKAGES + enabledKeyboardPackages()
         val initialForeground = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
         ScanStatus.foregroundPackage = initialForeground?.takeIf { it != packageName }
+        ScanStatus.foregroundNow = { foregroundNow() }
 
         handler.post {
             classifier = try {
@@ -488,6 +489,27 @@ class GuardianAccessibilityService : AccessibilityService() {
         onForegroundChanged(fix)
     }
 
+    /**
+     * The app in front right now, from the active window (for the blocked-sites log; called
+     * from its background thread). Falls back to the last window event's app.
+     */
+    private fun foregroundNow(): String? {
+        val cached = ScanStatus.foregroundPackage
+        val active = runCatching {
+            rootInActiveWindow?.let { root ->
+                try {
+                    root.packageName?.toString()
+                } finally {
+                    releaseNode(root)
+                }
+            }
+        }.getOrNull()
+        return ForegroundReconciler.inFront(
+            cached, active, packageName, scheduler.overlayPackages,
+            runCatching { lockController?.isLocked() == true }.getOrDefault(false), ReflectionActivity.isShowing
+        )
+    }
+
     /** A screenshot request failed (worker thread). */
     private fun onCaptureFailure(errorCode: Int) {
         captureInFlight = false
@@ -525,10 +547,11 @@ class GuardianAccessibilityService : AccessibilityService() {
             // path below is untouched.
             val t0 = SystemClock.elapsedRealtime()
             val crop = letterboxCrop(frame)
+            val cropBox = crop?.second
             val whole = try {
-                model.classify(crop ?: frame)
+                model.classify(crop?.first ?: frame)
             } finally {
-                if (crop != null && crop !== frame) crop.recycle()
+                crop?.first?.let { if (it !== frame) it.recycle() }
             }
             val t1 = SystemClock.elapsedRealtime()
             // Path 2: image-bearing elements cropped out of the same frame.
@@ -559,6 +582,17 @@ class GuardianAccessibilityService : AccessibilityService() {
             if (readable) onCaptureReadable(pkg, captureType, blackFrac) else onCaptureUnreadable(pkg, captureType, blackFrac)
 
             val confirmation = confirmer.onFrame(verdict.score, now, source, verdict.positive)
+            val cropLabel = ScanLog.cropLabel(cropBox, frame.width, frame.height)
+            // Diagnostics: a suspect whole-screen frame that was cropped is classified again
+            // uncropped, and both are logged with the crop rectangle (decisions unchanged).
+            if (cropBox != null && (whole.screenSignal >= ScanConfig.NSFW_THRESHOLD ||
+                    whole.porn >= ScanConfig.SUSPECT_FLOOR || whole.sexy >= ScanConfig.SUSPECT_FLOOR)
+            ) {
+                val uncropped = runCatching { model.classify(frame) }.getOrNull()
+                if (uncropped != null) {
+                    GuardianLog.i(applicationContext, ScanLog.cropCheckLine(cropBox, frame.width, frame.height, whole, uncropped, pkg))
+                }
+            }
             // Additive per-class layer: raw-class rules on top of the combined paths.
             val suggestiveThreshold = ScanSensitivitySettings.suggestiveThreshold(applicationContext)
             val perClass = PerClassLayer.evaluate(whole, regions.scores.map { it.scores }, suggestiveThreshold)
@@ -582,7 +616,7 @@ class GuardianAccessibilityService : AccessibilityService() {
                         signal = verdict.score,
                         level = level.label,
                         fastScan = fastScanLabel(pkg)
-                    )
+                    ) + " " + cropLabel
                 )
                 // (Unreadable frames are logged by onCaptureUnreadable with more detail.)
                 // Per-class "suspect" frames are logged (not locked) so the thresholds can
@@ -592,8 +626,19 @@ class GuardianAccessibilityService : AccessibilityService() {
                 }
             }
             if (confirmation != null) onConfirmed(confirmation, frame, verdict)
-            // Per-class porn: an immediate (one-frame) lock, after the explicit confirmation.
-            if (perClass.pornImmediate) onPerClassImmediate(verdict, "porn")
+            // Per-class porn: an immediate (one-frame) lock, after the explicit confirmation —
+            // but one lock per frame: if this frame already confirmed (and so locked), the
+            // per-class match is only logged (Build 45: two locks 0.2 s apart).
+            if (perClass.pornImmediate && confirmation != null) {
+                GuardianLog.i(
+                    applicationContext,
+                    "PER-CLASS porn also matched this frame on " +
+                        ScanLog.surfaceLabel(perClass.pornSurface ?: PerClassLayer.WHOLE, regions.scores, cropLabel) +
+                        "; already handled by the confirmed detection, no second lock."
+                )
+            } else if (perClass.pornImmediate) {
+                onPerClassImmediate(verdict, "porn", perClass.pornSurface ?: PerClassLayer.WHOLE, whole, regions.scores, cropLabel)
+            }
             // Suggestive tier: locks on its own, after the explicit confirmation above
             // (so a frame that also confirmed explicitly locks as that first).
             else if (suggestiveConfirmed) onSuggestiveConfirmed(verdict)
@@ -678,15 +723,15 @@ class GuardianAccessibilityService : AccessibilityService() {
     /**
      * Screen scanning → letterbox crop. If [frame] is a letterboxed media-viewer screen (a large
      * image on black bands, with a status bar / header / thumbnail strip around it), this
-     * returns that image cropped out, so the black bands and chrome don't dilute the
-     * whole-screen signal. Returns null when there's nothing worth cropping (no bands, or
+     * returns that image cropped out (with its rectangle in frame pixels), so the black
+     * bands and chrome don't dilute the whole-screen signal. Returns null when there's nothing worth cropping (no bands, or
      * the crop would be trivial) — then the caller classifies the whole frame unchanged,
      * so apps without black bars are not affected. The returned bitmap is a new bitmap the
      * caller recycles. Geometry is in [LetterboxCrop]; here we only build the luma grid
      * (reusing [RegionContent.GRID] and the same Rec. 601 luma as [ImageRegions]) and map
      * the result rect back to frame pixels.
      */
-    private fun letterboxCrop(frame: Bitmap): Bitmap? {
+    private fun letterboxCrop(frame: Bitmap): Pair<Bitmap, Box>? {
         val grid = RegionContent.GRID
         var current = frame
         for ((w, h) in NsfwPreprocessor.downscaleSteps(frame.width, frame.height, grid)) {
@@ -709,7 +754,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         val top = (rect.top.toLong() * frame.height / grid).toInt().coerceIn(0, frame.height - 1)
         val right = ((rect.left + rect.width).toLong() * frame.width / grid).toInt().coerceIn(left + 1, frame.width)
         val bottom = ((rect.top + rect.height).toLong() * frame.height / grid).toInt().coerceIn(top + 1, frame.height)
-        return Bitmap.createBitmap(frame, left, top, right - left, bottom - top)
+        return Bitmap.createBitmap(frame, left, top, right - left, bottom - top) to Box(left, top, right, bottom)
     }
 
     /** [RegionContent] verdict for a crop, on an area-averaged [RegionContent.GRID]² downsample. */
@@ -824,20 +869,32 @@ class GuardianAccessibilityService : AccessibilityService() {
      * [ScanConfig.PORN_IMMEDIATE_THRESHOLD]. Locks through the same controller as a
      * detection, bypassing the confirmer and cooldown. Log + lock only.
      */
-    private fun onPerClassImmediate(verdict: FrameVerdict.Result, cls: String) {
+    private fun onPerClassImmediate(
+        verdict: FrameVerdict.Result,
+        cls: String,
+        surface: Int,
+        whole: NsfwScores,
+        regions: List<RegionScore>,
+        cropLabel: String
+    ) {
         val ctx = applicationContext
         val pkg = scheduler.foregroundPackage
+        // The surface that matched (whole screen or a region) — not the frame's combined
+        // verdict surface, which can be another one with lower porn.
+        val triggerScores = if (surface == PerClassLayer.WHOLE) whole else regions[surface].scores
+        val triggerRegion = if (surface == PerClassLayer.WHOLE) null else regions[surface].region.label
         GuardianLog.w(
             ctx,
-            "PER-CLASS lock (immediate): $cls (${verdict.scores.breakdown()}) " +
-                "scored=${verdict.region?.region?.label ?: "whole screen"} app=${pkg ?: "unknown"}."
+            "PER-CLASS lock (immediate): $cls on ${ScanLog.surfaceLabel(surface, regions, cropLabel)} " +
+                "(${triggerScores.breakdown()}); frame verdict surface=${verdict.region?.region?.label ?: "whole screen"} " +
+                "(${verdict.scores.breakdown()}) regions=${regions.size} app=${pkg ?: "unknown"}."
         )
         ScanStatus.confirmedCount++
         handleLock(
             lockController?.onDetection(
                 DetectionEvent(
-                    System.currentTimeMillis(), verdict.scores.porn, TriggerSource.EVENT,
-                    pkg, null, verdict.scores, region = verdict.region?.region?.label
+                    System.currentTimeMillis(), triggerScores.porn, TriggerSource.EVENT,
+                    pkg, null, triggerScores, region = triggerRegion
                 )
             )
         )
@@ -1261,6 +1318,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         ScanStatus.modelLoaded = false
         ScanStatus.fastModePackage = null
         ScanStatus.foregroundPackage = null
+        ScanStatus.foregroundNow = null
         blindOverlay.hide()
         val handler = worker ?: return
         worker = null
@@ -1373,6 +1431,11 @@ object ScanStatus {
     @Volatile var fastModePackage: String? = null
     /** The app in front as last seen by the scanner (Rafiq's own windows excluded); null when off. */
     @Volatile var foregroundPackage: String? = null
+    /**
+     * Set by the scanner while it runs: reads the active window to say which app is in
+     * front right now ([ForegroundReconciler.inFront]); any thread. Null when off.
+     */
+    @Volatile var foregroundNow: (() -> String?)? = null
     @Volatile var framesScanned = 0L
         private set
     @Volatile var lastFrameAtMs = 0L

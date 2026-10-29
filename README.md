@@ -199,9 +199,15 @@ hour (`BlockedDomainLog`, `BlockedDomainLogSettings`, `BlockedSitesActivity`):
   (`BlocklistManager.matchedEntry`), not the full host: `cdn.x.example` and
   `www.x.example` both count for `x.example`. DNS never sees URLs.
 - Each row: the domain, the app that was in front at the latest block (its name, or
-  the package if the name isn't visible; taken from the scanner's
-  `ScanStatus.foregroundPackage`, so it's "unknown" while screen scanning is off),
-  the last time, and how many times it was blocked since it entered the log.
+  the package if the name isn't visible), the last time, and how many times it was
+  blocked since it entered the log — **at most once per
+  `ScanConfig.BLOCKED_LOG_COUNT_WINDOW_MS` (15 s)** per domain, since one page load
+  asks for a domain several times (a reload showed 6).
+- The app is read from the **active window at block time**
+  (`ForegroundReconciler.inFront`, through `ScanStatus.foregroundNow`), falling back to
+  the last window event's app. The cached value alone said "System Launcher" for a
+  reload right after coming back to the browser from Recents (no window event fires
+  then). It's "unknown" while screen scanning is off.
 - Constants in one place (`BlockedDomainLog`): `BLOCKED_LOG_WINDOW_MINUTES = 60` —
   an entry is dropped an hour after its **last** block (a new block restarts its
   hour); `BLOCKED_LOG_MAX_SHOWN = 20`, newest first. At most 200 are kept between
@@ -313,6 +319,12 @@ hour (`BlockedDomainLog`, `BlockedDomainLogSettings`, `BlockedSitesActivity`):
     whole UI, vs 0 % on real photos), so whole-screen hentai is **never** counted here.
   - a low floor (`SUSPECT_FLOOR` 0.25) only marks a frame *suspect* in the log
     (`Scan suspect: …`), never locks — at 0.25 it fires on 5–8 % of benign frames.
+  - The `PER-CLASS lock` line names the surface that matched (`on whole screen (crop=…)`
+    or `on region …`) with its scores, then the frame's combined verdict surface —
+    they can differ (a Build 45 line printed porn=0.270, the verdict surface's).
+  - **One lock per frame:** if the same frame also confirmed on the combined path
+    (which locks), the per-class match is only logged ("also matched … no second
+    lock").
 - **Letterbox crop (`LetterboxCrop`):** in an in-app media viewer (a Telegram album,
   etc.) a large image sits on black bands with a status bar, header and thumbnail
   strip around it; classifying that whole frame dilutes the signal below the screen
@@ -323,6 +335,13 @@ hour (`BlockedDomainLog`, `BlockedDomainLogSettings`, `BlockedSitesActivity`):
   Guardrails: the rect must be ≥ 35 % of each axis, the crop must remove ≥ 6 % of one
   axis, and a screen with no bands yields no crop (classified whole), so apps without
   black bars are unaffected. The explicit region path is untouched.
+  Every frame line ends with `crop=[l,t,r,b] of WxH` (or `crop=none`). A cropped frame
+  that is suspect (screen signal ≥ 0.15, or sexy/porn ≥ 0.25) is classified a second
+  time uncropped and logged as `Crop check: … cropped[…] uncropped[…]` — diagnostics
+  only, the decision still uses the crop. Known issue being measured: on a split
+  TikTok video (dark graphic on top, a close-up face below) the crop keeps only the
+  face band, and the model's porn score rises from ≈0.01 (whole frame) to as much as
+  0.84–0.99 on face-only crops.
 - **Calibration logging (temporary):** with `LOG_EVERY_FRAME_SCORE = true` every
   classified frame is logged, e.g.
   `Scan frame: signal=0.6430 [>= 0.15] sexy=0.612 porn=0.031 hentai=0.000 safe=0.340 drawing=0.017 trigger=event app=com.whatsapp positives=1/2 regions=0`

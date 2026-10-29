@@ -70,6 +70,23 @@ object ScanLog {
      * per-class thresholds can be tuned from the log, e.g.
      * `Scan suspect: whole[sexy=0.312 porn=0.028 hentai=0.004] region[sexy=0.455 porn=0.010 hentai=0.002 image …] app=…`.
      */
+    /** The whole-screen pass's letterbox crop for the frame line: `crop=[l,t,r,b] of WxH`, or `crop=none`. */
+    fun cropLabel(crop: Box?, frameWidth: Int, frameHeight: Int): String =
+        if (crop == null) "crop=none" else "crop=[${crop.left},${crop.top},${crop.right},${crop.bottom}] of ${frameWidth}x$frameHeight"
+
+    /**
+     * A suspect whole-screen frame that was letterbox-cropped, classified a second time
+     * uncropped (diagnostics only; the decision uses the cropped scores, as before), e.g.
+     * `Crop check: crop=[0,1105,1080,2160] of 1080x2412 cropped[sexy=… porn=0.809 …] uncropped[… porn=0.004 …] app=…`.
+     */
+    fun cropCheckLine(crop: Box, frameWidth: Int, frameHeight: Int, cropped: NsfwScores, uncropped: NsfwScores, foregroundPackage: String?): String =
+        "Crop check: ${cropLabel(crop, frameWidth, frameHeight)} cropped[${cropped.breakdown()}] " +
+            "uncropped[${uncropped.breakdown()}] app=${foregroundPackage ?: "unknown"}"
+
+    /** Names the surface a per-class rule fired on: `whole screen (crop=…)` or `region <label>`. */
+    fun surfaceLabel(pornSurface: Int, regions: List<RegionScore>, wholeCrop: String): String =
+        if (pornSurface == PerClassLayer.WHOLE) "whole screen ($wholeCrop)" else "region ${regions[pornSurface].region.label}"
+
     fun perClassLine(whole: NsfwScores, regions: List<RegionScore>, foregroundPackage: String?): String {
         val best = regions.maxByOrNull { maxOf(it.scores.sexy, it.scores.porn, it.scores.hentai) }
         val w = String.format(Locale.US, "whole[sexy=%.3f porn=%.3f hentai=%.3f]", whole.sexy, whole.porn, whole.hentai)

@@ -38,4 +38,19 @@ object ForegroundReconciler {
         if (!ForegroundFilter.counts(active, ownPackage, lockActive, reflectionShowing)) return null
         return active
     }
+
+    /**
+     * The app in front **now**, for something that happens between captures (a blocked
+     * DNS query): the active window when it counts, else [current]. Without this, a
+     * reload right after coming back to the browser from Recents / a home-screen peek
+     * was logged under the launcher (no window-state event says the browser is back).
+     */
+    fun inFront(
+        current: String?,
+        active: String?,
+        ownPackage: String,
+        overlayPackages: Set<String>,
+        lockActive: Boolean,
+        reflectionShowing: Boolean
+    ): String? = correction(current, active, ownPackage, overlayPackages, lockActive, reflectionShowing) ?: current
 }

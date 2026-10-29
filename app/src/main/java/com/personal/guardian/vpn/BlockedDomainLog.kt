@@ -1,5 +1,6 @@
 package com.personal.guardian.vpn
 
+import com.personal.guardian.scan.ScanConfig
 import java.io.File
 import java.io.IOException
 
@@ -9,20 +10,26 @@ import java.io.IOException
  * One entry per **blocklist domain** — the list entry that matched, not the full host
  * (DNS never sees URLs anyway): `cdn.example.com` and `www.example.com` both count for
  * `example.com`. Each entry keeps the app that was in front at the latest block (package
- * and label), the last time, and how many times it was blocked since it entered the log.
+ * and label), the last time, and how many times it was blocked since it entered the log —
+ * counted at most once per [countWindowMs] (one page load queries a domain several times).
  * An entry is dropped once it hasn't been blocked for [WINDOW_MS]. Local only: nothing
  * here is ever sent anywhere.
  *
  * Pure Kotlin with injected timestamps; callers serialise access ([BlockedDomainLogSettings]).
  */
-class BlockedDomainLog(entries: Collection<Entry> = emptyList()) {
+class BlockedDomainLog(
+    entries: Collection<Entry> = emptyList(),
+    private val countWindowMs: Long = ScanConfig.BLOCKED_LOG_COUNT_WINDOW_MS
+) {
 
     data class Entry(
         val domain: String,
         val appPackage: String?,
         val appLabel: String?,
         val lastBlockedAtMs: Long,
-        val count: Int
+        val count: Int,
+        /** When [count] last went up (it goes up at most once per count window). */
+        val lastCountedAtMs: Long = lastBlockedAtMs
     )
 
     private val byDomain = LinkedHashMap<String, Entry>().apply { entries.forEach { put(it.domain, it) } }
@@ -35,7 +42,12 @@ class BlockedDomainLog(entries: Collection<Entry> = emptyList()) {
         if (key.isEmpty()) return
         prune(nowMs)
         val prev = byDomain.remove(key)
-        byDomain[key] = Entry(key, appPackage, appLabel, nowMs, (prev?.count ?: 0) + 1)
+        val counts = prev == null || nowMs - prev.lastCountedAtMs >= countWindowMs
+        byDomain[key] = Entry(
+            key, appPackage, appLabel, nowMs,
+            count = (prev?.count ?: 0) + if (counts) 1 else 0,
+            lastCountedAtMs = if (counts) nowMs else prev!!.lastCountedAtMs
+        )
         // Bound what is kept (only the newest [MAX_SHOWN] are displayed anyway).
         while (byDomain.size > MAX_KEPT) byDomain.remove(byDomain.keys.first())
     }
@@ -78,7 +90,11 @@ class BlockedDomainLog(entries: Collection<Entry> = emptyList()) {
     }
 }
 
-/** Text file format: a header line, then `domain<TAB>lastMs<TAB>count<TAB>package<TAB>label`. */
+/**
+ * Text file format: a header line, then
+ * `domain<TAB>lastMs<TAB>count<TAB>package<TAB>label<TAB>lastCountedMs` (the last field
+ * was added later; lines without it read it as lastMs).
+ */
 object BlockedDomainLogFormat {
 
     const val HEADER = "# Rafiq blocked domains v1"
@@ -90,7 +106,8 @@ object BlockedDomainLogFormat {
                 .append(e.lastBlockedAtMs).append('\t')
                 .append(e.count).append('\t')
                 .append(clean(e.appPackage.orEmpty())).append('\t')
-                .append(clean(e.appLabel.orEmpty())).append('\n')
+                .append(clean(e.appLabel.orEmpty())).append('\t')
+                .append(e.lastCountedAtMs).append('\n')
         }
     }
 
@@ -106,7 +123,8 @@ object BlockedDomainLogFormat {
             val last = f[1].toLongOrNull() ?: return@mapNotNull null
             val count = f[2].toIntOrNull()?.takeIf { it > 0 } ?: return@mapNotNull null
             if (domain.isEmpty()) return@mapNotNull null
-            BlockedDomainLog.Entry(domain, f.getOrNull(3)?.ifBlank { null }, f.getOrNull(4)?.ifBlank { null }, last, count)
+            val counted = f.getOrNull(5)?.trim()?.toLongOrNull() ?: last
+            BlockedDomainLog.Entry(domain, f.getOrNull(3)?.ifBlank { null }, f.getOrNull(4)?.ifBlank { null }, last, count, counted)
         }
     }
 

@@ -3,6 +3,7 @@ package com.personal.guardian.vpn
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.annotation.VisibleForTesting
+import com.personal.guardian.scan.ScanStatus
 import com.personal.guardian.util.GuardianLog
 import java.io.File
 import java.util.concurrent.Executors
@@ -29,6 +30,10 @@ object BlockedDomainLogSettings {
     private var saveScheduled = false
     private val labels = HashMap<String, String?>()
 
+    // Background thread only.
+    private var lastMismatchLogMs = 0L
+    private const val MISMATCH_LOG_EVERY_MS = 60_000L
+
     // One background thread: label lookups and file writes never run on the DNS loop.
     private val io = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "rafiq-blocked-log").apply { isDaemon = true }
@@ -50,14 +55,25 @@ object BlockedDomainLogSettings {
     }
 
     /**
-     * Records a block of the list entry [domain] while [appPackage] was in front. Called
-     * on the DNS loop; returns at once (the work runs on a background thread).
+     * Records a block of the list entry [domain]. [lastEventPackage] is the app of the last
+     * window event; the app in front is re-read from the active window when the scanner
+     * runs ([ScanStatus.foregroundNow]). Called on the DNS loop; returns at once (the work
+     * runs on a background thread).
      */
-    fun record(context: Context, domain: String, appPackage: String?) {
+    fun record(context: Context, domain: String, lastEventPackage: String?) {
         val ctx = context.applicationContext
         val now = System.currentTimeMillis()
         io.execute {
             try {
+                val appPackage = runCatching { ScanStatus.foregroundNow?.invoke() }.getOrNull() ?: lastEventPackage
+                if (appPackage != lastEventPackage && now - lastMismatchLogMs >= MISMATCH_LOG_EVERY_MS) {
+                    lastMismatchLogMs = now
+                    GuardianLog.i(
+                        ctx,
+                        "Blocked-sites log: app in front taken from the active window ($appPackage), " +
+                            "not the last window event (${lastEventPackage ?: "none"})."
+                    )
+                }
                 val label = appPackage?.let { labelFor(ctx, it) }
                 synchronized(lock) {
                     loaded(ctx).record(domain, appPackage, label, now)

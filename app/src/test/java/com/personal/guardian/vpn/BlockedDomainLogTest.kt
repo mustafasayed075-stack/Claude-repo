@@ -190,4 +190,60 @@ class BlockedDomainLogTest {
             }
         }
     }
+
+    // ---- count window (one page load queries a domain several times) ----
+
+    private val sec = 1_000L
+
+    @Test
+    fun oneReloadCountsOnceThreeSpacedReloadsCountThree() {
+        assertEquals(15_000L, com.personal.guardian.scan.ScanConfig.BLOCKED_LOG_COUNT_WINDOW_MS)
+        val log = BlockedDomainLog()
+        repeat(6) { log.record("x.test", "com.browser", "Browser", t0 + it * 150L) } // one reload: 6 queries
+        assertEquals(1, log.recent(t0 + sec).single().count)
+        repeat(6) { log.record("x.test", "com.browser", "Browser", t0 + 20 * sec + it * 150L) }
+        repeat(6) { log.record("x.test", "com.browser", "Browser", t0 + 40 * sec + it * 150L) }
+        assertEquals(3, log.recent(t0 + 41 * sec).single().count)
+    }
+
+    @Test
+    fun theWindowIsMeasuredFromTheLastCountedBlock() {
+        val log = BlockedDomainLog()
+        log.record("x.test", null, null, t0)
+        log.record("x.test", null, null, t0 + 14_999)
+        assertEquals(1, log.entries().single().count)
+        log.record("x.test", null, null, t0 + 15_000)
+        assertEquals(2, log.entries().single().count)
+        // Blocks every 10 s still count every other time (not swallowed forever).
+        log.record("x.test", null, null, t0 + 25_000)
+        log.record("x.test", null, null, t0 + 35_000)
+        assertEquals(3, log.entries().single().count)
+    }
+
+    @Test
+    fun timeAndAppUpdateEvenWhenTheCountDoesNot() {
+        val log = BlockedDomainLog()
+        log.record("x.test", "com.a", "A", t0)
+        log.record("x.test", "com.b", "B", t0 + 2 * sec)
+        val e = log.entries().single()
+        assertEquals(1, e.count)
+        assertEquals(t0 + 2 * sec, e.lastBlockedAtMs)
+        assertEquals("com.b", e.appPackage)
+    }
+
+    @Test
+    fun theCountWindowSurvivesSaveAndOldFilesStillLoad() {
+        val file = File(tmp.root, "no_backup/blocked_domains.tsv")
+        val log = BlockedDomainLog()
+        log.record("x.test", null, null, t0)
+        log.record("x.test", null, null, t0 + 5 * sec)
+        BlockedDomainLogStore(file).save(log.entries())
+        val reloaded = BlockedDomainLog(BlockedDomainLogStore(file).load())
+        reloaded.record("x.test", null, null, t0 + 10 * sec) // still inside the window of t0
+        assertEquals(1, reloaded.entries().single().count)
+        // A Build 45/46 line (5 fields) reads lastCounted as the last time.
+        val old = BlockedDomainLogFormat.decode(BlockedDomainLogFormat.HEADER + "\nold.test\t$t0\t4\tcom.a\tA\n")!!
+        assertEquals(t0, old.single().lastCountedAtMs)
+        assertEquals(4, old.single().count)
+    }
 }

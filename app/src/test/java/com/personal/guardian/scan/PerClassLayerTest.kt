@@ -2,6 +2,8 @@ package com.personal.guardian.scan
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /** Pure-JVM tests for the additive per-class layer. */
@@ -75,5 +77,17 @@ class PerClassLayerTest {
         // porn immediate default 0.40, hentai region default 0.70.
         assertTrue(PerClassLayer.evaluate(scores(porn = ScanConfig.PORN_IMMEDIATE_THRESHOLD), emptyList(), sexyThr).pornImmediate)
         assertTrue(PerClassLayer.evaluate(safeFrame, listOf(scores(hentai = ScanConfig.HENTAI_SUGGESTIVE_THRESHOLD)), sexyThr).suggestive)
+    }
+
+    @Test
+    fun theLockNamesTheSurfaceThatMatchedNotTheVerdictSurface() {
+        // Build 45: "PER-CLASS lock: porn" printed porn=0.270 — another surface matched.
+        val whole = scores(safe = 0.6f, porn = 0.27f)
+        val v = PerClassLayer.evaluate(whole, listOf(scores(porn = 0.10f), scores(porn = 0.62f)), sexyThr)
+        assertTrue(v.pornImmediate)
+        assertEquals(1, v.pornSurface)
+        assertEquals(PerClassLayer.WHOLE, PerClassLayer.evaluate(scores(porn = 0.45f), listOf(scores(porn = 0.41f)), sexyThr).pornSurface)
+        assertEquals(0, PerClassLayer.evaluate(scores(porn = 0.45f), listOf(scores(porn = 0.90f)), sexyThr).pornSurface)
+        assertNull(PerClassLayer.evaluate(whole, listOf(scores(porn = 0.39f)), sexyThr).pornSurface)
     }
 }

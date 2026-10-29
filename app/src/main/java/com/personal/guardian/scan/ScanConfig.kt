@@ -295,4 +295,13 @@ object ScanConfig {
      * Apache-2.0; see README "Model" and third_party/viddexa_nsfw_detection_2_nano/).
      */
     const val MODEL_ASSET = "models/viddexa_nsfw_detection_2_nano_224.tflite"
+
+    // ---- Blocked-sites log ----
+
+    /**
+     * A domain's count goes up at most once per this window: one page load asks for the
+     * same domain several times (A, AAAA, HTTPS records, `www.` …) — a reload showed 6.
+     * The last time and the app still update on every block.
+     */
+    const val BLOCKED_LOG_COUNT_WINDOW_MS = 15_000L
 }

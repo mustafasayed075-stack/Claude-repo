@@ -88,4 +88,15 @@ class ScanLogTest {
     fun perFrameLoggingFlagIsOnForCalibration() {
         assertEquals(true, ScanConfig.LOG_EVERY_FRAME_SCORE)
     }
+
+    @Test
+    fun cropLabelAndCropCheckLine() {
+        assertEquals("crop=none", ScanLog.cropLabel(null, 1080, 2412))
+        val box = Box(0, 1105, 1080, 2160)
+        assertEquals("crop=[0,1105,1080,2160] of 1080x2412", ScanLog.cropLabel(box, 1080, 2412))
+        val line = ScanLog.cropCheckLine(box, 1080, 2412, suggestive, ordinary, "com.zhiliaoapp.musically")
+        assertTrue(line.startsWith("Crop check: crop=[0,1105,1080,2160] of 1080x2412 cropped[sexy=0.612 "))
+        assertTrue(line.contains(" uncropped[sexy=0.006 porn=0.000 "))
+        assertTrue(line.endsWith(" app=com.zhiliaoapp.musically"))
+    }
 }

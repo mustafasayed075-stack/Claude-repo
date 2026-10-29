@@ -44,4 +44,22 @@ class ForegroundReconcilerTest {
         assertEquals(own, fix(current = "com.whatsapp", active = own, lock = true))
         assertEquals(own, fix(current = "com.whatsapp", active = own, reflection = true))
     }
+
+    private fun now(current: String?, active: String?) =
+        ForegroundReconciler.inFront(current, active, own, overlays, lockActive = false, reflectionShowing = false)
+
+    @Test
+    fun aBlockRightAfterComingBackFromRecentsIsTheBrowserNotTheLauncher() {
+        // Build 46: a reload in the browser was logged under "System Launcher".
+        assertEquals("com.android.chrome", now(current = "com.android.launcher", active = "com.android.chrome"))
+    }
+
+    @Test
+    fun theLastEventAppStaysWhenTheActiveWindowDoesNotCount() {
+        assertEquals("com.android.chrome", now(current = "com.android.chrome", active = "com.android.systemui"))
+        assertEquals("com.android.chrome", now(current = "com.android.chrome", active = null))
+        assertEquals("com.android.chrome", now(current = "com.android.chrome", active = own))
+        assertNull(now(current = null, active = null))
+        assertEquals("com.android.launcher", now(current = "com.android.chrome", active = "com.android.launcher"))
+    }
 }
