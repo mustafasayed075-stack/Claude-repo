@@ -122,6 +122,14 @@ The single local event log lives on-device at
 the app's UI. Every deactivation attempt, service lifecycle change, and blocklist
 refresh/failure is recorded there with a timestamp.
 
+**Crashes** are recorded too (`util/CrashReport.kt`, installed by `RafiqApp`): an
+uncaught exception anywhere in the process writes a `CRASH on thread …` entry with
+the exception class names and the first 15 stack frames of each (up to 3 "Caused by"
+levels — Android wraps launch failures, so the real one is usually a cause). No
+exception message is written, since messages can carry arbitrary text. The latest
+crash is also kept in `files/last_crash.txt` and put at the top of "نسخ اللوج", so it
+is included even after it has scrolled out of the last 300 lines.
+
 ---
 
 ## Stage 1 — Device Owner provisioning (manual steps)
@@ -1726,6 +1734,14 @@ to this stage.
 - **Blocklist parsing & matching:** `BlocklistManagerTest` (pure JVM), including a
   lookup benchmark at the live list size.
 - **DNS packet parse/build:** `DnsPacketTest` (pure JVM).
+- **Screens opened for real (Robolectric):** `BlockedSitesActivityTest` launches
+  "المواقع المحظورة مؤخرًا" with the log file missing, empty, normal and damaged, runs
+  its 15-second refresh, and opens it from the settings row (Build 45 crashed on open:
+  the adapter, created as a field, read the time format before the Activity had a
+  Context). `CrashLoggerTest` checks the crash handler. Robolectric downloads its
+  Android runtime jar from Maven Central on the first run.
+- **Crash summary:** `CrashReportTest` (pure JVM) — exception class names and the
+  first 15 frames per exception (plus up to 3 "Caused by" levels), never messages.
 - **Concurrent DNS forwarding:** `DnsForwarderTest` (pure JVM, fake local resolver).
 - **Screen-scan logic:** `DetectionConfirmerTest`, `DetectionCooldownTest`,
   `CaptureSchedulerTest`, `NsfwPreprocessorTest`, `DetectionEventTest`,

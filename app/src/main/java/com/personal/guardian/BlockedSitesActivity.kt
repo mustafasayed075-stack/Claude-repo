@@ -96,7 +96,9 @@ class BlockedSitesActivity : AppCompatActivity() {
 
     private inner class EntriesAdapter : BaseAdapter() {
         var entries: List<BlockedDomainLog.Entry> = emptyList()
-        private val timeFormat = DateFormat.getTimeFormat(this@BlockedSitesActivity)
+        // Lazy: the adapter is created with the Activity, before it has a Context. Reading
+        // the time format here eagerly crashed the screen on open (Build 45).
+        private val timeFormat by lazy { DateFormat.getTimeFormat(this@BlockedSitesActivity) }
 
         override fun getCount() = entries.size
         override fun getItem(position: Int) = entries[position]

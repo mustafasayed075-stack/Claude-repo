@@ -44,6 +44,11 @@ android {
         viewBinding = true
     }
 
+    // Robolectric tests open real Activities on the JVM (e.g. BlockedSitesActivityTest).
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     // Stage 3: the TFLite model is memory-mapped from the APK, so it must be stored
     // uncompressed.
     androidResources {
@@ -83,4 +88,6 @@ dependencies {
     // build/parse round-trips, scan scheduling/confirmation). Run with:
     // ./gradlew testDebugUnitTest
     testImplementation("junit:junit:4.13.2")
+    // Opens Activities on the JVM, so a screen that crashes on launch fails a test.
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

@@ -2,6 +2,7 @@ package com.personal.guardian.vpn
 
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.annotation.VisibleForTesting
 import com.personal.guardian.util.GuardianLog
 import java.io.File
 import java.util.concurrent.Executors
@@ -89,6 +90,12 @@ object BlockedDomainLogSettings {
             store(ctx).save(emptyList())
         }
         GuardianLog.i(ctx, "Blocked-sites log: cleared by the user.")
+    }
+
+    /** Tests only: forget the in-memory log so the next read loads the file again. */
+    @VisibleForTesting
+    internal fun resetForTests() {
+        synchronized(lock) { log = null }
     }
 
     private fun scheduleSave(ctx: Context) {

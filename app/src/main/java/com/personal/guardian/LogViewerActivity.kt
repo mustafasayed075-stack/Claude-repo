@@ -10,6 +10,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import com.personal.guardian.databinding.ActivityLogViewerBinding
+import com.personal.guardian.util.CrashLogger
 import com.personal.guardian.util.GuardianLog
 import com.personal.guardian.util.LogExport
 import java.text.SimpleDateFormat
@@ -80,11 +81,15 @@ class LogViewerActivity : AppCompatActivity() {
             GuardianLog.e(this, "Log viewer: could not read the log to copy.", t)
             ""
         }
-        if (text.isBlank()) {
+        if (text.isBlank() && CrashLogger.lastCrash(this) == null) {
             Toast.makeText(this, R.string.share_log_empty, Toast.LENGTH_SHORT).show()
             return
         }
-        val payload = header() + "\n" + LogExport.tail(text, COPY_LINES)
+        // The last crash goes first: it may have scrolled out of the last COPY_LINES lines.
+        val crash = CrashLogger.lastCrash(this)
+        val payload = header() + "\n" +
+            (if (crash != null) "--- آخر crash ---\n$crash\n--- نهاية آخر crash ---\n" else "") +
+            LogExport.tail(text, COPY_LINES)
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         if (clipboard == null) {
             Toast.makeText(this, R.string.share_log_failed, Toast.LENGTH_LONG).show()
