@@ -66,6 +66,26 @@ object LetterboxCrop {
         return GridRect(left, top, rectW, rectH)
     }
 
+    /**
+     * Fraction of the grid cells **outside** [rect] — the part the crop removes — that are
+     * black (luma ≤ [BLACK_LUMA]). A real letterbox (an image on black bands) is close to
+     * 1; a split video whose dark-but-not-black graphic was cut away (the TikTok
+     * regression) is low. Used by the strict-crop shadow comparison
+     * ([ScanConfig.STRICT_CROP_BLACK_FRACTION]); 0.0 if nothing is outside.
+     */
+    fun trimmedBlackFraction(luma: IntArray, w: Int, h: Int, rect: GridRect): Double {
+        require(luma.size == w * h) { "luma must be $w*$h" }
+        var outside = 0
+        var black = 0
+        for (r in 0 until h) for (c in 0 until w) {
+            val inside = r >= rect.top && r < rect.top + rect.height && c >= rect.left && c < rect.left + rect.width
+            if (inside) continue
+            outside++
+            if (luma[r * w + c] <= BLACK_LUMA) black++
+        }
+        return if (outside == 0) 0.0 else black.toDouble() / outside
+    }
+
     /** A row of cells `r`, over columns [from, until). */
     private fun richRow(luma: IntArray, w: Int, r: Int, from: Int, until: Int): Boolean {
         var nonBlack = 0

@@ -296,6 +296,20 @@ object ScanConfig {
      */
     const val MODEL_ASSET = "models/viddexa_nsfw_detection_2_nano_224.tflite"
 
+    // ---- Strict letterbox crop, shadow comparison (README "Letterbox crop") ----
+
+    /**
+     * TEMPORARY (Build 49): for every cropped frame, also work out what the first stage
+     * would decide if the crop applied **only** when the trimmed part is really black
+     * (≥ [STRICT_CROP_BLACK_FRACTION] of its cells) — else the uncropped frame — and log
+     * it next to what happened. Locks are unchanged. Costs one extra inference on cropped
+     * frames whose trimmed part isn't black.
+     */
+    const val LOG_STRICT_CROP_SHADOW = true
+
+    /** Trimmed cells that must be black for the strict variant to keep the crop. */
+    const val STRICT_CROP_BLACK_FRACTION = 0.70
+
     // ---- Second stage (README "Second stage") ----
 
     /** NudeNet v3 `320n` body-part detector, float16 TFLite (third_party/nudenet). */

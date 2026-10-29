@@ -346,6 +346,20 @@ hour (`BlockedDomainLog`, `BlockedDomainLogSettings`, `BlockedSitesActivity`):
   TikTok video (dark graphic on top, a close-up face below) the crop keeps only the
   face band, and the model's porn score rises from ≈0.01 (whole frame) to as much as
   0.84–0.99 on face-only crops.
+  **Regression case (must not lock once a fix is enforced):** a TikTok screenshot
+  opened in the gallery (`com.coloros.gallery3d`, Build 47 log) locked as PER-CLASS
+  porn=0.978 with `crop=[0,1155,1080,2110] of 1080x2412`; uncropped it is porn=0.007,
+  safe=0.947.
+  **Strict-crop shadow (Build 49, temporary, `LOG_STRICT_CROP_SHADOW`):** one candidate
+  fix is to crop only when the part the crop removes is really black (≥
+  `STRICT_CROP_BLACK_FRACTION` 70 % of its grid cells, `LetterboxCrop.trimmedBlackFraction`),
+  else classify the whole frame. `StrictCropShadow` runs the first-stage rules on that
+  variant with its own confirmers and logs, for every cropped frame (and any frame
+  where the two differ):
+  `Strict-crop shadow: crop=… trimmed black=0.31 (< 0.70: no crop) now[…] → lock=per-class porn; strict[…] → no lock … — lock unchanged (shadow).`
+  Locks are unchanged; it costs one extra inference on cropped frames whose trimmed
+  part isn't black. With the second stage's shadow line it lets the two fixes be
+  compared on real data before either is enforced.
 - **Second stage — body-part reviewer (Build 48: shadow mode):** the first stage
   above stays as the fast filter. Whenever it decides to lock (confirmed detection,
   per-class porn, or the suggestive tier), a second model checks the same frame: is

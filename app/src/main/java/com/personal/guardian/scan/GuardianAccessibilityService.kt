@@ -93,6 +93,8 @@ class GuardianAccessibilityService : AccessibilityService() {
     // Suggestive tier: two suggestive frames within the window lock, independent of the
     // same-content cooldown and of the explicit confirmer above (Stage 5).
     private val suggestiveConfirmer = SuggestiveConfirmer()
+    // Build 49 shadow: the first stage if the crop applied only on really black bands.
+    private val strictCropShadow = StrictCropShadow()
     private val cooldown = DetectionCooldown()
     private val fingerprintPixels = IntArray(ScreenFingerprint.WIDTH * ScreenFingerprint.HEIGHT)
     // Region scanning (worker thread).
@@ -325,6 +327,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         if (appSwitch.onWindowStateChanged(pkg, SystemClock.elapsedRealtime(), scheduler.overlayPackages)) {
             confirmer.reset()
             suggestiveConfirmer.reset()
+            strictCropShadow.reset()
         }
         // Returning to another app while a lock is still notionally active (e.g. the user
         // left Reflection Mode early with the system gesture): re-arm so the same content,
@@ -410,6 +413,7 @@ class GuardianAccessibilityService : AccessibilityService() {
             // Nothing visible: don't capture, and don't let positives span a screen-off.
             confirmer.reset()
             suggestiveConfirmer.reset()
+            strictCropShadow.reset()
             blindSpot.onScreenOff()
             blindOverlay.hide()
             scheduler.onCaptured(now) // keep the cadence without spinning
@@ -564,11 +568,12 @@ class GuardianAccessibilityService : AccessibilityService() {
             // path below is untouched.
             val t0 = SystemClock.elapsedRealtime()
             val crop = letterboxCrop(frame)
-            val cropBox = crop?.second
+            val cropBox = crop?.box
+            val trimmedBlack = crop?.trimmedBlack
             val whole = try {
-                model.classify(crop?.first ?: frame)
+                model.classify(crop?.bitmap ?: frame)
             } finally {
-                crop?.first?.let { if (it !== frame) it.recycle() }
+                crop?.bitmap?.let { if (it !== frame) it.recycle() }
             }
             val t1 = SystemClock.elapsedRealtime()
             // Path 2: image-bearing elements cropped out of the same frame.
@@ -602,12 +607,13 @@ class GuardianAccessibilityService : AccessibilityService() {
             val cropLabel = ScanLog.cropLabel(cropBox, frame.width, frame.height)
             // Diagnostics: a suspect whole-screen frame that was cropped is classified again
             // uncropped, and both are logged with the crop rectangle (decisions unchanged).
+            var uncropped: NsfwScores? = null
             if (cropBox != null && (whole.screenSignal >= ScanConfig.NSFW_THRESHOLD ||
                     whole.porn >= ScanConfig.SUSPECT_FLOOR || whole.sexy >= ScanConfig.SUSPECT_FLOOR)
             ) {
-                val uncropped = runCatching { model.classify(frame) }.getOrNull()
-                if (uncropped != null) {
-                    GuardianLog.i(applicationContext, ScanLog.cropCheckLine(cropBox, frame.width, frame.height, whole, uncropped, pkg))
+                uncropped = runCatching { model.classify(frame) }.getOrNull()
+                uncropped?.let {
+                    GuardianLog.i(applicationContext, ScanLog.cropCheckLine(cropBox, frame.width, frame.height, whole, it, pkg))
                 }
             }
             // Additive per-class layer: raw-class rules on top of the combined paths.
@@ -619,6 +625,22 @@ class GuardianAccessibilityService : AccessibilityService() {
             // the immediate path, so excluded) OR a per-class sexy/region-hentai hit.
             val suggestive = (!verdict.positive && verdict.score >= suggestiveThreshold) || perClass.suggestive
             val suggestiveConfirmed = suggestiveConfirmer.onFrame(now, suggestive)
+            val lockedBy = FirstStageLock.lockedBy(confirmation != null, perClass.pornImmediate, suggestiveConfirmed)
+            // Build 49 shadow comparison: what the first stage would decide if the crop
+            // applied only when the trimmed part is really black. Logged for every cropped
+            // frame (and any frame where the two differ); locks are unchanged.
+            if (ScanConfig.LOG_STRICT_CROP_SHADOW) {
+                val strict = runCatching {
+                    strictCropShadow.onFrame(
+                        now, source, trimmedBlack, whole,
+                        { uncropped ?: model.classify(frame).also { uncropped = it } },
+                        regions.scores, suggestiveThreshold
+                    )
+                }.getOrNull()
+                if (strict != null && (cropBox != null || strict.lockedBy != lockedBy)) {
+                    GuardianLog.i(applicationContext, StrictCropShadow.line(cropLabel, trimmedBlack, whole, lockedBy, strict, pkg))
+                }
+            }
             if (ScanConfig.LOG_EVERY_FRAME_SCORE) {
                 // TEMPORARY calibration logging (see ScanConfig.LOG_EVERY_FRAME_SCORE).
                 val positives = if (confirmation != null) confirmer.requiredPositives else confirmer.pendingPositives
@@ -662,12 +684,6 @@ class GuardianAccessibilityService : AccessibilityService() {
             // Second stage, shadow mode (Build 48): for every first-stage lock decision above,
             // log what the body-part reviewer would decide. Runs after the lock, so the lock
             // and its timing are unchanged.
-            val lockedBy = when {
-                confirmation != null -> "confirmed"
-                perClass.pornImmediate -> "per-class porn"
-                suggestiveConfirmed -> "suggestive"
-                else -> null
-            }
             if (lockedBy != null) {
                 val regionBox = when {
                     confirmation == null && perClass.pornImmediate ->
@@ -811,7 +827,10 @@ class GuardianAccessibilityService : AccessibilityService() {
      * (reusing [RegionContent.GRID] and the same Rec. 601 luma as [ImageRegions]) and map
      * the result rect back to frame pixels.
      */
-    private fun letterboxCrop(frame: Bitmap): Pair<Bitmap, Box>? {
+    /** A letterbox crop: the bitmap, its rectangle in frame pixels, and how black the trimmed part is. */
+    private class Letterbox(val bitmap: Bitmap, val box: Box, val trimmedBlack: Double)
+
+    private fun letterboxCrop(frame: Bitmap): Letterbox? {
         val grid = RegionContent.GRID
         var current = frame
         for ((w, h) in NsfwPreprocessor.downscaleSteps(frame.width, frame.height, grid)) {
@@ -834,7 +853,10 @@ class GuardianAccessibilityService : AccessibilityService() {
         val top = (rect.top.toLong() * frame.height / grid).toInt().coerceIn(0, frame.height - 1)
         val right = ((rect.left + rect.width).toLong() * frame.width / grid).toInt().coerceIn(left + 1, frame.width)
         val bottom = ((rect.top + rect.height).toLong() * frame.height / grid).toInt().coerceIn(top + 1, frame.height)
-        return Bitmap.createBitmap(frame, left, top, right - left, bottom - top) to Box(left, top, right, bottom)
+        return Letterbox(
+            Bitmap.createBitmap(frame, left, top, right - left, bottom - top), Box(left, top, right, bottom),
+            LetterboxCrop.trimmedBlackFraction(letterboxLuma, grid, grid, rect)
+        )
     }
 
     /** [RegionContent] verdict for a crop, on an area-averaged [RegionContent.GRID]² downsample. */
@@ -1159,6 +1181,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         val handler = worker ?: return
         confirmer.reset()
         suggestiveConfirmer.reset()
+        strictCropShadow.reset()
         regionCache.clear()
         cooldown.clear()
         GuardianLog.i(applicationContext, "Lock re-arm ($reason): still-visible suspect content will be re-evaluated.")
