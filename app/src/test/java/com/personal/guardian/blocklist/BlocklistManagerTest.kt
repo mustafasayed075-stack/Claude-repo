@@ -128,4 +128,17 @@ class BlocklistManagerTest {
         // Generous bound so the test isn't flaky on slow CI; real cost is ~1 µs.
         assertTrue("lookup too slow: avg $avgUs µs", avgUs < 50.0)
     }
+
+    @Test
+    fun matchedEntryNamesTheListDomainNotTheFullHost() {
+        val set = setOf("example.test", "deep.other.test")
+        assertEquals("example.test", BlocklistManager.matchedEntry(set, "cdn.www.Example.TEST."))
+        assertEquals("example.test", BlocklistManager.matchedEntry(set, "example.test"))
+        assertEquals("deep.other.test", BlocklistManager.matchedEntry(set, "a.deep.other.test"))
+        assertEquals(null, BlocklistManager.matchedEntry(set, "other.test"))
+        assertEquals(null, BlocklistManager.matchedEntry(emptySet(), "example.test"))
+        // matches() agrees with matchedEntry().
+        assertTrue(BlocklistManager.matches(set, "x.example.test"))
+        assertFalse(BlocklistManager.matches(set, "notexample.test"))
+    }
 }

@@ -190,6 +190,7 @@ class GuardianAccessibilityService : AccessibilityService() {
 
         scheduler.overlayPackages = ScanConfig.OVERLAY_PACKAGES + enabledKeyboardPackages()
         val initialForeground = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
+        ScanStatus.foregroundPackage = initialForeground?.takeIf { it != packageName }
 
         handler.post {
             classifier = try {
@@ -299,6 +300,8 @@ class GuardianAccessibilityService : AccessibilityService() {
             )
             return
         }
+        // For the blocked-sites log: which app was in front when a DNS query was blocked.
+        if (pkg.isNotEmpty() && pkg !in scheduler.overlayPackages) ScanStatus.foregroundPackage = pkg
         // Positives must not combine across apps: a positive frame in the previous app
         // plus one in the new app's first frames used to confirm a detection there.
         if (appSwitch.onWindowStateChanged(pkg, SystemClock.elapsedRealtime(), scheduler.overlayPackages)) {
@@ -1257,6 +1260,7 @@ class GuardianAccessibilityService : AccessibilityService() {
         ScanStatus.textEntries = 0
         ScanStatus.modelLoaded = false
         ScanStatus.fastModePackage = null
+        ScanStatus.foregroundPackage = null
         blindOverlay.hide()
         val handler = worker ?: return
         worker = null
@@ -1367,6 +1371,8 @@ object ScanStatus {
     @Volatile var unsupported = false
     @Volatile var modelLoaded = false
     @Volatile var fastModePackage: String? = null
+    /** The app in front as last seen by the scanner (Rafiq's own windows excluded); null when off. */
+    @Volatile var foregroundPackage: String? = null
     @Volatile var framesScanned = 0L
         private set
     @Volatile var lastFrameAtMs = 0L

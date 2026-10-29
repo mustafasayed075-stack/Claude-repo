@@ -178,6 +178,20 @@
     <string name="reset_escalation_done">اتعمل إعادة ضبط: أول مرة جاية مهلتها 60 ثانية.</string>
     <string name="reset_escalation_service_off">الحماية مش شغّالة دلوقتي؛ لما تشتغل هتبدأ من 60 ثانية.</string>
 
+    <!-- Blocked sites (local log of DNS blocks, last hour) -->
+    <string name="row_blocked_sites_title">المواقع المحظورة مؤخرًا</string>
+    <string name="row_blocked_sites_summary">%1$d موقع في آخر ساعة</string>
+    <string name="row_blocked_sites_none">مفيش في آخر ساعة</string>
+    <string name="blocked_sites_title">المواقع المحظورة مؤخرًا</string>
+    <string name="blocked_sites_intro">المواقع اللي فلتر رفيق منعها في آخر ساعة، والتطبيق اللي كان مفتوح وقتها. السجل ده على جهازك بس ومش بيتنسخ في أي نسخة احتياطية.</string>
+    <string name="blocked_sites_empty">مفيش مواقع اتحظرت في آخر ساعة</string>
+    <string name="blocked_sites_clear">مسح السجل</string>
+    <string name="blocked_sites_clear_confirm">مسح سجل المواقع المحظورة؟</string>
+    <string name="blocked_sites_cleared">تم مسح السجل</string>
+    <string name="blocked_sites_clear_failed">تعذّر مسح السجل.</string>
+    <string name="blocked_sites_unknown_app">تطبيق غير معروف</string>
+    <string name="blocked_sites_count">%1$d مرة</string>
+
     <!-- Log viewer (visible, for sending the log for tuning) -->
     <string name="row_log_title">سجل الأحداث</string>
     <string name="row_log_summary">عرض ونسخ اللوج للتشخيص</string>

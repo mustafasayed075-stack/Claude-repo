@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+: what may leave the device through cloud backup or device-to-device transfer.
+  The blocked-sites log (no_backup/blocked_domains.tsv) is excluded from both.
+  Keep in sync with full_backup_content.xml (Android 11 and older).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="no_backup/blocked_domains.tsv" />
+        <exclude domain="root" path="no_backup/blocked_domains.tsv.tmp" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="no_backup/blocked_domains.tsv" />
+        <exclude domain="root" path="no_backup/blocked_domains.tsv.tmp" />
+    </device-transfer>
+</data-extraction-rules>

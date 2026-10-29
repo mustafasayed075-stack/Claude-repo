@@ -182,6 +182,31 @@ these in order (from the spec):
   WorkManager, only when a network is available, surviving reboots. The previous
   cache stays in effect if a refresh fails.
 
+### Recently blocked sites (on-device log)
+
+Settings → **المواقع المحظورة مؤخرًا** lists what the DNS filter blocked in the last
+hour (`BlockedDomainLog`, `BlockedDomainLogSettings`, `BlockedSitesActivity`):
+
+- **One row per list domain** — the blocklist entry that matched
+  (`BlocklistManager.matchedEntry`), not the full host: `cdn.x.example` and
+  `www.x.example` both count for `x.example`. DNS never sees URLs.
+- Each row: the domain, the app that was in front at the latest block (its name, or
+  the package if the name isn't visible; taken from the scanner's
+  `ScanStatus.foregroundPackage`, so it's "unknown" while screen scanning is off),
+  the last time, and how many times it was blocked since it entered the log.
+- Constants in one place (`BlockedDomainLog`): `BLOCKED_LOG_WINDOW_MINUTES = 60` —
+  an entry is dropped an hour after its **last** block (a new block restarts its
+  hour); `BLOCKED_LOG_MAX_SHOWN = 20`, newest first. At most 200 are kept between
+  prunes.
+- **"مسح السجل"** empties the log and its file. The screen has no open or re-check
+  action and makes no network request; recording is done off the DNS loop and saves
+  are batched (one write per ~2 s burst).
+- **Stays on the device:** the file is `no_backup/blocked_domains.tsv`
+  (`Context.noBackupFilesDir`) and is also excluded explicitly from cloud backup and
+  device-to-device transfer (`res/xml/data_extraction_rules.xml`, Android 12+, where
+  `allowBackup="false"` alone doesn't stop device transfer) and from older backups
+  (`res/xml/full_backup_content.xml`).
+
 ### Stage 2 — Definition of Done → how it's met
 
 - **Starts automatically on boot** — always-on VPN (Device Owner) + `BootReceiver`.

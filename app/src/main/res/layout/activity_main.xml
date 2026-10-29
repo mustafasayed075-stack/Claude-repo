@@ -210,6 +210,16 @@
 
                     <View style="@style/Widget.Rafiq.Divider" />
 
+                    <LinearLayout android:id="@+id/rowBlockedSites" style="@style/Widget.Rafiq.Row">
+                        <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
+                            <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/row_blocked_sites_title" />
+                            <TextView android:id="@+id/txtBlockedSitesSummary" style="@style/Widget.Rafiq.Row.Desc" />
+                        </LinearLayout>
+                        <ImageView style="@style/Widget.Rafiq.Row.Chevron" />
+                    </LinearLayout>
+
+                    <View style="@style/Widget.Rafiq.Divider" />
+
                     <LinearLayout android:id="@+id/rowLog" style="@style/Widget.Rafiq.Row">
                         <LinearLayout style="@style/Widget.Rafiq.Row.TextBox">
                             <TextView style="@style/Widget.Rafiq.Row.Title" android:text="@string/row_log_title" />

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and older: the blocked-sites log never goes into a backup.
+  Keep in sync with data_extraction_rules.xml (Android 12+).
+-->
+<full-backup-content>
+    <exclude domain="root" path="no_backup/blocked_domains.tsv" />
+    <exclude domain="root" path="no_backup/blocked_domains.tsv.tmp" />
+</full-backup-content>

@@ -79,19 +79,25 @@ object BlocklistManager {
      */
     fun isBlocked(host: String): Boolean = matches(domains.get(), host)
 
+    /** The list entry that blocks [host] (itself or a parent domain), or null if allowed. */
+    fun blockedEntry(host: String): String? = matchedEntry(domains.get(), host)
+
     /**
      * Pure matching function (no shared state), extracted so it can be unit-tested
      * directly. Walks the labels of [host] up to the root, matching against [set].
      */
-    fun matches(set: Set<String>, host: String): Boolean {
-        if (set.isEmpty()) return false
+    fun matches(set: Set<String>, host: String): Boolean = matchedEntry(set, host) != null
+
+    /** Like [matches], but returns the entry of [set] that matched (closest to [host] first). */
+    fun matchedEntry(set: Set<String>, host: String): String? {
+        if (set.isEmpty()) return null
         var name = host.trim().lowercase().trimEnd('.')
-        if (name.isEmpty()) return false
+        if (name.isEmpty()) return null
 
         while (true) {
-            if (set.contains(name)) return true
+            if (set.contains(name)) return name
             val dot = name.indexOf('.')
-            if (dot < 0) return false
+            if (dot < 0) return null
             name = name.substring(dot + 1)
         }
     }

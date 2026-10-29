@@ -38,6 +38,7 @@ import com.personal.guardian.scan.ScanSensitivitySettings
 import com.personal.guardian.scan.ScanStatus
 import com.personal.guardian.service.GuardianForegroundService
 import com.personal.guardian.util.GuardianLog
+import com.personal.guardian.vpn.BlockedDomainLogSettings
 import com.personal.guardian.vpn.GuardianVpnService
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -116,6 +117,7 @@ class MainActivity : AppCompatActivity() {
         binding.rowLockDuration.setOnClickListener { showLockDurationDialog() }
         binding.rowSensitivity.setOnClickListener { showSensitivityDialog() }
         binding.rowBlindSpot.setOnClickListener { startActivity(Intent(this, BlindSpotAppsActivity::class.java)) }
+        binding.rowBlockedSites.setOnClickListener { startActivity(Intent(this, BlockedSitesActivity::class.java)) }
         binding.rowLog.setOnClickListener { startActivity(Intent(this, LogViewerActivity::class.java)) }
 
         binding.btnFullScreenIntentSettings.setOnClickListener { ReflectionLauncher.openFullScreenIntentSettings(this) }
@@ -320,6 +322,9 @@ class MainActivity : AppCompatActivity() {
         binding.txtLockDurationSummary.text = getString(R.string.row_lock_duration_summary, ReflectionSettings.durationSeconds(this))
         binding.txtSensitivitySummary.text = getString(sensitivityLabel(ScanSensitivitySettings.get(this)))
         binding.txtBlindSpotSummary.text = getString(R.string.row_blind_spot_summary, BlindSpotSettings.get(this).size)
+        val blocked = BlockedDomainLogSettings.recent(this).size
+        binding.txtBlockedSitesSummary.text =
+            if (blocked == 0) getString(R.string.row_blocked_sites_none) else getString(R.string.row_blocked_sites_summary, blocked)
 
         // Warnings.
         val fsiMissing = ReflectionLauncher.needsFullScreenIntentGrant(this)

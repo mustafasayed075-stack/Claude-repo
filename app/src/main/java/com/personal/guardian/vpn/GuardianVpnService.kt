@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import com.personal.guardian.blocklist.BlocklistManager
+import com.personal.guardian.scan.ScanStatus
 import com.personal.guardian.util.GuardianLog
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -133,10 +134,12 @@ class GuardianVpnService : VpnService() {
                 val query = DnsPacket.parseQuery(packet, n) ?: continue
                 val host = query.qName
 
-                if (host != null && BlocklistManager.isBlocked(host)) {
+                val blockedBy = host?.let { BlocklistManager.blockedEntry(it) }
+                if (host != null && blockedBy != null) {
                     // Blocked: answer locally, nothing leaves the device.
                     writeToTunnel(DnsPacket.buildBlockedResponse(query))
                     GuardianLog.i(applicationContext, "BLOCKED dns query: $host")
+                    BlockedDomainLogSettings.record(applicationContext, blockedBy, ScanStatus.foregroundPackage)
                 } else {
                     // Allowed: forward to the real resolver without blocking this loop.
                     forwarder.forward(query) { reply ->
