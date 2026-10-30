@@ -1,12 +1,16 @@
 ---
 name: architecture-planning
-description: Plan before building - use before a large or risky engineering change such as a new feature spanning several modules, a new service or subsystem, a data-model or public API change, a significant refactor, or choosing an architecture for a new project. Produces a right-sized design covering requirements, constraints, current structure, files and responsibilities, dependencies, tests, and risks. Not for single-file fixes or small, well-understood edits.
+description: Plan before building - use before a large or risky engineering change such as a feature touching 3+ files or several modules, a new service or subsystem, a data-model, storage, or public API change, a significant refactor, or starting a new project in an empty repo. Produces a right-sized plan (requirements, design, files, dependencies, tests, risks) and decides whether to proceed or stop for approval. Not for single-file fixes or small, well-understood edits.
 ---
 
 # Architecture & Planning
 
 Goal: a plan sized to the change. A small feature gets a short plan; a new
 system gets a fuller one. Do not produce ceremony for its own sake.
+
+Use it when the change touches 3+ files or several modules, adds a module,
+service, or dependency, changes data models, storage, or public APIs, or
+starts a new project. Skip it for small, well-understood edits.
 
 ## Step 1 - Requirements and constraints
 - Restate the goal in one or two sentences and list explicit requirements.
@@ -71,6 +75,14 @@ Risks & approvals needed:
 Steps:
 ```
 
-For large or high-risk plans, wait for the user's approval before
-implementing. For moderate plans within a clearly scoped task, proceed and
-follow `engineering-standards` while implementing.
+Keep each field to a few lines; omit fields that do not apply.
+
+## Proceed or stop
+Classify the plan with the risk tiers in `engineering-standards` section 7:
+- **Low / Medium:** show the plan, then implement it in the same turn. Do
+  not ask for approval.
+- **High** (changes architecture, data/storage semantics, security, public
+  contracts, or is irreversible), or a new project in an empty repo where
+  the stack is not specified: show the plan, mark the decisions that need
+  approval, and stop before editing files. Reading code and reproducing
+  issues is still fine.

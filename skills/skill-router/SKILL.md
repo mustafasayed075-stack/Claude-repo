@@ -5,64 +5,67 @@ description: Decide how to approach a software engineering task in any repositor
 
 # Skill Router
 
-A short decision step, not a process. Spend a few tool calls at most, then
-work. Recommend only skills that appear in this session's available-skills
-list; if a mapped skill is missing, skip it and say so.
+A quick decision, not a process. Do exactly this:
 
-## 1. Detect project type (quick look at the root and one level down)
+1. **Look** at the file listing (root and one level down) and the main
+   manifest (package.json, pyproject.toml, pubspec.yaml, ...). Do not read
+   source files to route; that belongs to the task itself.
+2. **Decide** project type, task type, and skills using the tables below.
+3. **Write one line** as your next text output, before loading any other
+   skill or reading further:
 
-| Signals | Project type |
+   `Router: <project type> | <task type> | skills: <list or none> - <reason, max ~12 words>`
+
+Then load the chosen skills and do the task. No other routing report.
+
+Recommend only skills in this session's available-skills list; if a mapped
+skill is missing, skip it.
+
+## Project type
+
+| Signals | Type |
 |---|---|
-| `package.json` with react/vue/svelte/angular/next/nuxt/vite/astro; `index.html`; `src/app`, `pages/` | Web frontend / full-stack web |
-| express/fastify/nest/koa; `manage.py`, django/flask/fastapi; `go.mod` + net/http/gin; spring `pom.xml`/`build.gradle`; `Cargo.toml` + axum/actix; `routes/`, `controllers/`, OpenAPI file | Backend / API |
-| `pubspec.yaml` (Flutter); react-native/expo in package.json; `android/` + `ios/`; `*.xcodeproj`; `AndroidManifest.xml` | Mobile app |
-| `ProjectSettings/` + `Assets/` (Unity); `project.godot`; `*.uproject`; phaser/pixi/three/bevy/pygame deps | Game |
-| anthropic/openai/langchain/llamaindex/transformers/torch deps; prompts/, agents/, evals/, embeddings, vector DB clients | AI / LLM app |
-| `Dockerfile`, `docker-compose*`, `*.tf`, `k8s/`, `helm/`, `.github/workflows` only | Infra / DevOps |
-| `setup.py`/`pyproject` or package.json with `main`/`exports` and no app entry | Library / package |
-| Only a few scripts | Script / tool |
+| package.json with react/vue/svelte/angular/next/nuxt/vite/astro; index.html; src/app, pages/ | Web |
+| express/fastify/nest/koa; django/flask/fastapi; go.mod + net/http/gin; spring; axum/actix; routes/, controllers/, OpenAPI | Backend/API |
+| pubspec.yaml; react-native/expo; android/ + ios/; *.xcodeproj | Mobile |
+| Unity (ProjectSettings/ + Assets/); project.godot; *.uproject; phaser/pixi/three/bevy/pygame | Game |
+| anthropic/openai/langchain/llamaindex/transformers/torch; prompts/, agents/, evals/, vector DB | AI/LLM |
+| Dockerfile, compose, *.tf, k8s/, helm/, CI workflows only | Infra |
+| package/pyproject exporting a library, no app entry | Library |
+| no source files (empty or README only) | Empty - a "build X" request is Architecture |
 
-Projects can match several rows (e.g. AI + Backend). Record all matches.
-An empty repo has no type yet: treat a request to "build X" as Architecture.
+Several types can match (e.g. AI + Backend); list them all.
 
-## 2. Classify the task
+## Task type
 
 | Task | Typical wording |
 |---|---|
 | Feature | add, implement, support, new screen/endpoint |
 | Bug | fix, broken, error, crash, regression, wrong output |
-| Refactor | clean up, restructure, extract, rename, simplify (no behavior change) |
-| Architecture | design, new project/service/module, choose stack, migrate framework |
+| Refactor | clean up, restructure, split, extract (no behavior change) |
+| Architecture | design, new project/service, choose stack, migrate framework |
 | Testing | add tests, coverage, flaky test, test strategy |
-| Release | version bump, changelog, build/publish, deploy prep, PR readiness |
+| Release | version bump, changelog, build/publish, deploy prep |
 
-## 3. Select skills
+## Skills
 
-| Task | Load | Also consider (if available) |
-|---|---|---|
-| Feature (small, 1-2 files) | `engineering-standards` | - |
-| Feature (multi-module, new data/API) | `architecture-planning`, then `engineering-standards` | `code-review` on the diff before finishing |
-| Bug | `engineering-standards` (reproduce, regression test) | `run` to reproduce/verify runtime bugs |
-| Refactor | `engineering-standards`; add `architecture-planning` if it spans modules | `simplify`, `code-review` |
-| Architecture | `architecture-planning` | - |
-| Testing | `engineering-standards` (section 5) | `run` |
-| Release | `engineering-standards` (Definition of Done) | `code-review`; `security-review` if auth/secrets/permissions changed |
+| Situation | Load |
+|---|---|
+| Small change (1-2 files, existing patterns) - any task type | `engineering-standards` |
+| Touches 3+ files or several modules, adds a module/dependency, or changes data, storage, or public API | `architecture-planning`, then `engineering-standards` |
+| Architecture, or a "build X" request in an empty repo | `architecture-planning` |
+| Release | `engineering-standards` (Definition of Done) |
 
-Project-type add-ons (only if present in the session):
-- AI app calling Claude/Anthropic: `claude-api`. Not for other providers.
-- Repo with no CLAUDE.md and the user wants one: `init`.
-- Web/Mobile/Game/DevOps domain skills: not built yet; apply the generic
-  skills above plus the framework's own conventions.
+Optional built-ins, only when they clearly add value:
+- `run` - to reproduce or verify runtime/UI behavior.
+- `code-review`, `simplify` - on a large diff before finishing.
+- `security-review` - when auth, secrets, or permissions changed.
+- `claude-api` - when the task changes code that calls Claude/Anthropic.
 
-## 4. When no extra skill is needed
-- Questions, explanations, code reading, or reviews the user asked to just
-  discuss.
-- Trivial edits: typo, one-line config/text change, renaming a variable in
-  one file, running a command the user specified.
-- The user already named the skill or approach to use.
-In these cases do the work directly; the standards still apply implicitly.
+Web/Mobile/Game/Infra domain skills do not exist yet; follow the
+framework's own conventions.
 
-## 5. Output
-State the decision in one line before starting, then proceed:
-
-`Router: <project type(s)> | <task type> | skills: <list or "none"> - <short reason>`
+## No skill needed
+Questions, explanations, code reading, trivial edits (typo, one-line
+change, a command the user specified), or when the user named the
+approach. Do the work directly; skip the Router line too.

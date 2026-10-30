@@ -68,19 +68,32 @@ A change is done only when all applicable items hold:
 - [ ] Docs/config/migrations updated if behavior or setup changed.
 - [ ] Summary given: what changed, how it was verified, known gaps.
 
-## 7. Autonomy and escalation
-Proceed without asking (low risk, easily reversible):
-- Local code edits on the working branch, adding tests, running read-only
-  commands, builds, and test suites, fixing lint, small refactors inside the
-  task's scope.
+## 7. Autonomy and escalation: autonomous by default, escalate by risk
+Classify the change once, before editing. The highest matching tier wins.
 
-Stop and ask for review first (high risk or hard to reverse):
-- Deleting data or files you did not create; destructive git (force-push,
-  history rewrite, branch deletion); schema migrations on real data.
-- Changes to auth, permissions, payments, security controls, or secrets.
-- Public API or data-contract breaking changes; major dependency or framework
-  swaps; wide refactors beyond the task.
-- Anything that deploys, publishes, sends messages, or costs money.
-- Requirements conflict, or the safest path is unclear.
+**Low - just do it.** Local, reversible edits inside the task's scope: code
+changes on the working branch, adding/updating tests, read-only commands,
+builds, test runs, lint fixes, small in-scope refactors.
 
-When escalating, give the options, your recommendation, and the risk of each.
+**Medium - plan briefly, then proceed.** Multi-file features or refactors
+that follow the existing architecture, new modules or endpoints that add
+(but do not break) behavior. State a short plan (`architecture-planning`)
+and continue without waiting.
+
+**High - present the plan and stop for approval before editing.**
+- Architecture: changing the established structure or patterns, adding a
+  new service/process boundary, swapping a framework, state manager, or
+  other major dependency, or a wide refactor beyond the task.
+- Data: schema or stored-format changes, migrations, new persistence or
+  sync semantics for user data, deleting data or files you did not create.
+- Security: auth, permissions, crypto, payments, secrets, security controls.
+- Contracts: breaking public API, CLI, or data-contract changes.
+- Irreversible or outward-facing: destructive git (force-push, history
+  rewrite, branch deletion), deploy, publish, send, or anything that costs
+  money.
+- Requirements conflict or are too unclear to choose a safe design.
+
+When escalating, give the options, your recommendation, and the risk of
+each. Do the low-risk parts of the task (reading, reproduction, analysis)
+first so the review request is concrete. A user's explicit go-ahead for the
+specific high-risk action counts as approval.
