@@ -15,7 +15,7 @@ mkdir -p "$OUT/work"
 
 "$HERE/../scripts/install.sh" --check >/dev/null || { echo "Skills not installed; run scripts/install.sh" >&2; exit 1; }
 
-commit() { git -C "$1" add -A && git -C "$1" -c user.email=t@t -c user.name=t commit -qm "$2"; }
+commit() { git -C "$1" add -A && git -C "$1" -c user.email=t@t -c user.name=t commit -qm "$2" >/dev/null || true; }
 
 make_fixture() { # $1 kind, $2 dir
   local d="$2"; mkdir -p "$d"; git -C "$d" init -q

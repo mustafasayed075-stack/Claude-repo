@@ -1,46 +1,60 @@
-# Phase 1 verification record
+# Test results
 
-Run on 2026-10-30, Claude Code 2.1.314, after `./scripts/install.sh`.
-Each test was a fresh headless session (`claude -p`).
+## Foundation Hardening - 2026-10-30
 
-## 1. Discovery
+Claude Code 2.1.314, headless `claude -p`, `tests/run.sh 3` (3 repeats per
+scenario, fresh session and fresh fixture repo per run). Permission mode
+`acceptEdits`. Shell limited to read-only commands and test runners. No
+package installs allowed.
 
-Prompt (no tools allowed): list skills matching engineering/router/architecture
-and quote any user-level instruction about skill-router.
+### Discovery (separate test, no tools)
+3/3: all three skills listed, and the routing instruction was recognised.
 
-Result: all three skills listed with correct descriptions; the
-`~/.claude/CLAUDE.md` block was quoted verbatim. **Pass.**
+### Persistence (manual test)
+With `~/.claude` emptied, a fresh session on this repo:
+- the SessionStart hook installed the skills, and they were visible in the
+  same session;
+- `~/.claude/CLAUDE.md` is read *before* hooks run, so the hook prints the
+  routing block to stdout, and the session reported receiving it from the hook;
+- the second session was silent (already installed), and the instruction came
+  from `~/.claude/CLAUDE.md`;
+- outside the cloud (`CLAUDE_CODE_REMOTE` unset), the hook does nothing.
 
-## 2. Router scenarios
+### Selection and execution
 
-Fixtures: small git repos with only the signal files listed below.
-Command per scenario:
+| Scenario | Prompt | Skills invoked (all 3 runs) | Selection | Execution | Behavior |
+|---|---|---|---|---|---|
+| Web App | dark mode toggle, persisted | router > standards | 3/3 | 3/3 | Edited 1-4 files without asking |
+| Backend API | 500 should be 404 | router > standards | 3/3 | 3/3 | Fix + regression test each run; no planning |
+| Game (Godot) | split player.gd by concern | router > planning > standards | 3/3 | 3/3 | Medium risk: planned, then split into 3-4 scripts without asking |
+| Mobile (Flutter) | offline cache + sync | router > planning > standards | 3/3 | 3/3 | High risk (user-data storage/sync): plan shown, stopped before editing |
+| AI App | prepare release 1.2.0 | router > standards | 3/3 | 3/3 | Bumped version + changelog from git log; no tag/publish; `claude-api` correctly not loaded |
+| Testing (new) | add unit tests for pricing.py | router > standards | 3/3 | 3/3 | Wrote test file; no planning |
+| Empty repo (new) | build a URL shortener | router > planning | 3/3 | 3/3 | Plan shown, stopped: no stack specified |
+| Control | explain app/db.py | none | 3/3 | 3/3 | Answered directly, no Router line |
 
-```bash
-claude -p "<prompt>" --output-format stream-json --verbose \
-  --max-turns 10 --disallowedTools "Edit,Write,NotebookEdit"
-```
+The `Router:` decision line appeared in all 24 non-control runs (Phase 1:
+missing in the Mobile run). No run invoked a skill outside the expected set.
 
-The prompts never mention skills. Routing comes from the global CLAUDE.md
-block and the skill descriptions.
+Definitions: **Selection** = the required skills were invoked, the router
+came first, and no unneeded planning or extra skills. **Execution** = the
+Router line was printed, edits happened when expected, no edits on
+high-risk/empty-repo tasks, test files changed where required, and no git
+tags were created.
 
-| # | Fixture signals | Prompt | Skills invoked (in order) | Router line / reasoning |
-|---|---|---|---|---|
-| 1 Web App | `package.json` react+vite, `index.html`, `src/Header.jsx` | Add a dark mode toggle to the header that persists across reloads | skill-router → engineering-standards | "Web frontend (React + Vite) \| Feature, small \| engineering-standards": self-contained header change, so no planning |
-| 2 Backend API | `pyproject.toml` fastapi, `app/routes/users.py`, `tests/` | GET /users/{id} returns 500 for missing user; should be 404 | skill-router → engineering-standards | "Backend/API (Python) \| Bug \| engineering-standards": reproduce plus a regression test. It added a failing test and then ran pytest |
-| 3 Game | `project.godot`, `scripts/player.gd` | Split movement/health/inventory in player.gd | skill-router → engineering-standards | "Game (Godot) \| Refactor \| engineering-standards": refactor stays inside the player, so no architecture-planning |
-| 4 Mobile App | `pubspec.yaml` flutter, `lib/`, `android/`, `ios/` | Add offline caching + sync when back online | skill-router → architecture-planning → engineering-standards | Correct choice (multi-module feature), but **no one-line Router decision was printed** |
-| 5 AI App | `package.json` with `@anthropic-ai/sdk`, `CHANGELOG.md` | Prepare release 1.2.0 | skill-router → engineering-standards | "AI/LLM app + Library \| Release \| engineering-standards": `claude-api` skipped because no API code changes. It would not invent changelog entries and left tag/publish to the user |
-| control | API fixture | What does app/db.py do? | none | Correctly skipped routing for a pure question |
+### Limits of these results
+- No run could *execute* tests: pytest, npm dependencies, and Godot/Flutter
+  are not installed, and installs were not allowed. Every run said so in
+  its final message. `tests_attempted` only records that a test command was
+  tried.
+- 3 repeats detect gross instability only. A rarely occurring wrong choice
+  (e.g. below ~30%) could go unseen.
+- Headless only. Interactive and claude.ai clients were not tested.
+- Expectations for borderline cases are lenient by design. Planning is
+  optional for Web and Game; Game chose it 3/3 and Web 0/3.
+- Setup-script persistence for other repos was not tested (see README).
 
-## Known gaps / not tested
-
-- Scenario 4 skipped the one-line `Router:` output that the skill asks for.
-  The skill selection was still correct.
-- Scenario 4 began implementing a large design without waiting for approval.
-  There is no user in headless mode, so this is not conclusive.
-- Headless runs blocked some shell writes pending approval, so implementation
-  quality was not assessed. These tests cover discovery and routing only.
-- Not tested: interactive (TTY) sessions, the claude.ai desktop/web clients,
-  Testing and Architecture-from-empty-repo task types, and repeat runs
-  for variance (each scenario was run once).
+## Phase 1 - 2026-10-30 (superseded)
+Single run per scenario. Selection was correct 5/5, but the Mobile run did
+not print the Router line, and it began implementing a large design without
+stopping.

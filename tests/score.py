@@ -61,7 +61,7 @@ def analyse(jsonl, work):
         router_line=any(ROUTER_LINE.search(t) for t in texts),
         changed=sorted(changed),
         tests_touched=any(TEST_FILE.search(f) for f in changed),
-        tests_ran=any(re.search(r"pytest|unittest|vitest|npm test", b) for b in bash),
+        tests_attempted=any(re.search(r"pytest|unittest|vitest|npm test", b) for b in bash),
         tagged=bool(git(work, "tag").strip()),
         final=final.strip().replace("\n", " ")[:160],
     )
@@ -121,7 +121,7 @@ def main(out):
         print(f"  {rid:10} skills={'>'.join(r['skills']) or '-'}")
         print(f"  {'':10} selection={'PASS' if not sel else 'FAIL: ' + '; '.join(sel)}")
         print(f"  {'':10} execution={'PASS' if not exe else 'FAIL: ' + '; '.join(exe)}"
-              f" | files={len(r['changed'])} tests_touched={r['tests_touched']} tests_ran={r['tests_ran']}")
+              f" | files={len(r['changed'])} tests_touched={r['tests_touched']} tests_attempted={r['tests_attempted']}")
         print(f"  {'':10} final: {r['final']}")
 
     print("\n== Summary (passing runs / total)")
