@@ -107,7 +107,12 @@ approval.** At least:
   Until then, do read-only work only (read code, reproduce, analyze); do
   not create or edit files, including migrations and new modules.
 - Approval covers the plan as shown, and only that plan. After approval,
-  implement within it:
+  first re-verify the plan against the current code: check what changed
+  since the plan (`git status`, `git log`), and re-read the files the plan
+  will touch and what they depend on (e.g. the latest migration, shared
+  modules). Code can change between the plan and the approval. If
+  something changed that the plan did not account for, treat it as a
+  material deviation. Then implement within the plan:
   - **Material deviation - stop before making it, and ask for approval of
     the revised plan:** a different approach or design; scope beyond the
     plan; a component, service, data store, or interface the plan did not
@@ -119,8 +124,12 @@ approval.** At least:
     file layout inside the listed components, extra test cases, and fixes
     to mistakes you made along the way, as long as the plan's approach and
     scope stay the same.
+  - Every file you change outside the plan's affected components must be
+    either a routine detail, which you list in the conformance line, or a
+    reason to stop.
   - End the implementation report with
-    `Plan conformance: followed approved plan` or
-    `Plan conformance: deviations - <what changed and why>`.
+    `Plan conformance: followed approved plan` (only if every changed file
+    was in the plan) or
+    `Plan conformance: deviations - <each unplanned change and why>`.
 - When stopping, give the options, your recommendation, the risk of each,
   and end with a direct request for approval of the plan.

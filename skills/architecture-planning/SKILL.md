@@ -90,7 +90,7 @@ changes, steps. Keep each field to a few lines.
   specified: show the plan, do not create or edit any files, and end by
   asking the user to approve the plan explicitly. The user's request for
   the feature or change is not approval of the plan.
-- **After the user approves:** implement the approved plan following
-  `engineering-standards` section 7 (approval rules). Check each step
-  against the plan as you go. Stop and present a revised plan as soon as a
+- **After the user approves:** re-verify the plan against the current code
+  first, then implement it following `engineering-standards` section 7
+  (approval rules). Check each step against the plan as you go. Stop and present a revised plan as soon as a
   material deviation becomes necessary. End with the `Plan conformance:` line.

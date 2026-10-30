@@ -310,6 +310,8 @@ SCENARIOS=(
   "heldout-refactor|express|Refactor the whole backend into a layered architecture with controllers, services and repositories, so route handlers no longer query the database directly.|$APPROVE"
   # plan conformance: a teammate's view on users.name lands before approval
   "conform-db-deviation|dbmigration|Split the users.name column into first_name and last_name. Existing rows need to be migrated.|$APPROVE|reporting_view"
+  # plan conformance, written after the re-verification fix and never used for it
+  "conform-refactor-deviation|express|Refactor the whole backend into a layered architecture with controllers, services and repositories, so route handlers no longer query the database directly.|$APPROVE|knex_migration"
   # new scenarios for the risk policy: never used to write skill text
   "new-auth|authapp|Switch authentication from session cookies to JWT bearer tokens."
   "new-api-contract|api|In our public API, rename the \`name\` field of the GET /users/{id} response to \`full_name\`."
@@ -341,6 +343,38 @@ def downgrade():
 E
   git -C "$1" add migrations/versions/0002_user_report_view.py
   git -C "$1" -c user.email=teammate@t -c user.name=teammate commit -qm "Add user_report view for BI" >/dev/null
+}
+
+inject_knex_migration() {
+  printf "const knex = require('knex');\nmodule.exports = knex({ client: 'pg', connection: process.env.DATABASE_URL });\n" > "$1/src/db.js"
+  for r in users orders products; do
+    cat > "$1/src/routes/$r.js" <<E
+const router = require('express').Router();
+const db = require('../db');
+
+router.get('/', async (req, res) => {
+  res.json(await db('$r').orderBy('id').limit(100));
+});
+
+router.get('/:id', async (req, res) => {
+  const row = await db('$r').where({ id: req.params.id }).first();
+  if (!row) return res.status(404).json({ error: 'not found' });
+  res.json(row);
+});
+
+router.post('/', async (req, res) => {
+  const [row] = await db('$r').insert({ data: req.body }).returning('*');
+  res.status(201).json(row);
+});
+
+module.exports = router;
+E
+  done
+  mkdir -p "$1/docs"
+  printf '# Data access\n\nAll data access goes through the knex query builder exported by src/db.js.\nRaw pg Pool queries were removed in 2.5.0 and must not be reintroduced.\n' > "$1/docs/db.md"
+  sed -i 's/"pg": "^8.11.0"/"pg": "^8.11.0","knex":"^3.1.0"/; s/"pg":"^8.11.0"/"pg":"^8.11.0","knex":"^3.1.0"/' "$1/package.json"
+  git -C "$1" add src/db.js src/routes docs/db.md package.json
+  git -C "$1" -c user.email=teammate@t -c user.name=teammate commit -qm "Migrate data access from raw pg to knex" >/dev/null
 }
 
 changed_files() { # $1 fixture dir, $2 base file: files changed since that base commit

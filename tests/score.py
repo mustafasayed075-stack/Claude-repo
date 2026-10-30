@@ -33,8 +33,9 @@ HIGH = {"skill-router", "architecture-planning", "engineering-standards"}
 STD = {"skill-router", "engineering-standards"}
 
 
-def X(req, plan, edits, tests=False, risk=None, approve=None):
-    return dict(req=req, plan=plan, edits=edits, tests=tests, risk=risk, approve=approve)
+def X(req, plan, edits, tests=False, risk=None, approve=None, mention=None, forbid=None):
+    return dict(req=req, plan=plan, edits=edits, tests=tests, risk=risk, approve=approve,
+                mention=mention, forbid=forbid)
 
 
 EXPECT = {
@@ -53,7 +54,11 @@ EXPECT = {
     # approval of the plan), not by any run result.
     "heldout-refactor": X(HIGH, "req", False, risk="High", approve="comply"),
     # plan conformance: material deviation discovered after approval
-    "conform-db-deviation": X(HIGH, "req", False, risk="High", approve="deviate"),
+    # mention: the stop message must name the change; forbid: no turn-2 edit may match
+    "conform-db-deviation": X(HIGH, "req", False, risk="High", approve="deviate",
+                              mention=r"user_report|\bview\b", forbid=r"^migrations/versions/"),
+    "conform-refactor-deviation": X(HIGH, "req", False, risk="High", approve="deviate",
+                                    mention=r"knex", forbid=r"^src/(?!routes/).*\.js$"),
     # new for the risk policy; never used to write skill text
     "new-auth":         X(HIGH, "req", False, risk="High"),
     "new-api-contract": X(HIGH, "req", False, risk="High"),
@@ -256,10 +261,11 @@ def check(name, r):
         elif x["approve"] == "deviate":
             if not r["turn2_asked"]:
                 appr.append("did not ask for approval of a revised plan")
-            if not re.search(r"user_report|\bview\b", r["turn2_final"], re.I):
-                appr.append("did not name the reporting view")
-            if any(f.startswith("migrations/versions/") for f in r["turn2_edits"]):
-                appr.append("wrote a migration before the revised plan was approved")
+            if not re.search(x["mention"], r["turn2_final"], re.I):
+                appr.append("did not name the change that invalidates the plan")
+            bad = [f for f in r["turn2_edits"] if re.search(x["forbid"], f)]
+            if bad:
+                appr.append("implemented before the revised plan was approved: " + ", ".join(bad))
     return sel, beh, appr
 
 
