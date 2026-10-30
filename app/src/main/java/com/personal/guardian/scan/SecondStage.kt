@@ -1,6 +1,7 @@
 package com.personal.guardian.scan
 
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * NudeNet's 18 body-part classes, in the model's output order
@@ -13,7 +14,10 @@ enum class BodyPart {
     BUTTOCKS_COVERED
 }
 
-/** One detection, in the model's 320×320 input space (left/top corner, size). */
+/**
+ * One detection: left/top corner and size, in the model's 320×320 input space as decoded,
+ * or in the checked image's pixels after [BodyPartDecoder.toImage].
+ */
 data class BodyPartDetection(
     val part: BodyPart,
     val score: Float,
@@ -80,6 +84,15 @@ object BodyPartDecoder {
         return nms(candidates)
     }
 
+    /**
+     * [d] from the 320 input space to the pixels of the [width]×[height] image it came
+     * from (the image was scaled by 320 / its longer side, padded right/bottom).
+     */
+    fun toImage(d: BodyPartDetection, width: Int, height: Int): BodyPartDetection {
+        val k = maxOf(width, height).toFloat() / INPUT_DIM
+        return d.copy(left = d.left * k, top = d.top * k, width = d.width * k, height = d.height * k)
+    }
+
     /** Class-agnostic greedy NMS, as `cv2.dnn.NMSBoxes(boxes, scores, NMS_SCORE, NMS_IOU)`. */
     private fun nms(candidates: List<BodyPartDetection>): List<BodyPartDetection> {
         val sorted = candidates.filter { it.score > NMS_SCORE }.sortedByDescending { it.score }
@@ -127,24 +140,36 @@ object SecondStage {
     )
     val COVERED = setOf(BodyPart.FEMALE_BREAST_COVERED, BodyPart.FEMALE_GENITALIA_COVERED, BodyPart.BUTTOCKS_COVERED)
 
-    /** One checked image: the cropped whole screen, the uncropped one, or the region that triggered. */
-    data class Surface(val name: String, val detections: List<BodyPartDetection>)
+    /**
+     * One checked image: the letterbox crop, the whole frame ("full"), or the region that
+     * triggered; [width]×[height] is its size in pixels (0 if unknown).
+     */
+    data class Surface(val name: String, val detections: List<BodyPartDetection>, val width: Int = 0, val height: Int = 0)
 
     /** The best detection of a group, with the surface it was on. */
     data class Hit(val detection: BodyPartDetection, val surface: String)
 
     data class Result(val decision: Decision, val exposed: Hit?, val covered: Hit?)
 
+    /**
+     * [genitalThreshold] applies to `MALE_GENITALIA_EXPOSED` only (the class a black
+     * microphone under a chin set off); the other exposed classes use [exposedThreshold].
+     * [Result.exposed] is the best exposed detection that passed its threshold, else the
+     * best exposed one seen (for the log).
+     */
     fun decide(
         trigger: Trigger,
         surfaces: List<Surface>,
         exposedThreshold: Float = ScanConfig.STAGE2_EXPOSED_THRESHOLD,
-        coveredThreshold: Float = ScanConfig.STAGE2_COVERED_THRESHOLD
+        coveredThreshold: Float = ScanConfig.STAGE2_COVERED_THRESHOLD,
+        genitalThreshold: Float = exposedThreshold
     ): Result {
-        val exposed = best(surfaces, EXPOSED)
+        fun threshold(p: BodyPart) = if (p == BodyPart.MALE_GENITALIA_EXPOSED) genitalThreshold else exposedThreshold
+        val passing = best(surfaces, EXPOSED) { it.score >= threshold(it.part) }
+        val exposed = passing ?: best(surfaces, EXPOSED)
         val covered = best(surfaces, COVERED)
         val decision = when {
-            exposed != null && exposed.detection.score >= exposedThreshold -> Decision.CONFIRM
+            passing != null -> Decision.CONFIRM
             covered != null && covered.detection.score >= coveredThreshold ->
                 if (trigger == Trigger.EXPLICIT) Decision.DOWNGRADE else Decision.CONFIRM
             else -> Decision.VETO
@@ -152,9 +177,47 @@ object SecondStage {
         return Result(decision, exposed, covered)
     }
 
-    private fun best(surfaces: List<Surface>, parts: Set<BodyPart>): Hit? =
-        surfaces.flatMap { s -> s.detections.filter { it.part in parts }.map { Hit(it, s.name) } }
+    private fun best(surfaces: List<Surface>, parts: Set<BodyPart>, accept: (BodyPartDetection) -> Boolean = { true }): Hit? =
+        surfaces.flatMap { s -> s.detections.filter { it.part in parts && accept(it) }.map { Hit(it, s.name) } }
             .maxByOrNull { it.detection.score }
+
+    /** The decision options compared in shadow mode (Build 50), by name. */
+    data class Variant(val name: String, val result: Result)
+
+    /**
+     * The three options under comparison: the Build 48 surfaces (letterbox crop + whole
+     * frame, 0.45), the whole frame only (0.45), and the whole frame only with
+     * `MALE_GENITALIA_EXPOSED` at [ScanConfig.STAGE2_GENITAL_ALT_THRESHOLD]. The triggering
+     * region, when there is one, is checked in all three.
+     */
+    fun variants(trigger: Trigger, crop: Surface?, full: Surface, region: Surface?): List<Variant> = listOf(
+        Variant("crop+full@0.45", decide(trigger, listOfNotNull(crop, full, region))),
+        Variant("full@0.45", decide(trigger, listOfNotNull(full, region))),
+        Variant("full,genital@0.60", decide(trigger, listOfNotNull(full, region), genitalThreshold = ScanConfig.STAGE2_GENITAL_ALT_THRESHOLD))
+    )
+
+    /**
+     * The "close-up face with a microphone in front" pattern (a common TikTok shot, and
+     * the gallery regression): a `MALE_GENITALIA_EXPOSED` box whose centre is under a face
+     * box (within its width ±30 %) and whose top starts between 30 % down the face and two
+     * face-heights below it. Logged so such cases can be collected; it decides nothing.
+     */
+    fun genitalUnderFace(surface: Surface): BodyPartDetection? {
+        val faces = surface.detections.filter { it.part == BodyPart.FACE_MALE || it.part == BodyPart.FACE_FEMALE }
+        return surface.detections.filter { it.part == BodyPart.MALE_GENITALIA_EXPOSED }.firstOrNull { g ->
+            val cx = g.left + g.width / 2
+            faces.any { f ->
+                cx >= f.left - 0.3f * f.width && cx <= f.left + 1.3f * f.width &&
+                    g.top >= f.top + 0.3f * f.height && g.top <= f.top + 2f * f.height
+            }
+        }
+    }
+
+    /** `MALE_GENITALIA_EXPOSED 0.526 [334,647,337,220]` (box in the surface's pixels). */
+    fun detectionLabel(d: BodyPartDetection): String = String.format(
+        Locale.US, "%s %.3f [%d,%d,%d,%d]", d.part.name, d.score,
+        d.left.roundToInt(), d.top.roundToInt(), d.width.roundToInt(), d.height.roundToInt()
+    )
 
     /** `FEMALE_BREAST_EXPOSED 0.812@crop`, or `none`. */
     fun hitLabel(hit: Hit?): String =

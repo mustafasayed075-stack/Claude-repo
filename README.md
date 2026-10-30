@@ -378,19 +378,48 @@ hour (`BlockedDomainLog`, `BlockedDomainLogSettings`, `BlockedSitesActivity`):
     is not counted (owner decision), nor are faces, feet, armpits and bellies.
 
   Surfaces checked: the letterbox crop (if any), the whole frame, and the region that
-  triggered (if any). **Build 48 does not change any lock** (`STAGE2_ENFORCE = false`):
-  after each first-stage lock decision it logs
-  `STAGE2 shadow: would CONFIRM|DOWNGRADE to suggestive|VETO first-stage lock=… exposed=… covered=… ms=… [crop N ms: …; full N ms: …] … — lock unchanged (shadow).`
-  with the time each check took on the device, plus the model's load time at start.
+  triggered (if any). **No lock is changed** (`STAGE2_ENFORCE = false`). After each
+  first-stage lock decision it logs (Build 50 format):
+  `STAGE2 shadow: first-stage lock=… app=… screen=on|off reflection=shown|not shown lock=active|none cpu2 ms=… | crop+full@0.45=… · full@0.45=… · full,genital@0.60=… | crop WxH prep N ms infer N ms: CLASS score [x,y,w,h], …; full …; region … | #face-mic … — lock unchanged (shadow).`
+  - **Three options compared** (`SecondStage.variants`): the Build 48 surfaces
+    (crop + whole frame, 0.45); the whole frame only (0.45, the owner's chosen
+    decision source); the whole frame only with `MALE_GENITALIA_EXPOSED` at
+    `STAGE2_GENITAL_ALT_THRESHOLD` 0.60. The triggering region is checked in all three.
+    The genital threshold and enforcement are to be decided from the shadow data.
+  - **Every detection** is listed with its box in that surface's pixels.
+  - **`#face-mic`:** a `MALE_GENITALIA_EXPOSED` box centred under a face box
+    (`SecondStage.genitalUnderFace`) — the close-up-face-with-a-microphone shot common
+    on TikTok — is tagged in the line and gets its own searchable line
+    `STAGE2 #face-mic: …`, so such cases can be collected.
+  - **Timing:** pre-processing and inference per surface, and the device state —
+    the review runs right after the lock (screen turning off, Reflection starting),
+    which is suspected to explain Build 48's 1.3–3.4 s. The model is warmed up at
+    load (the first inference is much slower). Once per service start, 30 s after
+    load, with the screen on and nothing locked, `STAGE2 benchmark` times 1, 2 and 4
+    CPU threads (XNNPACK) and the GPU delegate (if the device supports it) on a
+    synthetic frame.
+
+  **Regression case (must not lock once enforced):** the TikTok screenshot in the
+  gallery (`com.coloros.gallery3d`). First stage: uncropped porn 0.009, cropped to
+  `[0,1155,1080,2110]` porn 0.979. Second stage (measured off-device on the real
+  screenshot, matching the Build 48 device log): `MALE_GENITALIA_EXPOSED` 0.526 on
+  the crop, 0.405 on the whole frame. Masking only the black microphone's pixels drops
+  it to 0.000, and so does masking the face: the microphone under the chin is what the
+  model reads as genitals. So crop+full@0.45 confirms, whole frame @0.45 and @0.60
+  veto (`SecondStageTest.galleryRegressionAcrossTheThreeOptions`). The screenshot
+  itself is not committed (a third party's face in a public repo).
   If it fails, it logs that enforcement would keep the first-stage lock (the planned
   fallback), and it switches itself off for the session after 3 failures in a row.
   Developer section → "تجربة المرحلة التانية على اللقطات المحفوظة" runs it over the
   saved review thumbnails of past confirmed detections and shows counts only (no
   image). Measured off-device (benign content only): of the first stage's 67 locks
   on COCO people photos and Rico app screens it would have kept 1; on the TikTok
-  close-up-face frames it vetoed all 18. Whether it still catches explicit content is
-  **not** measured off-device (no explicit images are used) — that is what the
-  shadow log is for.
+  close-up-face frames it vetoed all 18. On 130 COCO photos captioned with a
+  microphone and 200 close-ups with a synthetic black microphone drawn under the
+  chin, `MALE_GENITALIA_EXPOSED` never reached 0.45 — those don't reproduce the
+  close-up TikTok shot, which is why the device log collects `#face-mic` cases.
+  Whether it still catches explicit content is **not** measured off-device (no
+  explicit images are used) — that is what the shadow log is for.
 - **Calibration logging (temporary):** with `LOG_EVERY_FRAME_SCORE = true` every
   classified frame is logged, e.g.
   `Scan frame: signal=0.6430 [>= 0.15] sexy=0.612 porn=0.031 hentai=0.000 safe=0.340 drawing=0.017 trigger=event app=com.whatsapp positives=1/2 regions=0`

@@ -87,30 +87,42 @@ object ScanLog {
     fun surfaceLabel(pornSurface: Int, regions: List<RegionScore>, wholeCrop: String): String =
         if (pornSurface == PerClassLayer.WHOLE) "whole screen ($wholeCrop)" else "region ${regions[pornSurface].region.label}"
 
+    /** One second-stage check of one surface, with its pre-processing and inference times. */
+    class Stage2Check(val surface: SecondStage.Surface, val prepMs: Long, val inferMs: Long)
+
     /**
-     * The second stage's verdict on one first-stage lock decision (shadow mode), e.g.
-     * `STAGE2 shadow: would VETO first-stage lock=per-class porn (explicit) exposed=none covered=none
-     * ms=212 [crop 74 ms: FACE_MALE 0.840; full 69 ms: FACE_MALE 0.810] app=… — lock unchanged (shadow).`
+     * The second stage's verdict on one first-stage lock decision (shadow mode, Build 50):
+     * the three options under comparison, then every detection on every checked surface
+     * with its box (x,y,w,h in that surface's pixels), and the device state, e.g.
+     * `STAGE2 shadow: first-stage lock=per-class porn (explicit) app=… screen=on reflection=shown lock=active cpu2 ms=640
+     * | crop+full@0.45=CONFIRM (MALE_GENITALIA_EXPOSED 0.526@crop) · full@0.45=VETO (MALE_GENITALIA_EXPOSED 0.405@full) · full,genital@0.60=VETO (…)
+     * | crop 1080x955 prep 9 ms infer 420 ms: FACE_FEMALE 0.833 [229,189,643,582], MALE_GENITALIA_EXPOSED 0.526 [334,647,337,220]; full …
+     * | #face-mic crop,full — lock unchanged (shadow).`
      */
     fun stage2Line(
         lockedBy: String,
         trigger: SecondStage.Trigger,
-        result: SecondStage.Result,
-        surfaces: List<Pair<SecondStage.Surface, Long>>,
+        variants: List<SecondStage.Variant>,
+        checks: List<Stage2Check>,
         totalMs: Long,
+        state: String,
+        faceMic: List<String>,
         foregroundPackage: String?
     ): String {
-        val parts = surfaces.joinToString("; ") { (s, ms) ->
-            val top = s.detections.take(ScanConfig.STAGE2_LOG_TOP)
-                .joinToString(", ") { String.format(Locale.US, "%s %.3f", it.part.name, it.score) }
-            "${s.name} $ms ms: ${top.ifEmpty { "nothing" }}"
-        }
         val budget = if (totalMs > ScanConfig.STAGE2_TIMEOUT_MS) {
             " (over the ${ScanConfig.STAGE2_TIMEOUT_MS} ms budget: enforcement would keep the first-stage lock)"
         } else ""
-        return "STAGE2 shadow: would ${result.decision.label} first-stage lock=$lockedBy (${trigger.label}) " +
-            "exposed=${SecondStage.hitLabel(result.exposed)} covered=${SecondStage.hitLabel(result.covered)} " +
-            "ms=$totalMs$budget [$parts] app=${foregroundPackage ?: "unknown"} — lock unchanged (shadow)."
+        val options = variants.joinToString(" · ") { v ->
+            "${v.name}=${v.result.decision.label} (${SecondStage.hitLabel(v.result.exposed)}" +
+                (v.result.covered?.let { ", covered ${SecondStage.hitLabel(it)}" } ?: "") + ")"
+        }
+        val surfaces = checks.joinToString("; ") { c ->
+            "${c.surface.name} ${c.surface.width}x${c.surface.height} prep ${c.prepMs} ms infer ${c.inferMs} ms: " +
+                c.surface.detections.joinToString(", ") { SecondStage.detectionLabel(it) }.ifEmpty { "nothing" }
+        }
+        val tag = if (faceMic.isEmpty()) "" else " | #face-mic ${faceMic.joinToString(",")}"
+        return "STAGE2 shadow: first-stage lock=$lockedBy (${trigger.label}) app=${foregroundPackage ?: "unknown"} $state " +
+            "ms=$totalMs$budget | $options | $surfaces$tag — lock unchanged (shadow)."
     }
 
     fun perClassLine(whole: NsfwScores, regions: List<RegionScore>, foregroundPackage: String?): String {

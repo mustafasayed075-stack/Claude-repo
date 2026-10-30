@@ -2,6 +2,7 @@ package com.personal.guardian.scan
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -143,23 +144,88 @@ class SecondStageTest {
         assertEquals("region", r.exposed!!.surface)
     }
 
-    // ---- shadow log line ----
+    // ---- Build 50: the three options, the face+mic pattern, the shadow line ----
+
+    private fun at(part: BodyPart, score: Float, x: Int, y: Int, w: Int, h: Int) =
+        BodyPartDetection(part, score, x.toFloat(), y.toFloat(), w.toFloat(), h.toFloat())
+
+    // The gallery regression (the real TikTok screenshot, 1080x2412), measured off-device
+    // with the bundled model and the app's decoding: crop [0,1155,1080,2110] and the whole frame.
+    private val galleryCrop = SecondStage.Surface(
+        "crop", listOf(at(BodyPart.FACE_FEMALE, 0.833f, 229, 189, 643, 582), at(BodyPart.MALE_GENITALIA_EXPOSED, 0.526f, 334, 647, 337, 220)), 1080, 955
+    )
+    private val galleryFull = SecondStage.Surface(
+        "full", listOf(at(BodyPart.FACE_FEMALE, 0.842f, 242, 1352, 613, 564), at(BodyPart.MALE_GENITALIA_EXPOSED, 0.405f, 341, 1789, 309, 252)), 1080, 2412
+    )
 
     @Test
-    fun shadowLineCarriesDecisionScoresTimesAndSaysTheLockIsUnchanged() {
-        val crop = surface("crop", det(BodyPart.FACE_MALE, 0.84f))
-        val full = surface("full", det(BodyPart.FACE_FEMALE, 0.81f), det(BodyPart.MALE_GENITALIA_EXPOSED, 0.34f))
-        val result = SecondStage.decide(SecondStage.Trigger.EXPLICIT, listOf(crop, full))
-        val line = ScanLog.stage2Line("per-class porn", SecondStage.Trigger.EXPLICIT, result, listOf(crop to 74L, full to 69L), 150L, "com.zhiliaoapp.musically")
+    fun galleryRegressionAcrossTheThreeOptions() {
+        val v = SecondStage.variants(SecondStage.Trigger.EXPLICIT, galleryCrop, galleryFull, null).associate { it.name to it.result.decision }
+        assertEquals(SecondStage.Decision.CONFIRM, v["crop+full@0.45"]) // what Build 48 logged
+        assertEquals(SecondStage.Decision.VETO, v["full@0.45"])
+        assertEquals(SecondStage.Decision.VETO, v["full,genital@0.60"])
+        // The device log's worst whole-frame score (0.425) still vetoes on the whole frame.
+        val worst = galleryFull.copy(detections = listOf(at(BodyPart.MALE_GENITALIA_EXPOSED, 0.425f, 341, 1789, 309, 252)))
+        assertEquals(SecondStage.Decision.VETO, SecondStage.decide(SecondStage.Trigger.EXPLICIT, listOf(worst)).decision)
+    }
+
+    @Test
+    fun theMicrophoneUnderTheChinIsTaggedForCollection() {
+        assertEquals(0.526f, SecondStage.genitalUnderFace(galleryCrop)!!.score, 0f)
+        assertEquals(0.405f, SecondStage.genitalUnderFace(galleryFull)!!.score, 0f)
+        val face = at(BodyPart.FACE_MALE, 0.9f, 300, 300, 400, 400)
+        fun tagged(g: BodyPartDetection) = SecondStage.genitalUnderFace(SecondStage.Surface("full", listOf(face, g))) != null
+        assertTrue(tagged(at(BodyPart.MALE_GENITALIA_EXPOSED, 0.5f, 400, 600, 200, 200))) // under the chin
+        assertFalse(tagged(at(BodyPart.MALE_GENITALIA_EXPOSED, 0.5f, 400, 1300, 200, 200))) // far below (> 2 face heights)
+        assertFalse(tagged(at(BodyPart.MALE_GENITALIA_EXPOSED, 0.5f, 900, 600, 200, 200))) // beside, not under
+        assertFalse(tagged(at(BodyPart.MALE_GENITALIA_EXPOSED, 0.5f, 400, 310, 200, 200))) // at the top of the face
+        assertNull(SecondStage.genitalUnderFace(SecondStage.Surface("full", listOf(at(BodyPart.MALE_GENITALIA_EXPOSED, 0.9f, 400, 600, 200, 200)))))
+    }
+
+    @Test
+    fun theHigherGenitalThresholdAppliesToThatClassOnly() {
+        val breast = surface("full", det(BodyPart.FEMALE_BREAST_EXPOSED, 0.50f))
+        assertEquals(SecondStage.Decision.CONFIRM, SecondStage.decide(SecondStage.Trigger.EXPLICIT, listOf(breast), genitalThreshold = 0.60f).decision)
+        val genital = surface("full", det(BodyPart.MALE_GENITALIA_EXPOSED, 0.59f))
+        assertEquals(SecondStage.Decision.VETO, SecondStage.decide(SecondStage.Trigger.EXPLICIT, listOf(genital), genitalThreshold = 0.60f).decision)
+        assertEquals(SecondStage.Decision.CONFIRM, SecondStage.decide(SecondStage.Trigger.EXPLICIT, listOf(genital)).decision)
+        // A passing lower-scored part wins over a higher one that misses its own threshold.
+        val both = surface("full", det(BodyPart.MALE_GENITALIA_EXPOSED, 0.59f), det(BodyPart.BUTTOCKS_EXPOSED, 0.46f))
+        val r = SecondStage.decide(SecondStage.Trigger.EXPLICIT, listOf(both), genitalThreshold = 0.60f)
+        assertEquals(SecondStage.Decision.CONFIRM, r.decision)
+        assertEquals(BodyPart.BUTTOCKS_EXPOSED, r.exposed!!.detection.part)
+        assertEquals(0.60f, ScanConfig.STAGE2_GENITAL_ALT_THRESHOLD, 0f)
+    }
+
+    @Test
+    fun boxesAreMappedBackToTheImagesPixels() {
+        val d = BodyPartDecoder.toImage(at(BodyPart.FACE_MALE, 0.9f, 32, 64, 160, 80), 1080, 2412)
+        val k = 2412f / 320f
+        assertEquals(32 * k, d.left, 1e-3f); assertEquals(64 * k, d.top, 1e-3f)
+        assertEquals(160 * k, d.width, 1e-3f); assertEquals(80 * k, d.height, 1e-3f)
+    }
+
+    @Test
+    fun shadowLineListsEveryDetectionTheThreeOptionsAndTheDeviceState() {
+        val variants = SecondStage.variants(SecondStage.Trigger.EXPLICIT, galleryCrop, galleryFull, null)
+        val line = ScanLog.stage2Line(
+            "per-class porn", SecondStage.Trigger.EXPLICIT, variants,
+            listOf(ScanLog.Stage2Check(galleryCrop, 9, 420), ScanLog.Stage2Check(galleryFull, 12, 300)),
+            741, "screen=off reflection=shown lock=active cpu2", listOf("crop", "full"), "com.coloros.gallery3d"
+        )
         assertEquals(
-            "STAGE2 shadow: would VETO first-stage lock=per-class porn (explicit) exposed=MALE_GENITALIA_EXPOSED 0.340@full " +
-                "covered=none ms=150 [crop 74 ms: FACE_MALE 0.840; full 69 ms: FACE_FEMALE 0.810, MALE_GENITALIA_EXPOSED 0.340] " +
-                "app=com.zhiliaoapp.musically — lock unchanged (shadow).",
+            "STAGE2 shadow: first-stage lock=per-class porn (explicit) app=com.coloros.gallery3d screen=off reflection=shown lock=active cpu2 ms=741 | " +
+                "crop+full@0.45=CONFIRM (MALE_GENITALIA_EXPOSED 0.526@crop) · full@0.45=VETO (MALE_GENITALIA_EXPOSED 0.405@full) · " +
+                "full,genital@0.60=VETO (MALE_GENITALIA_EXPOSED 0.405@full) | " +
+                "crop 1080x955 prep 9 ms infer 420 ms: FACE_FEMALE 0.833 [229,189,643,582], MALE_GENITALIA_EXPOSED 0.526 [334,647,337,220]; " +
+                "full 1080x2412 prep 12 ms infer 300 ms: FACE_FEMALE 0.842 [242,1352,613,564], MALE_GENITALIA_EXPOSED 0.405 [341,1789,309,252] | " +
+                "#face-mic crop,full — lock unchanged (shadow).",
             line
         )
-        val slow = ScanLog.stage2Line("confirmed", SecondStage.Trigger.EXPLICIT, result, listOf(full to 1600L), 1600L, null)
-        assertTrue(slow.contains("ms=1600 (over the 1500 ms budget: enforcement would keep the first-stage lock)"))
-        assertTrue(slow.contains("[full 1600 ms: "))
+        val slow = ScanLog.stage2Line("confirmed", SecondStage.Trigger.EXPLICIT, variants, listOf(ScanLog.Stage2Check(galleryFull.copy(detections = emptyList()), 5, 1600)), 1605, "screen=on reflection=not shown lock=none cpu2", emptyList(), null)
+        assertTrue(slow.contains("ms=1605 (over the 1500 ms budget: enforcement would keep the first-stage lock)"))
+        assertTrue(slow.contains("full 1080x2412 prep 5 ms infer 1600 ms: nothing"))
+        assertFalse(slow.contains("#face-mic"))
     }
 
     // ---- Build 48 is shadow only; model and licences ----

@@ -4,7 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.os.SystemClock
 import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.CompatibilityList
+import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.Closeable
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -23,7 +26,17 @@ import kotlin.math.roundToInt
  *
  * Not thread-safe; use one instance per thread.
  */
-class BodyPartDetector private constructor(private val interpreter: Interpreter) : Closeable {
+class BodyPartDetector private constructor(
+    private val interpreter: Interpreter,
+    /** A GPU delegate in use (closed with the detector), or null on the CPU. */
+    private val gpu: Closeable? = null,
+    /** "cpu2", "cpu4", "gpu" … for the log. */
+    val config: String
+) : Closeable {
+
+    /** Detections (boxes in the checked image's pixels) and where the time went. */
+    class Detected(val detections: List<BodyPartDetection>, val prepMs: Long, val inferMs: Long)
+
 
     private val dim = BodyPartDecoder.INPUT_DIM
     private val anchors = BodyPartDecoder.ANCHORS
@@ -47,8 +60,12 @@ class BodyPartDetector private constructor(private val interpreter: Interpreter)
         require(distIndex >= 0 && clsIndex >= 0) { "unexpected second-stage model outputs: $shapes" }
     }
 
-    /** Body parts found in [bitmap] (any size, software config), highest score first. */
-    fun detect(bitmap: Bitmap): List<BodyPartDetection> {
+    /** Body parts found in [bitmap] (any size, software config), highest score first; boxes in its pixels. */
+    fun detect(bitmap: Bitmap): List<BodyPartDetection> = detectTimed(bitmap).detections
+
+    /** [detect], with the pre-processing and inference times. */
+    fun detectTimed(bitmap: Bitmap): Detected {
+        val t0 = SystemClock.elapsedRealtime()
         val k = dim.toFloat() / maxOf(bitmap.width, bitmap.height)
         val w = (bitmap.width * k).roundToInt().coerceIn(1, dim)
         val h = (bitmap.height * k).roundToInt().coerceIn(1, dim)
@@ -67,23 +84,52 @@ class BodyPartDetector private constructor(private val interpreter: Interpreter)
             input.putFloat((p and 0xFF) / 255f)
         }
         input.rewind()
+        val t1 = SystemClock.elapsedRealtime()
         interpreter.runForMultipleInputsOutputs(arrayOf<Any>(input), mapOf<Int, Any>(distIndex to distOut, clsIndex to clsOut))
+        val t2 = SystemClock.elapsedRealtime()
         for (r in 0 until 4) System.arraycopy(distOut[0][r], 0, dist, r * anchors, anchors)
         for (c in 0 until BodyPartDecoder.CLASSES) System.arraycopy(clsOut[0][c], 0, cls, c * anchors, anchors)
-        return BodyPartDecoder.decode(dist, cls)
+        val found = BodyPartDecoder.decode(dist, cls).map { BodyPartDecoder.toImage(it, bitmap.width, bitmap.height) }
+        return Detected(found, t1 - t0, t2 - t1)
     }
 
     override fun close() {
         interpreter.close()
+        runCatching { gpu?.close() }
         canvasBitmap.recycle()
     }
 
     companion object {
-        private const val NUM_THREADS = 2
+        /** Threads of the detector the scanner uses (the benchmark tries others). */
+        const val NUM_THREADS = 2
 
-        /** Loads the bundled model. Throws if the asset is missing or invalid. */
-        fun create(context: Context): BodyPartDetector =
-            BodyPartDetector(Interpreter(loadModel(context), Interpreter.Options().setNumThreads(NUM_THREADS)))
+        /** Loads the bundled model on the CPU (XNNPACK). Throws if the asset is missing or invalid. */
+        fun create(context: Context, threads: Int = NUM_THREADS): BodyPartDetector = BodyPartDetector(
+            Interpreter(loadModel(context), Interpreter.Options().setNumThreads(threads).setUseXNNPACK(true)),
+            config = "cpu$threads"
+        )
+
+        /**
+         * Loads the bundled model on the GPU delegate, or returns null with the reason when
+         * this device doesn't support it (benchmark only — Build 50 doesn't use the GPU to decide).
+         */
+        fun createGpu(context: Context): Pair<BodyPartDetector?, String> {
+            val compat = CompatibilityList()
+            return try {
+                if (!compat.isDelegateSupportedOnThisDevice) return null to "GPU delegate not supported on this device"
+                val delegate = GpuDelegate(compat.bestOptionsForThisDevice)
+                try {
+                    BodyPartDetector(Interpreter(loadModel(context), Interpreter.Options().addDelegate(delegate)), delegate, "gpu") to "ok"
+                } catch (t: Throwable) {
+                    delegate.close()
+                    null to "GPU delegate failed: ${t.javaClass.simpleName}"
+                }
+            } catch (t: Throwable) {
+                null to "GPU delegate unavailable: ${t.javaClass.simpleName}"
+            } finally {
+                compat.close()
+            }
+        }
 
         private fun loadModel(context: Context): MappedByteBuffer =
             context.assets.openFd(ScanConfig.STAGE2_MODEL_ASSET).use { fd ->

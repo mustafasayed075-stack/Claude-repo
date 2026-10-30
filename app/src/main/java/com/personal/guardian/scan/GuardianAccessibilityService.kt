@@ -114,6 +114,8 @@ class GuardianAccessibilityService : AccessibilityService() {
     // Second stage (README "Second stage"); shadow mode in Build 48. Worker thread only.
     private var bodyParts: BodyPartDetector? = null
     private var stage2Failures = 0
+    private var stage2LoadedAtMs = 0L
+    private var stage2Benchmarked = false
     private var captureInFlight = false
     // Ends a screenshot request whose callback never arrives (see ScanConfig.CAPTURE_TIMEOUT_MS).
     private val captureWatchdog = CaptureWatchdog()
@@ -210,9 +212,16 @@ class GuardianAccessibilityService : AccessibilityService() {
             val loadStart = SystemClock.elapsedRealtime()
             bodyParts = try {
                 BodyPartDetector.create(applicationContext).also {
+                    val loadMs = SystemClock.elapsedRealtime() - loadStart
+                    // Warm-up: the first inference sets the runtime up and is much slower
+                    // (Build 48: the first review took 3.4 s); keep that out of the reviews.
+                    val warm = Bitmap.createBitmap(BodyPartDecoder.INPUT_DIM, BodyPartDecoder.INPUT_DIM, Bitmap.Config.ARGB_8888)
+                    val first = try { it.detectTimed(warm) } finally { warm.recycle() }
+                    stage2LoadedAtMs = SystemClock.elapsedRealtime()
                     GuardianLog.i(
                         applicationContext,
-                        "Second stage (NudeNet 320n fp16) loaded in ${SystemClock.elapsedRealtime() - loadStart} ms; " +
+                        "Second stage (NudeNet 320n fp16, ${it.config}) loaded in $loadMs ms, warm-up run ${first.prepMs + first.inferMs} ms " +
+                            "(infer ${first.inferMs} ms); " +
                             (if (ScanConfig.STAGE2_ENFORCE) "enforcing." else "shadow mode: it logs its verdict, locks are unchanged."),
                         diagnostic = true
                     )
@@ -374,9 +383,61 @@ class GuardianAccessibilityService : AccessibilityService() {
     private fun onTick() {
         val handler = worker ?: return
         applyBlindSpotResetIfRequested()
+        maybeBenchmarkStage2()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) captureIfPossible()
         handler.removeCallbacks(tick)
         handler.postDelayed(tick, scheduler.delayUntilNextCapture(SystemClock.elapsedRealtime()))
+    }
+
+    /**
+     * Build 50: once per service start, time the second stage with 1, 2 and 4 CPU threads
+     * and the GPU delegate (if supported) on a synthetic full-size frame, while the screen
+     * is on and no lock or Reflection is showing — the speed it would have before a lock,
+     * to compare with the times the shadow reviews log after one. Worker thread; ~1–3 s once.
+     */
+    private fun maybeBenchmarkStage2() {
+        if (stage2Benchmarked || bodyParts == null) return
+        if (SystemClock.elapsedRealtime() - stage2LoadedAtMs < ScanConfig.STAGE2_BENCHMARK_AFTER_MS) return
+        if (!isScreenOn() || lockController?.isLocked() == true || ReflectionActivity.isShowing) return
+        stage2Benchmarked = true
+        val ctx = applicationContext
+        val frame = Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888)
+        try {
+            // A gradient with a skin-coloured oval: any content works for timing.
+            val c = android.graphics.Canvas(frame)
+            val paint = android.graphics.Paint()
+            for (y in 0 until 24) {
+                paint.color = android.graphics.Color.rgb(40 + y * 8, 30 + y * 6, 25 + y * 5)
+                c.drawRect(0f, y * 100f, 1080f, y * 100f + 100f, paint)
+            }
+            paint.color = android.graphics.Color.rgb(205, 170, 150)
+            c.drawOval(300f, 1300f, 800f, 1900f, paint)
+            val results = ArrayList<String>()
+            fun time(detector: BodyPartDetector) {
+                detector.use { d ->
+                    d.detectTimed(frame) // warm-up
+                    val runs = (0 until ScanConfig.STAGE2_BENCHMARK_RUNS).map { d.detectTimed(frame) }
+                    val infer = runs.map { it.inferMs }.sorted()
+                    val prep = runs.map { it.prepMs }.sorted()
+                    results += "${d.config} infer median ${infer[infer.size / 2]} ms (min ${infer.first()}, max ${infer.last()}), prep median ${prep[prep.size / 2]} ms"
+                }
+            }
+            for (threads in listOf(1, 2, 4)) {
+                runCatching { time(BodyPartDetector.create(ctx, threads)) }.onFailure { results += "cpu$threads failed: ${it.javaClass.simpleName}" }
+            }
+            val (gpu, why) = BodyPartDetector.createGpu(ctx)
+            if (gpu != null) runCatching { time(gpu) }.onFailure { results += "gpu failed: ${it.javaClass.simpleName}" } else results += "gpu: $why"
+            GuardianLog.i(
+                ctx,
+                "STAGE2 benchmark (screen on, no lock, no Reflection; synthetic 1080x2400 frame, ${ScanConfig.STAGE2_BENCHMARK_RUNS} runs each): " +
+                    results.joinToString("; "),
+                diagnostic = true
+            )
+        } catch (t: Throwable) {
+            GuardianLog.e(ctx, "STAGE2 benchmark failed (${t.javaClass.name}).")
+        } finally {
+            frame.recycle()
+        }
     }
 
     /** Developer "reset escalation" (see [requestBlindSpotReset]), applied on the worker thread. */
@@ -716,22 +777,35 @@ class GuardianAccessibilityService : AccessibilityService() {
             return
         }
         val start = SystemClock.elapsedRealtime()
+        // Device state while the review runs (it runs right after the lock): Build 48's
+        // slow reviews (1.3–3.4 s) are suspected to come from the screen turning off and
+        // Reflection starting at the same moment.
+        val state = "screen=${if (isScreenOn()) "on" else "off"} reflection=${if (ReflectionActivity.isShowing) "shown" else "not shown"} " +
+            "lock=${if (lockController?.isLocked() == true) "active" else "none"} ${detector.config}"
         try {
-            val surfaces = ArrayList<Pair<SecondStage.Surface, Long>>()
-            fun check(name: String, box: Box?) {
-                val t = SystemClock.elapsedRealtime()
+            val checks = ArrayList<ScanLog.Stage2Check>()
+            fun check(name: String, box: Box?): SecondStage.Surface {
                 val img = if (box == null) frame else Bitmap.createBitmap(frame, box.left, box.top, box.width, box.height)
                 try {
-                    surfaces += SecondStage.Surface(name, detector.detect(img)) to (SystemClock.elapsedRealtime() - t)
+                    val r = detector.detectTimed(img)
+                    return SecondStage.Surface(name, r.detections, img.width, img.height).also { checks += ScanLog.Stage2Check(it, r.prepMs, r.inferMs) }
                 } finally {
                     if (img !== frame) img.recycle()
                 }
             }
-            if (cropBox != null) check("crop", cropBox)
-            check("full", null)
-            if (regionBox != null && !regionBox.isEmpty) check("region", regionBox)
-            val result = SecondStage.decide(trigger, surfaces.map { it.first })
-            GuardianLog.w(ctx, ScanLog.stage2Line(lockedBy, trigger, result, surfaces, SystemClock.elapsedRealtime() - start, pkg))
+            val crop = cropBox?.let { check("crop", it) }
+            val full = check("full", null)
+            val region = regionBox?.takeIf { !it.isEmpty }?.let { check("region", it) }
+            val variants = SecondStage.variants(trigger, crop, full, region)
+            val faceMic = listOfNotNull(crop, full, region).filter { SecondStage.genitalUnderFace(it) != null }.map { it.name }
+            GuardianLog.w(ctx, ScanLog.stage2Line(lockedBy, trigger, variants, checks, SystemClock.elapsedRealtime() - start, state, faceMic, pkg))
+            if (faceMic.isNotEmpty()) {
+                // One short, searchable line per "close-up face with a microphone" case, to collect them.
+                val g = listOfNotNull(crop, full, region).mapNotNull { s ->
+                    SecondStage.genitalUnderFace(s)?.let { String.format(java.util.Locale.US, "%.3f@%s", it.score, s.name) }
+                }
+                GuardianLog.i(ctx, "STAGE2 #face-mic: MALE_GENITALIA_EXPOSED under a face (${g.joinToString(", ")}) app=${pkg ?: "unknown"} first-stage lock=$lockedBy.")
+            }
             stage2Failures = 0
         } catch (t: Throwable) {
             stage2Failures++

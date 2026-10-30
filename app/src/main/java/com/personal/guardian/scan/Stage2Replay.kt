@@ -35,13 +35,15 @@ object Stage2Replay {
                 }
                 try {
                     val t = SystemClock.elapsedRealtime()
-                    val result = SecondStage.decide(SecondStage.Trigger.EXPLICIT, listOf(SecondStage.Surface("thumbnail", detector.detect(bitmap))))
+                    val surface = SecondStage.Surface("thumbnail", detector.detect(bitmap), bitmap.width, bitmap.height)
+                    val result = SecondStage.decide(SecondStage.Trigger.EXPLICIT, listOf(surface))
                     times += SystemClock.elapsedRealtime() - t
                     counts[result.decision.ordinal]++
                     GuardianLog.i(
                         ctx,
                         "STAGE2 replay: ${f.name} would ${result.decision.label} " +
-                            "exposed=${SecondStage.hitLabel(result.exposed)} covered=${SecondStage.hitLabel(result.covered)}"
+                            "exposed=${SecondStage.hitLabel(result.exposed)} covered=${SecondStage.hitLabel(result.covered)}" +
+                            (if (SecondStage.genitalUnderFace(surface) != null) " #face-mic" else "")
                     )
                 } catch (t: Throwable) {
                     failed++

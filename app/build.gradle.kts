@@ -83,6 +83,9 @@ dependencies {
     // Stage 3: on-device image classification. Plain TensorFlow Lite runtime (no Play
     // Services, no model downloads) — inference is fully local.
     implementation("org.tensorflow:tensorflow-lite:2.17.0")
+    // Second stage: the GPU delegate, measured against the CPU in the Build 50 benchmark only.
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.17.0")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.17.0")
 
     // Local unit tests (pure-JVM logic: blocklist parsing/matching, DNS packet
     // build/parse round-trips, scan scheduling/confirmation). Run with:

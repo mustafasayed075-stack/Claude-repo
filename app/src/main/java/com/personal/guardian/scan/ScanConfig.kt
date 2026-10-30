@@ -328,11 +328,19 @@ object ScanConfig {
     /** A covered intimate part (SecondStage.COVERED) at or above this counts as suggestive. */
     const val STAGE2_COVERED_THRESHOLD = 0.50f
 
+    /** The third shadow option: `MALE_GENITALIA_EXPOSED` needs this on the whole frame (a microphone under a chin reached 0.405–0.539). */
+    const val STAGE2_GENITAL_ALT_THRESHOLD = 0.60f
+
+    /**
+     * Build 50: once per service start, this long after the model loads and while the
+     * screen is on with no lock or Reflection showing, time the second stage with 1, 2 and
+     * 4 CPU threads and the GPU delegate (if supported) on a synthetic frame.
+     */
+    const val STAGE2_BENCHMARK_AFTER_MS = 30_000L
+    const val STAGE2_BENCHMARK_RUNS = 5
+
     /** Longer than this, enforcement would give up and keep the first-stage lock. */
     const val STAGE2_TIMEOUT_MS = 1_500L
-
-    /** Detections per surface printed in the shadow line. */
-    const val STAGE2_LOG_TOP = 3
 
     // ---- Blocked-sites log ----
 
