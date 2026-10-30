@@ -35,10 +35,19 @@ tests/                   test harness (run.sh, score.py) and RESULTS.md
 ```
 
 The installer:
-- copies each skill to `~/.claude/skills/<name>/` (user-level, all projects);
-- inserts or replaces a marked block in `~/.claude/CLAUDE.md`, leaving
-  any other content in that file alone;
-- refuses to overwrite a same-named skill it did not install;
+- copies each skill to `~/.claude/skills/<name>/` (user-level, all projects)
+  and marks it with an ownership file, `.engineering-skill-system`;
+- only replaces or removes a skill directory that carries that marker, and
+  refuses (install) or skips (uninstall) any other directory with the same name;
+- changes `~/.claude/CLAUDE.md` only between its BEGIN/END markers, in
+  place, and leaves the rest of the file alone. If the markers are damaged it
+  stops and writes nothing. A symlinked CLAUDE.md keeps its link (the target
+  file is updated) and the file mode is kept. The file is replaced
+  atomically, only when its content changes, and is never deleted;
+- runs every check before its first write, so a refusal leaves nothing
+  half-installed;
+- `--check` compares every skill file and the managed CLAUDE.md block
+  against this repo and reports `STALE`, `MISSING`, `FOREIGN` or `DAMAGED`;
 - honors `CLAUDE_HOME` to target another directory.
 
 Start a new Claude Code session after installing. Edit the files under `skills/`
@@ -62,11 +71,24 @@ Check a session: `./scripts/install.sh --check` (or
 
 ## Tests
 
-`tests/run.sh [REPEATS] [OUT_DIR]` builds throwaway fixture repos and runs
-headless `claude -p` sessions against them, then `tests/score.py` reports:
-- **Discovery** - a fresh session lists the skills and knows the routing rule.
-- **Selection** - which skills each run invoked vs. what was expected.
-- **Execution** - Router line, edits vs. stopping for approval, tests
-  touched and run.
+Two separate suites:
+
+- `tests/installer_test.sh`: deterministic tests for the installer,
+  the SessionStart hook and the `run.sh` temp-dir guard. They run in a
+  `mktemp` sandbox with their own `CLAUDE_HOME`/`HOME`. No network and no
+  `claude` calls.
+- `tests/run.sh [REPEATS] [OUT_DIR]`: builds throwaway fixture repos,
+  runs headless `claude -p` sessions against them, and scores them with
+  `tests/score.py`. It reports four results separately:
+  - **Discovery**: a fresh session lists the skills, quotes the routing
+    instruction verbatim, and rejects a decoy skill name.
+  - **Selection**: which skills each run invoked vs. what was expected.
+  - **Behavior**: the Router line, edits when the task is autonomous, and
+    an explicit approval request with no edits when it must escalate.
+  - **Code execution**: whether a test command actually ran and passed,
+    read from the tool output. This is observed, not simulated. Most
+    fixtures have no installed toolchain, so most runs cannot execute tests.
+
+`heldout-*` scenarios were added after the skill text was frozen.
 
 Latest results: `tests/RESULTS.md`.
