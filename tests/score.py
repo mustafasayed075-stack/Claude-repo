@@ -49,6 +49,11 @@ APPROVAL = re.compile(
     r"approv|go-ahead|go ahead|sign[- ]off|\bconfirm|which (option|approach)|"
     r"should I\b|shall I\b|do you want|would you like|let me know|before I (start|proceed|write|implement|change)",
     re.I)
+# Sentences about tool permission prompts ("npm install needed approval") are
+# not a request to review the design, so they do not count as escalation.
+PERMISSION_TALK = re.compile(
+    r"\b(command|commands|install\w*|permission|npm|pytest|python3?|node|tool|blocked|granted|denied|"
+    r"needed (your )?approval|need(s|ed)? approval to run)\b", re.I)
 
 
 def git(d, *args):
@@ -104,7 +109,8 @@ def analyse(jsonl, work):
         tests_touched=any(TEST_FILE.search(f) for f in changed),
         test_cmds=len(test_calls),
         code=code,
-        asked_approval=bool(APPROVAL.search(final)),
+        asked_approval=any(APPROVAL.search(x) and not PERMISSION_TALK.search(x)
+                           for x in re.split(r"(?<=[.?!])\s+|\n+", final)),
         tagged=bool(git(work, "tag").strip()),
         final=final.strip().replace("\n", " ")[:160],
     )

@@ -133,7 +133,7 @@ echo "I. run.sh temp-dir guard"
 before=$(ls / | sha256sum)
 out=$(cd "$SANDBOX" && TMPDIR="$SANDBOX/does-not-exist" "$REPO/tests/run.sh" 0 2>&1); rc=$?
 expect "mktemp failure exits non-zero" '[[ $rc -ne 0 && "$out" == *"mktemp failed"* ]]'
-expect "nothing created at filesystem root" '[[ "$(ls / | sha256sum)" == "$before" && ! -e /work ]]'
+expect "filesystem root unchanged" '[[ "$(ls / | sha256sum)" == "$before" ]]'
 
 echo
 echo "Installer tests: $PASS passed, $FAIL failed"
