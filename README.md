@@ -89,6 +89,9 @@ Two separate suites:
     read from the tool output. This is observed, not simulated. Most
     fixtures have no installed toolchain, so most runs cannot execute tests.
 
-`heldout-*` scenarios were added after the skill text was frozen.
+`heldout-*` scenarios were added after the skill text was frozen; `new-*`
+scenarios were added with the risk policy and never used to write skill text.
+High-risk `heldout-*` scenarios include a second turn that approves the plan
+(`--resume`), to check that approval unlocks the implementation.
 
 Latest results: `tests/RESULTS.md`.
