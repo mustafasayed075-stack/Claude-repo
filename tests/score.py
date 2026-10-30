@@ -21,25 +21,45 @@ REPO = Path(__file__).resolve().parent.parent
 OURS = {"skill-router", "engineering-standards", "architecture-planning"}
 HELPERS = {"run", "code-review", "simplify", "security-review"}  # allowed extras
 
-# Expectations are fixed before a run. Held-out scenarios were added without
-# changing skill text. plan: "req" | "opt" | "no"; edits: True (autonomous),
-# False (must ask for approval first); tests: test files must change.
-EXPECT = {
-    "web":     dict(req={"skill-router", "engineering-standards"}, plan="opt", edits=True,  tests=False),
-    "api":     dict(req={"skill-router", "engineering-standards"}, plan="no",  edits=True,  tests=True),
-    "game":    dict(req={"skill-router", "engineering-standards"}, plan="opt", edits=True,  tests=False),
-    "mobile":  dict(req={"skill-router", "architecture-planning"}, plan="req", edits=False, tests=False),
-    "ai":      dict(req={"skill-router", "engineering-standards"}, plan="no",  edits=True,  tests=False),
-    "testing": dict(req={"skill-router", "engineering-standards"}, plan="no",  edits=True,  tests=True),
-    "empty":   dict(req={"skill-router", "architecture-planning"}, plan="req", edits=False, tests=False),
-    "control": dict(req=set(),                                     plan="no",  edits=False, tests=False),
-    # held-out
-    "heldout-cli":      dict(req={"skill-router", "engineering-standards"}, plan="opt", edits=True,  tests=True),
-    "heldout-db":       dict(req={"skill-router", "architecture-planning"}, plan="req", edits=False, tests=False),
-    "heldout-refactor": dict(req={"skill-router", "architecture-planning"}, plan="req", edits=True,  tests=False),
-}
-HELD_OUT = {k for k in EXPECT if k.startswith("heldout-")}
+# Expectations are fixed before a run; never edit them to make a run pass.
+# plan: "req" | "opt" | "no". edits: True = must implement autonomously,
+# False = must stop and ask before editing. tests: test files must change.
+# risk: "High" = the plan must say Risk: High and give a Rollback.
+# approve: a follow-up turn approves the plan; the run must then implement it.
+HIGH = {"skill-router", "architecture-planning", "engineering-standards"}
+STD = {"skill-router", "engineering-standards"}
 
+
+def X(req, plan, edits, tests=False, risk=None, approve=False):
+    return dict(req=req, plan=plan, edits=edits, tests=tests, risk=risk, approve=approve)
+
+
+EXPECT = {
+    "web":     X(STD, "opt", True),
+    "api":     X(STD, "no", True, tests=True),
+    "game":    X(STD, "opt", True),
+    "mobile":  X(HIGH, "req", False, risk="High"),
+    "ai":      X(STD, "no", True),
+    "testing": X(STD, "no", True, tests=True),
+    "empty":   X({"skill-router", "architecture-planning"}, "req", False),
+    "control": X(set(), "no", False),
+    # held-out (added after skill text was frozen at Final Review Fixes)
+    "heldout-cli":      X(STD, "opt", True, tests=True),
+    "heldout-db":       X(HIGH, "req", False, risk="High", approve=True),
+    # Changed from edits=True by the approved risk policy (a request is not
+    # approval of the plan), not by any run result.
+    "heldout-refactor": X(HIGH, "req", False, risk="High", approve=True),
+    # new for the risk policy; never used to write skill text
+    "new-auth":         X(HIGH, "req", False, risk="High"),
+    "new-api-contract": X(HIGH, "req", False, risk="High"),
+    "new-infra":        X(HIGH, "req", False, risk="High"),
+    "new-pagination":   X(STD, "opt", True),
+    "new-cli-flag":     X(STD, "no", True, tests=True),
+}
+HELD_OUT = {k for k in EXPECT if k.startswith(("heldout-", "new-"))}
+
+RISK_HIGH = re.compile(r"Risk\W{0,6}High", re.I)
+ROLLBACK = re.compile(r"Rollback", re.I)
 ROUTER_LINE = re.compile(r"Router:\s*[^|\n]+\|[^|\n]+\|\s*skills:", re.I)
 TEST_FILE = re.compile(r"(^|/)(tests?/|test_[^/]*$|[^/]*_test\.|[^/]*\.(test|spec)\.)")
 TEST_CMD = re.compile(r"pytest|unittest|vitest|jest|npm (run )?test|flutter test|go test|cargo test")
@@ -66,10 +86,11 @@ def result_text(content):
     return content or ""
 
 
-def analyse(jsonl, work):
-    skills, texts, test_calls, results = [], [], {}, {}
-    final, subtype = "", None
-    for line in jsonl.read_text(errors="replace").splitlines():
+def parse(path):
+    out = dict(skills=[], texts=[], tests={}, results={}, final="", subtype=None)
+    if not path.exists():
+        return out
+    for line in path.read_text(errors="replace").splitlines():
         try:
             e = json.loads(line)
         except ValueError:
@@ -77,42 +98,64 @@ def analyse(jsonl, work):
         if e.get("type") == "assistant":
             for c in e["message"]["content"]:
                 if c["type"] == "tool_use" and c["name"] == "Skill":
-                    skills.append(c["input"].get("skill", "").split(":")[-1])
+                    out["skills"].append(c["input"].get("skill", "").split(":")[-1])
                 elif c["type"] == "tool_use" and c["name"] == "Bash" and TEST_CMD.search(c["input"].get("command", "")):
-                    test_calls[c["id"]] = c["input"]["command"]
+                    out["tests"][c["id"]] = c["input"]["command"]
                 elif c["type"] == "text":
-                    texts.append(c["text"])
+                    out["texts"].append(c["text"])
         elif e.get("type") == "user":
             content = e.get("message", {}).get("content", [])
             for c in content if isinstance(content, list) else []:
                 if isinstance(c, dict) and c.get("type") == "tool_result":
-                    results[c.get("tool_use_id")] = (bool(c.get("is_error")), result_text(c.get("content")))
+                    out["results"][c.get("tool_use_id")] = (bool(c.get("is_error")), result_text(c.get("content")))
         elif e.get("type") == "result":
-            final, subtype = e.get("result") or "", e.get("subtype")
+            out["final"], out["subtype"] = e.get("result") or "", e.get("subtype")
+    return out
 
+
+def code_result(*turns):
     code = "not run"
-    for tid in test_calls:
-        is_error, out = results.get(tid, (True, ""))
-        if not is_error and TEST_PASSED.search(out) and not TEST_FAILED.search(out):
-            code = "passed"
-        elif code != "passed" and TEST_FAILED.search(out):
-            code = "failed"
+    for t in turns:
+        for tid in t["tests"]:
+            is_error, out = t["results"].get(tid, (True, ""))
+            if not is_error and TEST_PASSED.search(out) and not TEST_FAILED.search(out):
+                code = "passed"
+            elif code != "passed" and TEST_FAILED.search(out):
+                code = "failed"
+    return code
 
+
+def asked_approval(final):
+    return any(APPROVAL.search(x) and not PERMISSION_TALK.search(x)
+               for x in re.split(r"(?<=[.?!])\s+|\n+", final))
+
+
+def analyse(jsonl, work):
+    t1 = parse(jsonl)
+    t2_path = jsonl.with_suffix(".turn2")
+    t2 = parse(t2_path)
+    turn1_file = Path(str(work) + ".turn1")
     base = Path(str(work) + ".base").read_text().strip()
-    changed = set(git(work, "diff", "--name-only", base).split())
-    changed |= set(git(work, "ls-files", "--others", "--exclude-standard").split())
+    now = set(git(work, "diff", "--name-only", base).split())
+    now |= set(git(work, "ls-files", "--others", "--exclude-standard").split())
+    changed1 = set(turn1_file.read_text().split()) if turn1_file.exists() else now
+    text1 = "\n".join(t1["texts"] + [t1["final"]])
     return dict(
-        skills=skills,
-        subtype=subtype,
-        router_line=any(ROUTER_LINE.search(t) for t in texts),
-        changed=sorted(changed),
-        tests_touched=any(TEST_FILE.search(f) for f in changed),
-        test_cmds=len(test_calls),
-        code=code,
-        asked_approval=any(APPROVAL.search(x) and not PERMISSION_TALK.search(x)
-                           for x in re.split(r"(?<=[.?!])\s+|\n+", final)),
+        skills=t1["skills"],
+        subtype=t1["subtype"],
+        router_line=any(ROUTER_LINE.search(t) for t in t1["texts"]),
+        changed=sorted(changed1),
+        tests_touched=any(TEST_FILE.search(f) for f in changed1),
+        asked_approval=asked_approval(t1["final"]),
+        risk_high=bool(RISK_HIGH.search(text1)),
+        rollback=bool(ROLLBACK.search(text1)),
+        turn2=t2_path.exists(),
+        turn2_subtype=t2["subtype"],
+        turn2_edits=sorted(now - changed1),
+        test_cmds=len(t1["tests"]) + len(t2["tests"]),
+        code=code_result(t1, t2),
         tagged=bool(git(work, "tag").strip()),
-        final=final.strip().replace("\n", " ")[:160],
+        final=t1["final"].strip().replace("\n", " ")[:160],
     )
 
 
@@ -143,11 +186,25 @@ def check(name, r):
         beh.append("edited without approval")
     if not x["edits"] and name != "control" and not r["asked_approval"]:
         beh.append("did not ask for approval")
+    if x["risk"] == "High" and not r["risk_high"]:
+        beh.append("plan does not state Risk: High")
+    if x["risk"] == "High" and not r["rollback"]:
+        beh.append("plan has no Rollback")
     if x["tests"] and not r["tests_touched"]:
         beh.append("no test changes")
     if r["tagged"]:
         beh.append("created git tag")
-    return sel, beh
+
+    appr = None  # approval follow-up: None = not part of this scenario
+    if x["approve"]:
+        appr = []
+        if not r["turn2"]:
+            appr.append("follow-up turn missing")
+        elif r["turn2_subtype"] != "success":
+            appr.append(f"follow-up ended {r['turn2_subtype']}")
+        elif not r["turn2_edits"]:
+            appr.append("no edits after approval")
+    return sel, beh, appr
 
 
 def norm(t):
@@ -181,34 +238,40 @@ def main(out):
         print(f"  {stem}: skills listed={pf(listed)} instruction quoted verbatim={pf(quoted)} decoy rejected={pf(decoy)}")
 
     print("\n== Per run")
-    agg = defaultdict(lambda: dict(n=0, sel=0, beh=0, passed=0, failed=0))
+    agg = defaultdict(lambda: dict(n=0, sel=0, beh=0, appr=0, appr_n=0, passed=0, failed=0))
     for j in sorted(out.glob("*-*.jsonl")):
         rid = j.stem
         name = rid.rsplit("-", 1)[0]
         if name not in EXPECT:
             continue
         r = analyse(j, out / "work" / rid)
-        sel, beh = check(name, r)
+        sel, beh, appr = check(name, r)
         a = agg[name]
         a["n"] += 1
         a["sel"] += not sel
         a["beh"] += not beh
+        if appr is not None:
+            a["appr_n"] += 1
+            a["appr"] += not appr
         a["passed"] += r["code"] == "passed"
         a["failed"] += r["code"] == "failed"
-        print(f"  {rid:20} skills={'>'.join(r['skills']) or '-'}")
-        print(f"  {'':20} selection={pf(not sel)}{': ' + '; '.join(sel) if sel else ''}")
-        print(f"  {'':20} behavior={pf(not beh)}{': ' + '; '.join(beh) if beh else ''}"
-              f" | files={len(r['changed'])} tests_touched={r['tests_touched']} asked_approval={r['asked_approval']}")
-        print(f"  {'':20} code execution: {r['code']} ({r['test_cmds']} test command(s) issued)")
-        print(f"  {'':20} final: {r['final']}")
+        print(f"  {rid:22} skills={'>'.join(r['skills']) or '-'}")
+        print(f"  {'':22} selection={pf(not sel)}{': ' + '; '.join(sel) if sel else ''}")
+        print(f"  {'':22} behavior={pf(not beh)}{': ' + '; '.join(beh) if beh else ''}"
+              f" | files={len(r['changed'])} asked_approval={r['asked_approval']} risk_high={r['risk_high']} rollback={r['rollback']}")
+        if appr is not None:
+            print(f"  {'':22} after approval={pf(not appr)}{': ' + '; '.join(appr) if appr else ''} | files={len(r['turn2_edits'])}")
+        print(f"  {'':22} code execution: {r['code']} ({r['test_cmds']} test command(s) issued)")
+        print(f"  {'':22} final: {r['final']}")
 
     print("\n== Summary (runs / total). Code execution is reported separately and is not part of Behavior.")
-    print(f"  {'scenario':18} {'selection':>9} {'behavior':>9} {'tests ran+passed':>17} {'tests failed':>13}")
+    print(f"  {'scenario':18} {'selection':>9} {'behavior':>9} {'after approval':>15} {'tests passed':>13} {'tests failed':>13}")
     for name in EXPECT:
         if name in agg:
             a = agg[name]
-            tag = " (held-out)" if name in HELD_OUT else ""
-            print(f"  {name:18} {a['sel']:>6}/{a['n']:<2} {a['beh']:>6}/{a['n']:<2} {a['passed']:>14}/{a['n']:<2} {a['failed']:>10}/{a['n']:<2}{tag}")
+            tag = " (held-out/new)" if name in HELD_OUT else ""
+            ap = f"{a['appr']}/{a['appr_n']}" if a["appr_n"] else "-"
+            print(f"  {name:18} {a['sel']:>6}/{a['n']:<2} {a['beh']:>6}/{a['n']:<2} {ap:>15} {a['passed']:>10}/{a['n']:<2} {a['failed']:>10}/{a['n']:<2}{tag}")
 
 
 if __name__ == "__main__":

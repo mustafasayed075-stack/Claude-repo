@@ -49,8 +49,9 @@ Several types can match (e.g. AI + Backend); list them all.
 
 ## Skills
 
-| Situation | Load |
+| Situation (first matching row wins) | Load |
 |---|---|
+| High risk: database schema or migration, core architecture change, auth/permissions/security, breaking API or data contract, hard-to-undo data move/delete, infrastructure that can cause downtime or data loss | `architecture-planning`, then `engineering-standards` - both before any edit; the plan stops for approval |
 | Small change (1-2 files, existing patterns) - any task type | `engineering-standards` |
 | Touches 3+ files or several modules, adds a module/dependency, or changes data, storage, or public API | `architecture-planning`, then `engineering-standards` |
 | Architecture, or a "build X" request in an empty repo | `architecture-planning` |

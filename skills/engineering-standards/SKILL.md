@@ -69,31 +69,41 @@ A change is done only when all applicable items hold:
 - [ ] Summary given: what changed, how it was verified, known gaps.
 
 ## 7. Autonomy and escalation: autonomous by default, escalate by risk
-Classify the change once, before editing. The highest matching tier wins.
+Classify every change before the first edit. The highest matching tier wins.
 
-**Low - just do it.** Local, reversible edits inside the task's scope: code
-changes on the working branch, adding/updating tests, read-only commands,
-builds, test runs, lint fixes, small in-scope refactors.
+**Low - implement autonomously.** Local, reversible edits inside the task's
+scope: code changes on the working branch, adding/updating tests, read-only
+commands, builds, test runs, lint fixes, small in-scope refactors.
 
-**Medium - plan briefly, then proceed.** Multi-file features or refactors
-that follow the existing architecture, new modules or endpoints that add
-(but do not break) behavior. State a short plan (`architecture-planning`)
-and continue without waiting.
+**Medium - short plan, then implement autonomously.** Multi-file features
+or refactors that stay within the existing architecture, and new modules,
+endpoints, options, or fields that add behavior without breaking existing
+callers or stored data. State a short plan (`architecture-planning`) and
+continue without waiting.
 
-**High - present the plan and stop for approval before editing.**
-- Architecture: changing the established structure or patterns, adding a
-  new service/process boundary, swapping a framework, state manager, or
-  other major dependency, or a wide refactor beyond the task.
-- Data: schema or stored-format changes, migrations, new persistence or
-  sync semantics for user data, deleting data or files you did not create.
-- Security: auth, permissions, crypto, payments, secrets, security controls.
-- Contracts: breaking public API, CLI, or data-contract changes.
-- Irreversible or outward-facing: destructive git (force-push, history
-  rewrite, branch deletion), deploy, publish, send, or anything that costs
-  money.
-- Requirements conflict or are too unclear to choose a safe design.
+**High - analyze, present the plan and risks, then stop and wait for
+approval.** At least:
+- Database schema changes and migrations, including writing migration files.
+- Core architecture changes: restructuring into new layers or patterns,
+  new service/process boundaries, swapping a framework, state manager, or
+  other major dependency, wide refactors beyond the task.
+- Authentication, authorization, permissions, crypto, secrets, or other
+  security controls.
+- API, CLI, event, or data-contract changes that can break compatibility.
+- Moving, deleting, or transforming data in ways that are hard to undo.
+- Infrastructure changes that can cause downtime or data loss.
+- Also: destructive git (force-push, history rewrite, branch deletion),
+  deploy, publish, send, or anything that costs money; requirements that
+  conflict or are too unclear to choose a safe design.
 
-When escalating, give the options, your recommendation, and the risk of
-each. Do the low-risk parts of the task (reading, reproduction, analysis)
-first so the review request is concrete. A user's explicit go-ahead for the
-specific high-risk action counts as approval.
+**Approval rules for High risk**
+- A request to make a high-risk change approves the goal, not the
+  implementation. It is never approval of a plan the user has not seen, no
+  matter how explicitly the change was requested.
+- Approval means an explicit yes from the user after the plan was shown.
+  Until then, do read-only work only (read code, reproduce, analyze); do
+  not create or edit files, including migrations and new modules.
+- Approval covers the plan as shown. If implementation needs a material
+  change to it, or uncovers a new high-risk element, stop and ask again.
+- When stopping, give the options, your recommendation, the risk of each,
+  and end with a direct request for approval of the plan.

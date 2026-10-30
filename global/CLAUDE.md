@@ -8,5 +8,8 @@ code in a repository:
 2. Follow `engineering-standards` while implementing, and check its
    Definition of Done before reporting completion.
 3. Use `architecture-planning` before large, multi-module, or risky changes.
+4. High-risk changes (engineering-standards section 7): present the plan and
+   wait for explicit approval before editing. Asking for the change is not
+   approval of the plan.
 
 Project-level CLAUDE.md and explicit user instructions take precedence.
