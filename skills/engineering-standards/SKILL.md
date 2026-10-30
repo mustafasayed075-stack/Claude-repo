@@ -5,6 +5,9 @@ description: Baseline engineering rules for writing or changing code in any proj
 
 # Engineering Standards
 
+Routing check: if `skill-router` ran for this task and you have not yet
+written its `Router:` line, write it now, before anything else.
+
 Project rules win. If the repo has a CLAUDE.md, CONTRIBUTING, lint config, or an
 established pattern, follow it over anything here.
 
@@ -103,7 +106,21 @@ approval.** At least:
 - Approval means an explicit yes from the user after the plan was shown.
   Until then, do read-only work only (read code, reproduce, analyze); do
   not create or edit files, including migrations and new modules.
-- Approval covers the plan as shown. If implementation needs a material
-  change to it, or uncovers a new high-risk element, stop and ask again.
+- Approval covers the plan as shown, and only that plan. After approval,
+  implement within it:
+  - **Material deviation - stop before making it, and ask for approval of
+    the revised plan:** a different approach or design; scope beyond the
+    plan; a component, service, data store, or interface the plan did not
+    list as affected; a data operation the plan did not describe (e.g. a
+    drop, rewrite, or backfill strategy that differs); a higher risk level;
+    or a new external dependency. Keep work already done if it is still
+    valid under the approved plan, and say what remains.
+  - **Routine detail - proceed without asking:** naming, helper functions,
+    file layout inside the listed components, extra test cases, and fixes
+    to mistakes you made along the way, as long as the plan's approach and
+    scope stay the same.
+  - End the implementation report with
+    `Plan conformance: followed approved plan` or
+    `Plan conformance: deviations - <what changed and why>`.
 - When stopping, give the options, your recommendation, the risk of each,
   and end with a direct request for approval of the plan.

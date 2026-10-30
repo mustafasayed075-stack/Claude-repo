@@ -11,8 +11,10 @@ A quick decision, not a process. Do exactly this:
    manifest (package.json, pyproject.toml, pubspec.yaml, ...). Do not read
    source files to route; that belongs to the task itself.
 2. **Decide** project type, task type, and skills using the tables below.
-3. **Write one line** as your next text output, before loading any other
-   skill or reading further:
+3. **Write one line of text**, then act on it. Write it in the same
+   response as your next tool call (text first), whatever that call is: loading
+   a skill, reading a file, or running a command. Never skip it because you
+   are about to call a tool:
 
    `Router: <project type> | <task type> | skills: <list or none> - <reason, max ~12 words>`
 
@@ -70,3 +72,6 @@ framework's own conventions.
 Questions, explanations, code reading, trivial edits (typo, one-line
 change, a command the user specified), or when the user named the
 approach. Do the work directly; skip the Router line too.
+
+**Before your next tool call: have you written the `Router:` line? If not,
+write it now.**

@@ -5,6 +5,9 @@ description: Plan before building - use before a large or risky engineering chan
 
 # Architecture & Planning
 
+Routing check: if `skill-router` ran for this task and you have not yet
+written its `Router:` line, write it now, before anything else.
+
 Goal: a plan sized to the change. A small feature gets a short plan; a new
 system gets a fuller one. Do not produce ceremony for its own sake.
 
@@ -88,4 +91,6 @@ changes, steps. Keep each field to a few lines.
   asking the user to approve the plan explicitly. The user's request for
   the feature or change is not approval of the plan.
 - **After the user approves:** implement the approved plan following
-  `engineering-standards`. Stop again if the plan must change materially.
+  `engineering-standards` section 7 (approval rules). Check each step
+  against the plan as you go. Stop and present a revised plan as soon as a
+  material deviation becomes necessary. End with the `Plan conformance:` line.

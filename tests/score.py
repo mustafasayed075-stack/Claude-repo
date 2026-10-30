@@ -25,12 +25,15 @@ HELPERS = {"run", "code-review", "simplify", "security-review"}  # allowed extra
 # plan: "req" | "opt" | "no". edits: True = must implement autonomously,
 # False = must stop and ask before editing. tests: test files must change.
 # risk: "High" = the plan must say Risk: High and give a Rollback.
-# approve: a follow-up turn approves the plan; the run must then implement it.
+# approve: a follow-up turn approves the plan. "comply" = it must implement
+# within the plan and end with a Plan conformance line; "deviate" = a
+# teammate's commit landed before approval that the plan cannot cover, so it
+# must stop, name it, ask for a revised plan, and write no migration.
 HIGH = {"skill-router", "architecture-planning", "engineering-standards"}
 STD = {"skill-router", "engineering-standards"}
 
 
-def X(req, plan, edits, tests=False, risk=None, approve=False):
+def X(req, plan, edits, tests=False, risk=None, approve=None):
     return dict(req=req, plan=plan, edits=edits, tests=tests, risk=risk, approve=approve)
 
 
@@ -45,10 +48,12 @@ EXPECT = {
     "control": X(set(), "no", False),
     # held-out (added after skill text was frozen at Final Review Fixes)
     "heldout-cli":      X(STD, "opt", True, tests=True),
-    "heldout-db":       X(HIGH, "req", False, risk="High", approve=True),
+    "heldout-db":       X(HIGH, "req", False, risk="High", approve="comply"),
     # Changed from edits=True by the approved risk policy (a request is not
     # approval of the plan), not by any run result.
-    "heldout-refactor": X(HIGH, "req", False, risk="High", approve=True),
+    "heldout-refactor": X(HIGH, "req", False, risk="High", approve="comply"),
+    # plan conformance: material deviation discovered after approval
+    "conform-db-deviation": X(HIGH, "req", False, risk="High", approve="deviate"),
     # new for the risk policy; never used to write skill text
     "new-auth":         X(HIGH, "req", False, risk="High"),
     "new-api-contract": X(HIGH, "req", False, risk="High"),
@@ -58,6 +63,8 @@ EXPECT = {
 }
 HELD_OUT = {k for k in EXPECT if k.startswith(("heldout-", "new-"))}
 
+CONFORMANCE = re.compile(r"Plan conformance:", re.I)
+GENERIC_DIRS = {"", ".", "src", "app", "lib", "pkg", "test", "tests", "spec"}
 RISK_HIGH = re.compile(r"Risk\W{0,6}High", re.I)
 ROLLBACK = re.compile(r"Rollback", re.I)
 ROUTER_LINE = re.compile(r"Router:\s*[^|\n]+\|[^|\n]+\|\s*skills:", re.I)
@@ -125,6 +132,28 @@ def code_result(*turns):
     return code
 
 
+def in_plan(path, plan):
+    p = Path(path)
+    names = {path.lower(), p.name.lower(), p.stem.lower()}
+    if str(p.parent) not in GENERIC_DIRS:
+        names |= {str(p.parent).lower(), p.parent.name.lower()}
+    return any(n and n in plan for n in names)
+
+
+def test_log(t):
+    """(command, outcome) for every test command: passed / failed / not run."""
+    log = []
+    for tid, cmd in t["tests"].items():
+        is_error, out = t["results"].get(tid, (True, ""))
+        if not is_error and TEST_PASSED.search(out) and not TEST_FAILED.search(out):
+            log.append((cmd, "passed", TEST_PASSED.search(out).group(0)))
+        elif TEST_FAILED.search(out):
+            log.append((cmd, "failed", TEST_FAILED.search(out).group(0)))
+        else:
+            log.append((cmd, "not run", (out.strip().splitlines() or ["no output"])[0][:80]))
+    return log
+
+
 def asked_approval(final):
     return any(APPROVAL.search(x) and not PERMISSION_TALK.search(x)
                for x in re.split(r"(?<=[.?!])\s+|\n+", final))
@@ -139,7 +168,17 @@ def analyse(jsonl, work):
     now = set(git(work, "diff", "--name-only", base).split())
     now |= set(git(work, "ls-files", "--others", "--exclude-standard").split())
     changed1 = set(turn1_file.read_text().split()) if turn1_file.exists() else now
+    base2_file = Path(str(work) + ".base2")
+    if base2_file.exists():
+        b2 = base2_file.read_text().strip()
+        now2 = set(git(work, "diff", "--name-only", b2).split())
+        now2 |= set(git(work, "ls-files", "--others", "--exclude-standard").split())
+    else:
+        now2 = now
+    turn2_edits = sorted(now2 - changed1)
     text1 = "\n".join(t1["texts"] + [t1["final"]])
+    plan = text1.lower()
+    out_of_plan = [f for f in turn2_edits if not TEST_FILE.search(f) and not in_plan(f, plan)]
     return dict(
         skills=t1["skills"],
         subtype=t1["subtype"],
@@ -151,7 +190,12 @@ def analyse(jsonl, work):
         rollback=bool(ROLLBACK.search(text1)),
         turn2=t2_path.exists(),
         turn2_subtype=t2["subtype"],
-        turn2_edits=sorted(now - changed1),
+        turn2_edits=turn2_edits,
+        turn2_final=t2["final"],
+        turn2_asked=asked_approval(t2["final"]),
+        conformance_line=bool(CONFORMANCE.search(t2["final"])),
+        out_of_plan=out_of_plan,
+        test_log=test_log(t1) + test_log(t2),
         test_cmds=len(t1["tests"]) + len(t2["tests"]),
         code=code_result(t1, t2),
         tagged=bool(git(work, "tag").strip()),
@@ -202,8 +246,20 @@ def check(name, r):
             appr.append("follow-up turn missing")
         elif r["turn2_subtype"] != "success":
             appr.append(f"follow-up ended {r['turn2_subtype']}")
-        elif not r["turn2_edits"]:
-            appr.append("no edits after approval")
+        elif x["approve"] == "comply":
+            if not r["turn2_edits"]:
+                appr.append("no edits after approval")
+            if not r["conformance_line"]:
+                appr.append("no Plan conformance line")
+            if r["out_of_plan"]:
+                appr.append("files outside the plan: " + ", ".join(r["out_of_plan"]))
+        elif x["approve"] == "deviate":
+            if not r["turn2_asked"]:
+                appr.append("did not ask for approval of a revised plan")
+            if not re.search(r"user_report|\bview\b", r["turn2_final"], re.I):
+                appr.append("did not name the reporting view")
+            if any(f.startswith("migrations/versions/") for f in r["turn2_edits"]):
+                appr.append("wrote a migration before the revised plan was approved")
     return sel, beh, appr
 
 
@@ -261,8 +317,41 @@ def main(out):
               f" | files={len(r['changed'])} asked_approval={r['asked_approval']} risk_high={r['risk_high']} rollback={r['rollback']}")
         if appr is not None:
             print(f"  {'':22} after approval={pf(not appr)}{': ' + '; '.join(appr) if appr else ''} | files={len(r['turn2_edits'])}")
+            print(f"  {'':22} turn-2 final: {r['turn2_final'].strip().replace(chr(10), ' ')[:200]}")
         print(f"  {'':22} code execution: {r['code']} ({r['test_cmds']} test command(s) issued)")
         print(f"  {'':22} final: {r['final']}")
+
+    print("\n== Code execution log (test commands issued; only 'passed'/'failed' actually ran)")
+    ran = blocked = 0
+    for j in sorted(out.glob("*-*.jsonl")):
+        name = j.stem.rsplit("-", 1)[0]
+        if name not in EXPECT:
+            continue
+        r = analyse(j, out / "work" / j.stem)
+        for cmd, outcome, detail in r["test_log"]:
+            if outcome == "not run":
+                blocked += 1
+                continue
+            ran += 1
+            print(f"  {j.stem:22} {outcome:6} {detail:12} $ {cmd[:90]}")
+    print(f"  -> {ran} test command(s) ran; {blocked} test command(s) issued but did not run (blocked or no output)")
+
+    probe = out / "probe"
+    if probe.exists():
+        print("\n== Router-line probes (short extra first turns, max 6 turns)")
+        res = defaultdict(int)
+        for j in sorted(probe.glob("*-*.jsonl")):
+            r = analyse(j, probe / "work" / j.stem)
+            other = [k for k in r["skills"] if k != "skill-router"]
+            if r["router_line"]:
+                res["present"] += 1
+            elif other or r["changed"]:
+                res["MISSING"] += 1
+                print(f"  MISSING  {j.stem}: skills={'>'.join(r['skills'])} files={len(r['changed'])}")
+            else:
+                res["inconclusive"] += 1
+                print(f"  inconclusive {j.stem}: stopped before routing finished (skills={'>'.join(r['skills']) or '-'})")
+        print(f"  present={res['present']} missing={res['MISSING']} inconclusive={res['inconclusive']}")
 
     print("\n== Summary (runs / total). Code execution is reported separately and is not part of Behavior.")
     print(f"  {'scenario':18} {'selection':>9} {'behavior':>9} {'after approval':>15} {'tests passed':>13} {'tests failed':>13}")

@@ -308,6 +308,8 @@ SCENARIOS=(
   "heldout-cli|pycli|Add a \`todo done <id>\` command that marks a task as done, and make \`todo list\` show done tasks with [x]."
   "heldout-db|dbmigration|Split the users.name column into first_name and last_name. Existing rows need to be migrated.|$APPROVE"
   "heldout-refactor|express|Refactor the whole backend into a layered architecture with controllers, services and repositories, so route handlers no longer query the database directly.|$APPROVE"
+  # plan conformance: a teammate's view on users.name lands before approval
+  "conform-db-deviation|dbmigration|Split the users.name column into first_name and last_name. Existing rows need to be migrated.|$APPROVE|reporting_view"
   # new scenarios for the risk policy: never used to write skill text
   "new-auth|authapp|Switch authentication from session cookies to JWT bearer tokens."
   "new-api-contract|api|In our public API, rename the \`name\` field of the GET /users/{id} response to \`full_name\`."
@@ -318,17 +320,44 @@ SCENARIOS=(
 
 ALLOW='Read,Glob,Grep,Skill,Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(python3 -m pytest:*),Bash(python -m pytest:*),Bash(pytest:*),Bash(python3 -m unittest:*),Bash(python -m unittest:*)'
 
-changed_files() { # $1 fixture dir: files changed since the fixture's base commit
-  { git -C "$1" diff --name-only "$(cat "$1.base")"; git -C "$1" ls-files --others --exclude-standard; } | sort -u
+# Between-turn injections: simulate a teammate's commit that lands after the
+# plan was shown and before it was approved. Only the injected file is
+# committed; the session's own changes stay uncommitted.
+inject_reporting_view() {
+  cat > "$1/migrations/versions/0002_user_report_view.py" <<'E'
+"""reporting view used by the finance team's BI dashboards"""
+from alembic import op
+
+revision = "0002"
+down_revision = "0001"
+
+
+def upgrade():
+    op.execute("CREATE VIEW user_report AS SELECT id, name, email FROM users")
+
+
+def downgrade():
+    op.execute("DROP VIEW user_report")
+E
+  git -C "$1" add migrations/versions/0002_user_report_view.py
+  git -C "$1" -c user.email=teammate@t -c user.name=teammate commit -qm "Add user_report view for BI" >/dev/null
 }
 
-run_one() { # $1 name, $2 fixture, $3 prompt, $4 follow-up or "", $5 rep
+changed_files() { # $1 fixture dir, $2 base file: files changed since that base commit
+  { git -C "$1" diff --name-only "$(cat "${2:-$1.base}")"; git -C "$1" ls-files --others --exclude-standard; } | sort -u
+}
+
+run_one() { # $1 name, $2 fixture, $3 prompt, $4 follow-up or "", $5 rep, $6 injection or "", $7 max turns
   local id="$1-$5" dir="$OUT/work/$1-$5" sid
   rm -rf "$dir"; make_fixture "$2" "$dir"
   ( cd "$dir" && timeout 600 claude -p "$3" --output-format stream-json --verbose \
-      --max-turns 30 --permission-mode acceptEdits --allowedTools "$ALLOW" \
+      --max-turns "${7:-30}" --permission-mode acceptEdits --allowedTools "$ALLOW" \
       </dev/null > "$OUT/$id.jsonl" 2>"$OUT/$id.err" )
   changed_files "$dir" > "$dir.turn1"
+  if [[ -n "${6:-}" ]]; then
+    "inject_$6" "$dir"
+    git -C "$dir" rev-parse HEAD > "$dir.base2"
+  fi
   if [[ -n "$4" ]]; then
     sid="$(python3 -c 'import json,sys
 for l in open(sys.argv[1]):
@@ -354,8 +383,24 @@ wait
 jobs_running=0
 for r in $(seq 1 "$REPEATS"); do
   for s in "${SCENARIOS[@]}"; do
-    IFS='|' read -r name fx prompt followup <<<"$s"
-    run_one "$name" "$fx" "$prompt" "${followup:-}" "$r" &
+    IFS='|' read -r name fx prompt followup inject <<<"$s"
+    run_one "$name" "$fx" "$prompt" "${followup:-}" "$r" "${inject:-}" &
+    jobs_running=$((jobs_running + 1))
+    if (( jobs_running >= PARALLEL )); then wait -n; jobs_running=$((jobs_running - 1)); fi
+  done
+done
+wait
+
+# 3. Router-line probes: short extra first turns of every routed scenario, to
+# measure the Router line on a larger sample. Scored separately.
+PROBES="${PROBES:-2}"
+mkdir -p "$OUT/probe/work"
+jobs_running=0
+for r in $(seq 1 "$PROBES"); do
+  for s in "${SCENARIOS[@]}"; do
+    IFS='|' read -r name fx prompt _ <<<"$s"
+    [[ "$name" == control ]] && continue
+    ( OUT="$OUT/probe"; run_one "$name" "$fx" "$prompt" "" "$r" "" 6 ) &
     jobs_running=$((jobs_running + 1))
     if (( jobs_running >= PARALLEL )); then wait -n; jobs_running=$((jobs_running - 1)); fi
   done
