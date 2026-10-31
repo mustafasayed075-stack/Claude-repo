@@ -71,27 +71,36 @@ Check a session: `./scripts/install.sh --check` (or
 
 ## Tests
 
-Two separate suites:
+Code tests (deterministic, executed):
 
-- `tests/installer_test.sh`: deterministic tests for the installer,
-  the SessionStart hook and the `run.sh` temp-dir guard. They run in a
-  `mktemp` sandbox with their own `CLAUDE_HOME`/`HOME`. No network and no
-  `claude` calls.
-- `tests/run.sh [REPEATS] [OUT_DIR]`: builds throwaway fixture repos,
-  runs headless `claude -p` sessions against them, and scores them with
-  `tests/score.py`. It reports four results separately:
-  - **Discovery**: a fresh session lists the skills, quotes the routing
-    instruction verbatim, and rejects a decoy skill name.
-  - **Selection**: which skills each run invoked vs. what was expected.
-  - **Behavior**: the Router line, edits when the task is autonomous, and
-    an explicit approval request with no edits when it must escalate.
-  - **Code execution**: whether a test command actually ran and passed,
-    read from the tool output. This is observed, not simulated. Most
-    fixtures have no installed toolchain, so most runs cannot execute tests.
+- `tests/installer_test.sh`: installer, SessionStart hook and `run.sh`
+  temp-dir guard, in a `mktemp` sandbox with its own `CLAUDE_HOME`/`HOME`.
+  No network and no `claude` calls.
+- `tests/setup_flow_test.sh`: the setup-script route for other repos, end
+  to end, in a disposable sandbox: a fresh `HOME`, a local `file://` clone of
+  the committed branch, and a throwaway project. Live `claude` checks can be
+  skipped with `LIVE=0`. It verifies that the real `~/.claude` and this repo
+  are unchanged.
 
-`heldout-*` scenarios were added after the skill text was frozen; `new-*`
-scenarios were added with the risk policy and never used to write skill text.
-High-risk `heldout-*` scenarios include a second turn that approves the plan
-(`--resume`), to check that approval unlocks the implementation.
+Behavior tests (`tests/run.sh [REPEATS] [OUT_DIR]`): headless `claude -p`
+sessions against throwaway fixtures, scored by `tests/score.py` into
+separate results:
+- **Discovery**: a fresh session lists the skills, quotes the routing
+  instruction verbatim, and rejects a decoy skill.
+- **Selection**: which skills each run invoked vs. what was expected.
+- **Behavior**: the Router line, autonomous edits for Low/Medium, and for High
+  a plan with `Risk: High` and Rollback, an approval request, and no edits.
+- **After approval**: a `--resume` turn approves the plan. Compliant runs
+  must implement within the plan and print `Plan conformance:`. In the
+  `conform-*` runs a teammate commit lands before approval, and the run must
+  stop and ask for a revised plan.
+- **Router-line probes**: short extra first turns for a larger sample.
+- **Code execution**: test commands that actually ran, with their output,
+  read from tool results. Behavior passes are not code verification.
+- **INVALID**: turns that hit an API or usage-limit error are excluded and
+  listed separately. Rerun them with `REPS="3" SKIP_DISCOVERY=1`.
+
+`heldout-*`, `new-*` and `conform-refactor-deviation` were written after
+the skill text they test and were not used to shape it.
 
 Latest results: `tests/RESULTS.md`.

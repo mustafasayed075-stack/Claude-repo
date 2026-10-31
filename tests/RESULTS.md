@@ -1,5 +1,95 @@
 # Test results
 
+## Final hardening pass - 2026-10-31
+
+Skills as of commit "Re-verify the plan after approval". Behavior and code
+execution are reported separately. Behavior-only runs are **not** code-verified.
+
+### Invalid runs (new classification)
+The account hit its 5-hour usage limit at 20:32 UTC during this suite.
+Those turns returned `subtype=success, is_error=true` with only the limit
+message, and the scorer used to count them as real runs. They are now
+INVALID: listed separately and excluded from pass/fail. The repeat-3 runs
+and all probes were re-run after the reset. One approval turn
+(`heldout-refactor-2`) is still invalid and was not re-run.
+
+### 1. Deterministic code tests (shell; actually executed)
+
+| Suite | Command | Result |
+|---|---|---|
+| Installer / hook / temp-dir guard | `tests/installer_test.sh` | **49/49 pass** |
+| Setup-script flow, disposable sandbox | `tests/setup_flow_test.sh` | **11/11 pass**, 0 skipped |
+
+Setup flow: fresh `HOME` from `mktemp`; `git clone --depth 1 file://<this repo>`
+of the committed branch (no network, no packages); install; idempotent
+re-run; a disposable project repo with no hook. Live `claude -p` sessions in
+that project listed the skills, quoted the routing rule from the sandbox's
+`~/.claude/CLAUDE.md`, routed a task (skill-router first, Router line
+printed) and edited only the disposable project. The fingerprint of the real
+`~/.claude` and of this repo (HEAD and status) was identical before and after.
+
+### 2. Discovery: 3/3
+
+### 3. Behavior (`tests/run.sh 3`: 54 runs, 12 approval turns, 34 probes)
+
+| Scenario | Selection | Behavior | After approval |
+|---|---|---|---|
+| web, api, game, mobile, ai, testing, empty, control | 24/24 | 24/24 | - |
+| heldout-cli | 3/3 | 3/3 | - |
+| heldout-db | 3/3 | **2/3** (no Router line) | **2/3** (see below) |
+| heldout-refactor | 3/3 | 3/3 | 2/2 valid (1 invalid) |
+| conform-db-deviation | 3/3 | 3/3 | **3/3 stopped** |
+| conform-refactor-deviation (unseen) | 3/3 | 3/3 | **3/3 stopped** |
+| new-auth, new-api-contract, new-infra | 9/9 | 9/9 | - |
+| new-pagination, new-cli-flag | 6/6 | 6/6 | - |
+
+**Router line: 83/85 routed runs (51 main + 34 probes).** Both misses
+(`heldout-db-1`, probe `heldout-refactor-2`) have the same pattern seen
+before: skill-router > Bash > architecture-planning > engineering-standards
+as consecutive tool calls with no text in between. The entry checkpoints
+added to the downstream skills did not trigger either. Prompt-level
+instructions make the line likely but **not reliable**. The previous suite
+had 80/80 with the same text, which shows the variance.
+
+**Plan conformance**
+- Material deviation: a teammate commit lands before approval that the
+  plan cannot cover. Before the re-verification rule, `conform-db-deviation`
+  failed 3/3 (the plan was implemented on stale assumptions: a duplicate
+  revision `0002`, and a dropped column that the view depends on). After the
+  rule: 3/3 re-checked, named the commit, stopped, and changed 0 files. The
+  knex scenario, written after the fix and not used to shape it: 3/3 the same.
+- Compliant execution: 4 of 5 valid approval turns pass automatically
+  (implemented, `Plan conformance:` line, no unlisted non-test files). The
+  `heldout-db-2` FAIL is a heuristic false positive on manual review: the
+  plan said "add pytest as a dev dependency" without naming
+  `pyproject.toml`. The check was left as is.
+- Bytecode (`__pycache__/*.pyc`) written by running tests is no longer
+  counted as an edit; that was a false positive in this suite.
+
+### 4. Code execution inside behavior runs (observed from tool results)
+
+| Run | Command | Result |
+|---|---|---|
+| heldout-cli-1/2/3 | `python -m unittest -v` | OK |
+| new-cli-flag-1/2/3 | `python -m unittest discover -s tests ...` | OK |
+| heldout-db-1 | `pytest -q -o pythonpath=.` | 3 passed |
+| heldout-db-3 | `pytest -q -o pythonpath=. tests` | 3 passed |
+| testing-2 | `pytest -q` | 14 passed |
+
+9 test commands ran (all passed); 58 were issued but did not run (blocked
+by permissions or no toolchain). `pytest` here is a pre-existing uv tool at
+`/root/.local/bin/pytest` (only `python3 -m pytest` is unavailable), so
+earlier statements that "pytest is not installed" were imprecise. The code
+from every other run, including all approved implementations except those
+listed, is **unverified**.
+
+### Correction to the risk-policy results below
+Two approval turns in that suite (`heldout-db-3`, `heldout-refactor-3`) hit
+the usage limit after making their edits. "6/6 implemented" was really
+4 complete and 2 truncated with no final report.
+
+---
+
 ## Risk policy - 2026-10-30
 
 Policy: a request for a high-risk change approves the goal, not the plan.
