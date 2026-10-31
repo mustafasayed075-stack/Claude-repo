@@ -1,5 +1,49 @@
 # Test results
 
+## P1: risk/scope ownership, Medium plan, shell writes, continuation - 2026-10-31
+
+Rules: engineering-standards' new top section "Risk, scope and planning" owns
+tiers (by impact/reversibility), implementation vs supporting files, the
+architecture-planning triggers, the `Plan (Medium):` artifact, the shell-write
+policy and continuation; router, planning and global refer to it.
+
+Deterministic: policy 31/31 (23 failed on the previous text), harness 32/32,
+installer 60/60, setup flow 14/14, fixtures byte-identical after extraction.
+
+Live (`tests/p1_validation.sh`; expectations fixed before the run). Headless =
+Opus 5.5, TUI = Sonnet 5.5 (fresh-session default).
+
+| Scenario | Expected | n | Passed | Failed | Inconclusive | Observed |
+|---|---|---|---|---|---|---|
+| L1 bug fix | Low | 3 | 3 | | | standards only, edited, no plan, no stop |
+| L2 tests + docs only | Low | 3 | 3 | | | supporting files did not raise the tier |
+| B1 rename + callers | Low, no shell hand-edits | 3 | 3 | | | Edit tool only |
+| H1 one-line security change | High | 3 | 3 | | | planning, plan, stopped, no edits |
+| H2 schema split | High | 2 | 2 | | | same |
+| C1 continue -> new Medium request | line + plan before edit | 2 | 2 | | | `Plan (Medium):` before the first edit; skill-router not re-invoked (allowed) |
+| M1 additive query params | Medium | 3 | | 3 | | Router: "low/medium risk"; no plan |
+| M2 new CLI command | Medium | 3 | | 3 | | Router: "small feature"; no plan |
+| M3 mechanical rename (3 files) | Medium | 3 | | 3 | | Router: "low risk"; no plan (one run used sed: allowed) |
+| M4 additive --version flag | Medium | 3 | | 3 | | Router: "low-risk additive flag"; no plan |
+| A1 new runtime dependency | Medium + planning, proceed | 3 | | 3 | | classified High, plan, stopped (over-escalation, safe direction) |
+| A2 infra variable, same default | Medium + planning | 2 | | 2 | | Router: "Low risk"; planning loaded after; edited with no plan |
+| TM1 additive params (TUI) | Medium | 2 | | | 2 | permission prompt rejected; no plan before the first edit |
+| TC2 /compact -> new Medium request (TUI) | re-invoke + line + plan | 2x2 | | | 4 | permission prompt / timeout; turn 2 had no Router line or plan |
+
+Totals over 41 turns: Passed 18, Failed 17, Inconclusive 6, Blocked 0.
+
+Finding: the `Plan (Medium):` artifact is produced when the model classifies
+work as Medium (C1 2/2), but the model under-classifies additive and
+mechanical changes as Low (12/12 headless Medium runs), resolving the
+Low/Medium overlap downward at routing time. High and Low behave as defined.
+
+Harness defects found and fixed during this run: the express fixture's loop
+variable overwrote the orchestrator's run directory (8 runs never started; re-run
+after the fix); "does not stop for approval" counted optional offers after
+completed edits as stopping.
+
+---
+
 ## P0: skills discoverable in the hook's own session - 2026-10-31
 
 Change: `.claude/hooks/session-start.sh` returns
