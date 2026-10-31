@@ -15,15 +15,18 @@ sb_home() {
   mkdir -p "$h/.claude"
   [[ "${3:-}" == --skills-dir ]] && mkdir -p "$h/.claude/skills"
   python3 - "$h/.claude/settings.json" "$HARNESS/logger.py" "$log" <<'PY'
-import json, sys
+import json, os, sys
 path, logger, log = sys.argv[1:4]
 hook = lambda phase: [{"matcher": "", "hooks": [{"type": "command",
         "command": f"python3 '{logger}' '{log}' {phase}", "timeout": 30}]}]
 allow = ["Read", "Glob", "Grep"] + [f"Bash({c}:*)" for c in (
     "ls", "cat", "head", "tail", "wc", "grep", "find", "sed -n", "bash -n",
     "git status", "git log", "git diff", "git show",
-    "./scripts/install.sh --check", "tests/installer_test.sh", "bash tests/installer_test.sh")]
-json.dump({"permissions": {"allow": allow},
+    "./scripts/install.sh", "scripts/install.sh", "bash scripts/install.sh",
+    "tests/installer_test.sh", "bash tests/installer_test.sh")]
+# Reading the sandbox's own ~/.claude is harmless and avoids prompts.
+extra = [os.path.join(os.path.dirname(path))]
+json.dump({"permissions": {"allow": allow, "additionalDirectories": extra},
            "hooks": {"PreToolUse": hook("pre"), "PostToolUse": hook("post")}},
           open(path, "w"), indent=2)
 PY

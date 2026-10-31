@@ -8,7 +8,9 @@
 It answers only first-run onboarding screens and the workspace-trust
 dialog. It never approves a permission prompt: one that appears is rejected
 with Escape and logged, and the analyzer then treats the turn as
-inconclusive. Usage-limit screens are logged so the run counts as blocked.
+inconclusive. A question dialog (AskUserQuestion) ends the turn: the model
+is waiting for the user. Usage-limit screens are logged so the run counts
+as blocked.
 """
 import json
 import re
@@ -75,6 +77,8 @@ def prompt(name, dlog, text, timeout=900):
         if "Do you want to proceed?" in s or "Do you want to make this edit" in s:
             log(dlog, type="permission_prompt_rejected", screen=s[-1200:])
             keys(name, "Escape"); continue
+        if "Enter to select" in s and "Esc to cancel" in s:
+            log(dlog, type="question_asked", screen=s[-1500:]); return 0
         full = screen(name, True)
         if len(DONE.findall(full)) > before or (text.startswith("/compact") and "Compacted" in full):
             log(dlog, type="turn_done", prompt=text); return 0

@@ -3,7 +3,7 @@
 # SessionStart hook installs them). Every scenario runs in its own disposable
 # sandbox (fresh HOME + copy of this working tree); the real ~/.claude is
 # never touched. Results: tests/harness/analyze.py verdicts per turn.
-#   tests/p0_validation.sh [OUT_DIR]
+#   [ONLY="s1 s2"] tests/p0_validation.sh [OUT_DIR]
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/harness/sandbox.sh"
@@ -27,9 +27,9 @@ setup() {
 # meta <id> <home> <project> <turns-json>
 meta() {
   python3 - "$OUT/$1" "$1" "$2" "$3" "$(sb_state "$3")" "$4" <<'PY'
-import json, sys
+import json, sys, time
 run, rid, home, proj, base, turns = sys.argv[1:7]
-json.dump({"id": rid, "home": home, "project": proj, "baseline": base,
+json.dump({"id": rid, "home": home, "project": proj, "baseline": base, "started": time.time(),
            "turns": json.loads(turns)}, open(f"{run}/meta.json", "w"), indent=2)
 PY
 }
@@ -94,6 +94,11 @@ s7() { # platform tolerance: hook prints malformed output (disposable copy only)
   headless "$r/home" "$r/project" "$r/events.jsonl" "$r/turn1.jsonl" "$P_Q"
 }
 
-s1 & s2 & s3 & s6 & s7 & wait
-s4 & s5 & wait
+# ONLY="s1 s2" runs a subset (s4 needs s2's run, s5 needs s3's, in the same OUT_DIR).
+if [[ -n "${ONLY:-}" ]]; then
+  for s in $ONLY; do "$s" & done; wait
+else
+  s1 & s2 & s3 & s6 & s7 & wait
+  s4 & s5 & wait
+fi
 ANALYZE_OUT="$OUT/verdicts.json" python3 "$HERE/harness/analyze.py" "$OUT"/S*/ | tee "$OUT/verdicts.txt"

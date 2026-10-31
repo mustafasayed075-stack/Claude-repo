@@ -75,26 +75,49 @@ entries += [{"type": "user", "timestamp": T(30), "message": {"content": "<comman
 if kind != "notranscript":
     with open(os.path.join(tdir, "t.jsonl"), "w") as f:
         f.write("\n".join(json.dumps(e) for e in entries) + "\n")
-ev = [{"ts": 1011, "phase": "post", "tool": "Skill", "state": "BASE"},
-      {"ts": 1053, "phase": "pre", "tool": "Bash", "state": "BASE"},
-      {"ts": 1054, "phase": "post", "tool": "Bash", "state": "CHANGED"}]
+started = None
+if kind == "shared_project":  # an older run's transcript with the same prompt, wrong skills
+    old = [dict(e) for e in entries]
+    for e in old:
+        e["timestamp"] = T(-500) if e.get("timestamp") else e.get("timestamp")
+        if e.get("type") == "assistant" and e["message"]["content"][0].get("text", "").startswith("Router"):
+            e["message"] = {"model": "m", "content": [{"type": "tool_use", "name": "Skill", "id": "z", "input": {"skill": "skill-router"}}]}
+    with open(os.path.join(tdir, "older.jsonl"), "w") as f:
+        f.write("\n".join(json.dumps(e) for e in old) + "\n")
+    os.utime(os.path.join(tdir, "older.jsonl"), (2e9, 2e9))  # newest mtime, but before the run
+    started = 1005
+if kind == "shared_file":  # two runs appended to ONE transcript file (inherited session id)
+    first = [dict(e, timestamp=T(-500 + i)) for i, e in enumerate(entries)]
+    for e in first:
+        if e.get("type") == "assistant" and e["message"]["content"][0].get("text", "").startswith("Router"):
+            e["message"] = {"model": "m", "content": [{"type": "tool_use", "name": "Skill", "id": "z", "input": {"skill": "skill-router"}}]}
+    with open(os.path.join(tdir, "t.jsonl"), "w") as f:
+        f.write("\n".join(json.dumps(e) for e in first + entries) + "\n")
+    started = 1005
+ev = [{"ts": 1011, "phase": "post", "tool": "Skill", "state": "BASE", "cwd": proj},
+      {"ts": 1053, "phase": "pre", "tool": "Bash", "state": "BASE", "cwd": proj},
+      {"ts": 1054, "phase": "post", "tool": "Bash", "state": "CHANGED", "cwd": proj}]
 if kind == "mod_in_turn1":
-    ev.insert(1, {"ts": 1013, "phase": "post", "tool": "Edit", "state": "EARLY"})
+    ev.insert(1, {"ts": 1013, "phase": "post", "tool": "Edit", "state": "EARLY", "cwd": proj})
+if kind == "foreign_events":  # another project's events in the same log (shared HOME)
+    ev = [{"ts": 1005, "phase": "post", "tool": "Edit", "state": "OTHER", "cwd": "/tmp/another-project"},
+          {"ts": 1011, "phase": "post", "tool": "Skill", "state": "BASE", "cwd": proj}] + ev[1:]
 with open(os.path.join(run, "events.jsonl"), "w") as f:
     f.write("\n".join(json.dumps(e) for e in ev) + "\n")
-drv = {"timeout": [{"type": "timeout", "ts": 1020}]}.get(kind, [])
+drv = {"timeout": [{"type": "timeout", "ts": 1020}],
+       "question": [{"type": "question_asked", "ts": 1020}]}.get(kind, [])
 with open(os.path.join(run, "driver.jsonl"), "w") as f:
     f.write("".join(json.dumps(d) + "\n" for d in drv))
 e1 = {"skills_listed": ["skill-router", "engineering-standards", "architecture-planning"], "router_first": True,
       "skills_required": ["architecture-planning", "engineering-standards"], "modification": False}
 e2 = {"router_first": True, "skills_required": ["engineering-standards"], "skills_forbidden": ["architecture-planning"], "modification": True}
-json.dump({"id": rid, "home": home, "project": proj, "baseline": "BASE",
+json.dump({"id": rid, "home": home, "project": proj, "baseline": "BASE", "started": started,
            "turns": [{"prompt": P1, "expect": e1}, {"prompt": P2, "expect": e2}]}, open(os.path.join(run, "meta.json"), "w"))
 PY
 }
 verdicts() { ANALYZE_OUT="$SB/out-$1.json" python3 "$H/analyze.py" "$SB/runs/$1" >/dev/null; python3 -c "import json,sys; print(' '.join(t['verdict'] for t in json.load(open(sys.argv[1]))[0]['turns']))" "$SB/out-$1.json"; }
 info() { python3 -c "import json,sys; print(json.load(open(sys.argv[1]))[0]['turns'][int(sys.argv[2])]['info'].get(sys.argv[3]))" "$SB/out-$1.json" "$2" "$3"; }
-for k in good nolisting limit timeout noassistant notranscript mod_in_turn1; do mkrun "$k" "$k"; done
+for k in good nolisting limit timeout noassistant notranscript mod_in_turn1 foreign_events question shared_project shared_file; do mkrun "$k" "$k"; done
 expect "complete evidence, expectations hold: Passed Passed" '[[ "$(verdicts good)" == "Passed Passed" ]]'
 expect "turn 2 (after /compact) first modification attributed to Bash" '[[ "$(info good 1 first_modification)" == "post:Bash" ]]'
 expect "turn 1 first modification is none" '[[ "$(info good 0 first_modification)" == "None" ]]'
@@ -104,6 +127,10 @@ expect "driver timeout inside the turn: Inconclusive" '[[ "$(verdicts timeout)" 
 expect "no assistant output: Inconclusive" '[[ "$(verdicts noassistant)" == Inconclusive* ]]'
 expect "no transcript at all: Blocked Blocked" '[[ "$(verdicts notranscript)" == "Blocked Blocked" ]]'
 expect "an edit in a turn that must not modify: Failed, attributed to Edit" '[[ "$(verdicts mod_in_turn1)" == Failed* && "$(info mod_in_turn1 0 first_modification)" == "post:Edit" ]]'
+expect "another project's events in the log are ignored (no false modification)" '[[ "$(verdicts foreign_events)" == "Passed Passed" && "$(info foreign_events 0 first_modification)" == "None" ]]'
+expect "a question dialog ends the turn without making it inconclusive" '[[ "$(verdicts question)" == "Passed Passed" && "$(info question 0 stopped_with_question)" == "True" ]]'
+expect "shared project + same prompt: the transcript sent after the run start is used" '[[ "$(verdicts shared_project)" == "Passed Passed" ]]'
+expect "two runs in one transcript file: this run's prompt (after its start) is used" '[[ "$(verdicts shared_file)" == "Passed Passed" ]]'
 mkdir -p "$SB/runs/never"; echo '{"id":"never","home":"/nonexistent","project":"/x","turns":[{"prompt":"p","expect":{}}]}' > "$SB/runs/never/meta.json"
 echo '{"type":"blocked","reason":"session never became ready","ts":1}' > "$SB/runs/never/driver.jsonl"
 expect "session never became ready: Blocked" '[[ "$(verdicts never)" == "Blocked" ]]'

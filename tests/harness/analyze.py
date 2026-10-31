@@ -82,14 +82,18 @@ def listing_names(entries, upto):
     return names, raw
 
 
-def analyse_turn(meta, turn, entries, events, driver):
+def analyse_turn(meta, turn, entries, events, driver, started=None):
     exp = turn.get("expect", {})
     res = {"prompt": turn["prompt"][:70], "checks": [], "info": {}}
 
     def check(name, ok, evidence):
         res["checks"].append({"check": name, "status": "pass" if ok else "fail", "evidence": evidence})
 
-    start = next((i for i, e in enumerate(entries) if is_prompt(e) and turn["prompt"][:60] in text_of(e)), None)
+    # Sessions here can share one transcript file (child sessions inherit the
+    # parent's session id), so take the first matching prompt sent after
+    # this run started.
+    start = next((i for i, e in enumerate(entries) if is_prompt(e) and turn["prompt"][:60] in text_of(e)
+                  and (started is None or (epoch(e.get("timestamp", "")) or 0) >= started - 5)), None)
     if start is None:
         res["verdict"], res["why"] = "Blocked", "prompt not found in transcript"
         return res
@@ -118,6 +122,8 @@ def analyse_turn(meta, turn, entries, events, driver):
     joined = "\n".join(texts)
 
     # first modification in this turn, from the event log
+    proj = os.path.realpath(meta["project"])
+    events = [ev for ev in events if os.path.realpath(ev.get("cwd") or "") == proj]
     before = [ev for ev in events if ev["ts"] < t0]
     base = before[-1]["state"] if before else meta.get("baseline")
     window = [ev for ev in events if t0 <= ev["ts"] < t1]
@@ -158,6 +164,9 @@ def analyse_turn(meta, turn, entries, events, driver):
 
     fails = [c for c in res["checks"] if c["status"] == "fail"]
     incomplete = [d["type"] for d in driver if d.get("type") in ("timeout", "permission_prompt_rejected") and t0 - 5 <= d["ts"] <= t1]
+    asked = [d for d in driver if d.get("type") == "question_asked" and t0 - 5 <= d["ts"] <= t1]
+    if asked:
+        res["info"]["stopped_with_question"] = True
     if not assistant:
         incomplete.append("no assistant output")
     if fails and not incomplete:
@@ -177,19 +186,25 @@ def analyse(run):
     driver = jsonl(os.path.join(run, "driver.jsonl"))
     out = {"id": meta["id"], "turns": []}
     files = transcripts(meta)
+    # Several runs can share a project and prompt; only transcripts whose
+    # prompt was sent after this run started belong to it.
+    started = meta.get("started") or min((d["ts"] for d in driver if d.get("type") in
+                                          ("onboarding", "trust_accepted", "ready", "sent")), default=None)
     never_ready = any(d.get("type") == "blocked" and "ready" in d.get("reason", "") for d in driver)
     for turn in meta["turns"]:
         entries = []
-        for f in reversed(files):
+        for f in files:
             es = jsonl(f)
-            if any(is_prompt(e) and turn["prompt"][:60] in text_of(e) for e in es):
+            hits = [e for e in es if is_prompt(e) and turn["prompt"][:60] in text_of(e)]
+            if hits and (started is None or any((epoch(e.get("timestamp", "")) or 0) >= started - 5 for e in hits)):
                 entries = es
-                break
+                if started is not None:
+                    break
         if never_ready or not files:
             out["turns"].append({"prompt": turn["prompt"][:70], "verdict": "Blocked",
                                  "why": "session never ready" if never_ready else "no transcript", "checks": [], "info": {}})
             continue
-        out["turns"].append(analyse_turn(meta, turn, entries, events, driver))
+        out["turns"].append(analyse_turn(meta, turn, entries, events, driver, started))
     return out
 
 
