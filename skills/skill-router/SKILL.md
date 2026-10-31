@@ -51,13 +51,16 @@ Several types can match (e.g. AI + Backend); list them all.
 
 ## Skills
 
+Risk tiers, scope and the planning triggers are defined in
+engineering-standards, section "Risk, scope and planning". Judge by impact,
+not by file count; tests and docs don't make a change bigger.
+
 | Situation (first matching row wins) | Load |
 |---|---|
-| High risk: database schema or migration, core architecture change, auth/permissions/security, breaking API or data contract, hard-to-undo data move/delete, infrastructure that can cause downtime or data loss | `architecture-planning`, then `engineering-standards` - both before any edit; the plan stops for approval |
-| Small change (1-2 files, existing patterns) - any task type | `engineering-standards` |
-| Touches 3+ files or several modules, adds a module/dependency, or changes data, storage, or public API | `architecture-planning`, then `engineering-standards` |
+| High risk or architectural impact (as defined there: e.g. schema/migration, security, breaking contract, new boundary, new runtime dependency, storage or infra change) | `architecture-planning`, then `engineering-standards` - both before any edit; a High plan stops for approval |
 | Architecture, or a "build X" request in an empty repo | `architecture-planning` |
 | Release | `engineering-standards` (Definition of Done) |
+| Any other change - Low or Medium, any task type | `engineering-standards` (Medium writes its short plan before the first modification) |
 
 Optional built-ins, only when they clearly add value:
 - `run` - to reproduce or verify runtime/UI behavior.
@@ -67,6 +70,9 @@ Optional built-ins, only when they clearly add value:
 
 Web/Mobile/Game/Infra domain skills do not exist yet; follow the
 framework's own conventions.
+
+## Continuing a conversation
+Your routing decision persists for its task. For a new coding request, write a fresh Router line; call this skill again only if its content is no longer in context (e.g. after compaction).
 
 ## No skill needed
 Questions, explanations, code reading, trivial edits (typo, one-line

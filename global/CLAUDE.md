@@ -8,7 +8,10 @@ code in a repository:
    explanations, and trivial one-line edits.
 2. Follow `engineering-standards` while implementing, and check its
    Definition of Done before reporting completion.
-3. Use `architecture-planning` before large, multi-module, or risky changes.
+3. Risk, scope and planning are defined in engineering-standards ("Risk,
+   scope and planning"): use `architecture-planning` for high-risk or
+   architectural changes, and write the short `Plan (Medium):` before the
+   first modification of Medium work, whatever tool makes it.
 4. High-risk changes (engineering-standards section 7): present the plan and
    wait for explicit approval before editing. Asking for the change is not
    approval of the plan. After approval, stay within the approved plan; a

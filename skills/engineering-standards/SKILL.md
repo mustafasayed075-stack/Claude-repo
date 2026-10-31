@@ -11,6 +11,81 @@ written its `Router:` line, write it now, before anything else.
 Project rules win. If the repo has a CLAUDE.md, CONTRIBUTING, lint config, or an
 established pattern, follow it over anything here.
 
+## Risk, scope and planning (read first; applies to every change)
+This section is the single source of truth for risk tiers, scope, planning,
+shell writes and continuation. Other skills refer to it.
+
+**Scope.** Judge a change by its impact and reversibility, not by how many
+files it touches.
+- *Implementation files* change what the software does: source code,
+  configuration, schemas, build and deploy files.
+- *Supporting files* are tests, docs, changelogs, fixtures and generated
+  lockfiles. They never raise the tier by themselves.
+
+**Tiers.** Classify before the first modification. The highest matching
+tier wins regardless of size: a one-line change can be High.
+- **High - present a plan, then stop and wait for approval** (approval
+  rules: section 7):
+  - database schema changes and migrations, including writing migration files;
+  - core architecture changes: new layers or patterns, new service or
+    process boundaries, swapping a framework, state manager or other major
+    dependency, wide refactors beyond the task;
+  - authentication, authorization, permissions, crypto, secrets or other
+    security controls;
+  - API, CLI, event or data-contract changes that can break compatibility;
+  - moving, deleting or transforming data in ways that are hard to undo;
+  - infrastructure changes that can cause downtime or data loss;
+  - destructive git (force-push, history rewrite, branch deletion), deploy,
+    publish, send, or anything that costs money;
+  - requirements that conflict or are too unclear to choose a safe design.
+- **Medium - write a short plan, then implement without waiting:** additive,
+  non-breaking contract changes (a new CLI option or command, endpoint,
+  parameter, field or config key); a new internal module; changes spread
+  across several implementation files or modules; mechanical changes across
+  many files (renames, in-codebase API migrations); a new dependency.
+- **Low - implement directly:** everything else, typically one or two
+  implementation files within existing patterns plus their tests and docs,
+  bug fixes that keep every contract, and tests-only or docs-only changes.
+
+**`architecture-planning` is required** for every High change and for
+changes with architectural impact: a new architectural boundary (a new
+service, process, package or layer, or connecting modules that did not
+interact); a new runtime dependency; any storage or data-model change;
+infrastructure, build or deploy changes; breaking contract changes. Other
+Medium work uses the short plan below; Low needs no plan.
+
+**Medium plan.** Before the first modification of the working tree, by any
+tool, write:
+
+```
+Plan (Medium): <goal in one line>
+- Scope: <implementation files>; supporting: <tests/docs>
+- Approach: <how, in one or two lines>
+- Validation: <tests and checks you will run>
+```
+
+Then implement without waiting for approval. If you load
+`architecture-planning` for Medium work, its plan replaces this one.
+
+**Modifications and shell writes.** A modification is any change to the
+working tree, whatever tool makes it; the tiers, plans and approvals above
+apply to all of them.
+- Use the Edit/Write tools for hand-written changes to tracked source, test,
+  doc and config files. Several edits are several Edit calls.
+- Shell commands may modify files when a tool does the work: generators,
+  formatters, lockfile updates by the package manager, and mechanical
+  transformations across many files (e.g. a sed rename). State the command,
+  then show `git diff --stat`.
+- Never use a shell heredoc or inline script to apply hand-written edits to
+  tracked files, and never use the shell to get around a plan, an approval,
+  a permission prompt or a risk control.
+
+**Continuing a conversation.** The routing decision persists for the task it
+was made for. For a new coding request in the same conversation, write a
+fresh Router line; call `skill-router` again (and any skill whose rules you
+need) only when its content is no longer in context, for example after
+compaction.
+
 ## 1. Understand before editing
 - Read the files you will touch and their direct callers/callees. Find how the
   project already solves the same kind of problem and reuse that pattern.
@@ -27,8 +102,8 @@ established pattern, follow it over anything here.
   (Clean/Hexagonal/MVC/ECS/...) is a default; adopt one only when a concrete
   problem calls for it.
 - Add abstraction when there is a second real use, not in anticipation.
-- For changes that add a module, cross several layers, or alter data models
-  or public APIs, use the `architecture-planning` skill first.
+- Use `architecture-planning` when "Risk, scope and planning" (top of this
+  skill) requires it.
 
 ## 3. Separation of concerns and maintainability
 - One responsibility per function/module; keep I/O, business logic, and
@@ -72,32 +147,9 @@ A change is done only when all applicable items hold:
 - [ ] Summary given: what changed, how it was verified, known gaps.
 
 ## 7. Autonomy and escalation: autonomous by default, escalate by risk
-Classify every change before the first edit. The highest matching tier wins.
-
-**Low - implement autonomously.** Local, reversible edits inside the task's
-scope: code changes on the working branch, adding/updating tests, read-only
-commands, builds, test runs, lint fixes, small in-scope refactors.
-
-**Medium - short plan, then implement autonomously.** Multi-file features
-or refactors that stay within the existing architecture, and new modules,
-endpoints, options, or fields that add behavior without breaking existing
-callers or stored data. State a short plan (`architecture-planning`) and
-continue without waiting.
-
-**High - analyze, present the plan and risks, then stop and wait for
-approval.** At least:
-- Database schema changes and migrations, including writing migration files.
-- Core architecture changes: restructuring into new layers or patterns,
-  new service/process boundaries, swapping a framework, state manager, or
-  other major dependency, wide refactors beyond the task.
-- Authentication, authorization, permissions, crypto, secrets, or other
-  security controls.
-- API, CLI, event, or data-contract changes that can break compatibility.
-- Moving, deleting, or transforming data in ways that are hard to undo.
-- Infrastructure changes that can cause downtime or data loss.
-- Also: destructive git (force-push, history rewrite, branch deletion),
-  deploy, publish, send, or anything that costs money; requirements that
-  conflict or are too unclear to choose a safe design.
+The tiers are defined in "Risk, scope and planning" at the top of this
+skill. Low and Medium proceed without waiting; High stops for approval
+under these rules.
 
 **Approval rules for High risk**
 - A request to make a high-risk change approves the goal, not the

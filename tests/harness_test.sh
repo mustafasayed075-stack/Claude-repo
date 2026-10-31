@@ -135,6 +135,57 @@ mkdir -p "$SB/runs/never"; echo '{"id":"never","home":"/nonexistent","project":"
 echo '{"type":"blocked","reason":"session never became ready","ts":1}' > "$SB/runs/never/driver.jsonl"
 expect "session never became ready: Blocked" '[[ "$(verdicts never)" == "Blocked" ]]'
 
+echo "3. Analyzer: P1 checks (plan before modification, approval stop, shell writes, continuation)"
+# mkp1 <kind>: one turn; assistant text/tool entries and tool events at controlled times.
+mkp1() {
+  python3 - "$SB" "$1" <<'PY'
+import json, os, sys, datetime
+sb, kind = sys.argv[1:3]
+rid = "p1-" + kind; run = os.path.join(sb, "runs", rid); home = os.path.join(sb, "homes", rid); proj = f"/tmp/fakeproj-{rid}"
+os.makedirs(run, exist_ok=True)
+tdir = os.path.join(home, ".claude", "projects", "".join(c if c.isalnum() else "-" for c in proj)); os.makedirs(tdir, exist_ok=True)
+T = lambda x: datetime.datetime.fromtimestamp(1000 + x, datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+P = "Add optional limit and offset query parameters to GET /products"
+plan = "Plan (Medium): add pagination\n- Scope: src/routes/products.js; supporting: tests\n- Approach: ...\n- Validation: ..."
+heredoc = "python3 - <<'EOF'\np='src/a.js'; s=open(p).read()\nopen(p,'w').write(s)\nEOF"
+cmd = {"heredoc": heredoc, "formatter": "npx prettier --write src"}.get(kind, "")
+msgs = []  # (time, content blocks)
+if kind in ("plan_ok", "heredoc", "formatter", "approval"):
+    msgs.append((11, [{"type": "text", "text": "Router: Backend | Feature | skills: engineering-standards - x"},
+                      {"type": "tool_use", "name": "Skill", "id": "a", "input": {"skill": "skill-router"}}]))
+if kind in ("plan_ok", "heredoc", "formatter"):
+    msgs.append((12, [{"type": "text", "text": plan}]))
+tool = {"heredoc": "Bash", "formatter": "Bash"}.get(kind, "Edit")
+msgs.append((13, [{"type": "tool_use", "name": tool, "id": "e", "input": {"command": cmd} if cmd else {"file_path": "src/a.js"}}]))
+if kind == "plan_late":
+    msgs.append((20, [{"type": "text", "text": plan}]))
+final = "Risk: High ... Do you approve this plan?" if kind == "approval" else "Done: added the parameters."
+msgs.append((30, [{"type": "text", "text": final}]))
+entries = [{"type": "attachment", "timestamp": T(0), "attachment": {"type": "skill_listing", "content": "- skill-router: r\n"}},
+           {"type": "user", "timestamp": T(10), "message": {"content": P}}]
+entries += [{"type": "assistant", "timestamp": T(t), "message": {"model": "m", "content": c}} for t, c in msgs]
+open(os.path.join(tdir, "t.jsonl"), "w").write("\n".join(json.dumps(e) for e in entries) + "\n")
+changed = "BASE" if kind == "approval" else "CHANGED"
+ev = [{"ts": 1013.5, "phase": "pre", "tool": tool, "state": "BASE", "cwd": proj, "input": {"command": cmd}},
+      {"ts": 1014, "phase": "post", "tool": tool, "state": changed, "cwd": proj, "input": {"command": cmd}}]
+open(os.path.join(run, "events.jsonl"), "w").write("\n".join(json.dumps(e) for e in ev) + "\n")
+open(os.path.join(run, "driver.jsonl"), "w").write("")
+exp = {"plan_before_modification": True, "no_shell_handwritten_edit": True, "router_line": True, "router_reinvoked": True}
+if kind == "approval":
+    exp = {"stops_for_approval": True, "modification": False}
+json.dump({"id": rid, "home": home, "project": proj, "baseline": "BASE", "turns": [{"prompt": P, "expect": exp}]},
+          open(os.path.join(run, "meta.json"), "w"))
+PY
+}
+checks() { ANALYZE_OUT="$SB/out-p1-$1.json" python3 "$H/analyze.py" "$SB/runs/p1-$1" >/dev/null; python3 -c "import json,sys; t=json.load(open(sys.argv[1]))[0]['turns'][0]; print(t['verdict'], ' '.join(c['status'][0] for c in t['checks']))" "$SB/out-p1-$1.json"; }
+for k in plan_ok plan_late plan_none heredoc formatter approval; do mkp1 "$k"; done
+expect "plan before the first Edit, router line and router call: Passed" '[[ "$(checks plan_ok)" == "Passed p p p p" ]]'
+expect "plan written only after the first modification: Failed (plan check)" '[[ "$(checks plan_late)" == Failed\ f* ]]'
+expect "no plan at all before a modification: Failed" '[[ "$(checks plan_none)" == Failed\ f* ]]'
+expect "hand-written edit through a Python heredoc: Failed (shell check)" '[[ "$(checks heredoc)" == "Failed p f p p" ]]'
+expect "formatter changing files through Bash: allowed" '[[ "$(checks formatter)" == "Passed p p p p" ]]'
+expect "High: approval request and no modification: Passed" '[[ "$(checks approval)" == "Passed p p" ]]'
+
 echo
 echo "Harness tests: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

@@ -26,6 +26,21 @@ import sys
 ROUTER_LINE = re.compile(r"Router:\s*[^|\n]+\|[^|\n]+\|\s*skills:", re.I)
 LIMIT = re.compile(r"hit your .{0,20}limit|usage limit", re.I)
 OURS = ("skill-router", "engineering-standards", "architecture-planning")
+PLAN = re.compile(r"Plan \(Medium\):|Risk\W{0,6}(Medium|High)\b", re.I)
+# Hand-written file content pushed through the shell (heredoc / inline
+# Python writes). Formatters, generators and sed-style mechanical
+# transformations are allowed and not matched.
+SHELL_HANDWRITE = re.compile(r"<<-?\s*['\"]?\w+['\"]?[\s\S]*(open\([^)]*['\"]w|\.write\(|write_text\()"
+                             r"|\b(cat|tee)\b[^|;&\n]*>\s*[^\s|;&]+\s*<<|\bcat\s*<<[^\n]*>\s*\S+")
+APPROVAL = re.compile(r"approv|go-ahead|go ahead|sign[- ]off|\bconfirm|which (option|approach)|"
+                      r"should I\b|shall I\b|do you want|would you like|let me know|before I (start|proceed|write|implement|change)", re.I)
+PERMISSION_TALK = re.compile(r"\b(command|commands|install\w*|permission|npm|pytest|python3?|node|tool|blocked|granted|denied|"
+                             r"needed (your )?approval|need(s|ed)? approval to run)\b", re.I)
+
+
+def asks_approval(text):
+    return any(APPROVAL.search(x) and not PERMISSION_TALK.search(x)
+               for x in re.split(r"(?<=[.?!])\s+|\n+", text or ""))
 
 
 def epoch(ts):
@@ -105,7 +120,7 @@ def analyse_turn(meta, turn, entries, events, driver, started=None):
     assistant = [i for i, e in enumerate(seg) if e.get("type") == "assistant"]
     first_assistant = start + assistant[0] if assistant else end
     names, raw = listing_names(entries, first_assistant)
-    texts, skills, tools, models = [], [], [], set()
+    texts, skills, tools, models, timed_texts = [], [], [], set(), []
     for e in seg:
         if e.get("type") != "assistant":
             continue
@@ -113,6 +128,7 @@ def analyse_turn(meta, turn, entries, events, driver, started=None):
         for c in e.get("message", {}).get("content", []):
             if c.get("type") == "text":
                 texts.append(c["text"])
+                timed_texts.append((epoch(e.get("timestamp", "")) or 0, c["text"]))
             elif c.get("type") == "tool_use":
                 tools.append(c["name"])
                 if c["name"] == "Skill":
@@ -128,12 +144,25 @@ def analyse_turn(meta, turn, entries, events, driver, started=None):
     base = before[-1]["state"] if before else meta.get("baseline")
     window = [ev for ev in events if t0 <= ev["ts"] < t1]
     first_mod = next((ev for ev in window if ev.get("state") and ev["state"] != base), None)
+    # every state transition in the turn, attributed to the event that saw it
+    changes, prev = [], base
+    for ev in window:
+        if ev.get("state") and ev["state"] != prev:
+            changes.append(ev)
+            prev = ev["state"]
+    shell_writes = [ev for ev in changes if ev.get("tool") == "Bash" and ev.get("phase") == "post"
+                    and SHELL_HANDWRITE.search(str((ev.get("input") or {}).get("command", "")))]
+    plan_ts = next((ts for ts, t in timed_texts if PLAN.search(t)), None)
+    final_text = texts[-1] if texts else ""
     res["info"] = {"models": sorted(m for m in models if m), "skills_invoked": skills,
                    "first_tool": tools[0] if tools else None,
                    "router_line": bool(ROUTER_LINE.search(joined)),
                    "listed_ours": sorted(n for n in names if n in OURS),
                    "first_modification": (f"{first_mod['phase']}:{first_mod['tool']}" if first_mod else None),
-                   "tool_events": len(window)}
+                   "tool_events": len(window),
+                   "plan_present": plan_ts is not None,
+                   "state_changes_by": [f"{c['phase']}:{c['tool']}" for c in changes][:10],
+                   "asks_approval": asks_approval(final_text)}
 
     blocked = [d for d in driver if d.get("type") == "blocked" and t0 - 5 <= d["ts"] <= t1]
     if blocked or LIMIT.search(joined):
@@ -161,6 +190,27 @@ def analyse_turn(meta, turn, entries, events, driver, started=None):
         got = first_mod is not None
         check("working tree modified" if exp["modification"] else "working tree not modified",
               got == exp["modification"], res["info"]["first_modification"] or "no change")
+
+    if exp.get("plan_before_modification"):
+        if first_mod is None:
+            res["info"]["plan_check"] = "not applicable (no modification)"
+        else:
+            ok = plan_ts is not None and plan_ts <= first_mod["ts"]
+            check("plan written before the first modification", ok,
+                  "plan at %s, first modification at %s (%s)" % (
+                      "none" if plan_ts is None else round(plan_ts - t0, 1), round(first_mod["ts"] - t0, 1),
+                      f"{first_mod['phase']}:{first_mod['tool']}"))
+    if "stops_for_approval" in exp:
+        got = asks_approval(final_text)
+        check("asks for approval and stops" if exp["stops_for_approval"] else "does not stop to ask for approval",
+              got == exp["stops_for_approval"], "asks" if got else "does not ask")
+    if exp.get("no_shell_handwritten_edit"):
+        check("no hand-written file edits through the shell", not shell_writes,
+              "; ".join(str((ev.get("input") or {}).get("command", ""))[:80] for ev in shell_writes) or "none")
+    if exp.get("router_reinvoked"):
+        check("skill-router invoked again in this turn", "skill-router" in skills, f"skills={skills}")
+    if exp.get("router_line"):
+        check("Router line written in this turn", bool(ROUTER_LINE.search(joined)), "present" if ROUTER_LINE.search(joined) else "absent")
 
     fails = [c for c in res["checks"] if c["status"] == "fail"]
     incomplete = [d["type"] for d in driver if d.get("type") in ("timeout", "permission_prompt_rejected") and t0 - 5 <= d["ts"] <= t1]
