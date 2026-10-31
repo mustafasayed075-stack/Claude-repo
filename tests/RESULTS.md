@@ -1,5 +1,46 @@
 # Test results
 
+## P0: skills discoverable in the hook's own session - 2026-10-31
+
+Change: `.claude/hooks/session-start.sh` returns
+`{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":<routing block>,"reloadSkills":true}}`
+when it installs or upgrades (documented fix; skill discovery runs before
+SessionStart hooks finish). Fast path silent; failure fails open with the
+reason in `additionalContext` and `systemMessage`.
+
+Deterministic: installer 60/60 (12 of them fail against the old hook),
+harness 24/24, setup flow 14/14 (includes live sessions in a disposable
+HOME).
+
+Live (`tests/p0_validation.sh`, verdicts from transcripts + event logs):
+
+| Scenario | Skills listed before 1st response | Router first | Expected skills | No/Yes modification | Verdict |
+|---|---|---|---|---|---|
+| S1 TUI empty HOME (run 1) | yes | yes | truncated | none | Inconclusive (permission prompt) |
+| S1 TUI empty HOME (run 2, Sonnet) | yes | yes | **standards only** | none (plan + approval request) | Failed (selection) |
+| S1 after /compact (run 1) | yes | yes | yes | Edit detected | Inconclusive (prompt rejected after the edit) |
+| S1 after /compact (run 2) | yes | not re-invoked | - | - | Inconclusive (Bash heredoc edit rejected) |
+| S2 TUI pre-existing skills dir (run 1) | yes | yes | standards only, then a question | none | Inconclusive (driver timeout, fixed) |
+| S2 TUI pre-existing skills dir (run 2, Sonnet) | yes | yes | yes | none | **Passed** |
+| S3 headless fresh | yes | yes | yes | none | **Passed** |
+| S3 resumed (--continue) | yes | not re-invoked (Router line in text) | - | Edit | Failed (pre-set expectation) |
+| S4 existing install, new TUI session | yes | yes | yes | none | **Passed** |
+| S5 upgrade (marker in description) | yes, upgraded text | yes | yes | none | **Passed** |
+| S6 hook failure (foreign skill dir) | - | - | - | none | **Passed** (error context delivered) |
+| S7 malformed hook output (platform) | - | - | - | none | **Passed** (session still ran) |
+
+P0 discoverability: 10/10 turns had all three skills listed before the
+first response (previously 0/2 in fresh TUI sessions). The remaining
+failures are routing behavior, not discovery: skill selection under Sonnet
+(P1 scope rules), skills not re-invoked in continued turns, Bash reads
+before routing and a Bash heredoc edit (P2).
+
+Harness bugs found by the first live run and fixed (with regression tests):
+cross-project events in a shared HOME, transcript attribution when child
+sessions share the parent's session id, AskUserQuestion dialogs.
+
+---
+
 ## Final hardening pass - 2026-10-31
 
 Skills as of commit "Re-verify the plan after approval". Behavior and code

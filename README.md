@@ -61,7 +61,7 @@ rebuilt for each session. Here is how each case is covered:
 
 | Where the session runs | Mechanism | Status |
 |---|---|---|
-| Cloud session on **this repo** | `.claude/settings.json` SessionStart hook runs `.claude/hooks/session-start.sh`, which installs if `--check` fails. It prints the routing instructions into the session's context, because `~/.claude/CLAUDE.md` was already read before the hook ran. | Automatic. Verified: fresh session with an empty `~/.claude` got the skills and the instructions. It runs from the branch the session checks out, so merge to `main` for it to apply by default. |
+| Cloud session on **this repo** | `.claude/settings.json` SessionStart hook runs `.claude/hooks/session-start.sh`, which installs if `--check` fails and then prints one SessionStart JSON object: `additionalContext` carries the routing instructions (`~/.claude/CLAUDE.md` was already read before the hook ran) and `reloadSkills: true` makes Claude Code re-scan skills, because skill discovery runs before SessionStart hooks finish. | Automatic. Verified live (tests/p0_validation.sh): the three skills are listed before the first response in fresh interactive and headless sessions, after an upgrade, and after resume/compaction. It runs from the branch the session checks out, so merge to `main` for it to apply by default. |
 | Cloud session on **another repo** | Add to the environment's **Setup script** (environment settings → Edit):<br>`git clone --depth 1 https://github.com/mustafasayed075-stack/Claude-repo /opt/engineering-skills && /opt/engineering-skills/scripts/install.sh` | Configured by you in the environment settings. Not verified from here (no tool to edit environments). It clones `main`, so merge first. In the first session, run `--check` (below) to confirm. |
 | Any session, fallback | Run the same two commands by hand. | Skills load immediately. The CLAUDE.md routing rule applies from the next session; until then, ask Claude to follow `skill-router`. |
 | Local machine | `./scripts/install.sh` once. | Persistent. The hook does nothing outside the cloud (`CLAUDE_CODE_REMOTE`). |
@@ -81,6 +81,14 @@ Code tests (deterministic, executed):
   the committed branch, and a throwaway project. Live `claude` checks can be
   skipped with `LIVE=0`. It verifies that the real `~/.claude` and this repo
   are unchanged.
+
+Live-test harness (test-only, disposable sandboxes): `tests/harness/` holds
+a tool-event logger that records the working-tree state per tool call (so
+the first real modification is found whatever tool made it), a tmux driver
+for interactive sessions that never approves permission prompts, and an
+analyzer that reports Passed / Failed / Blocked / Inconclusive per turn.
+`tests/harness_test.sh` tests it deterministically; `tests/p0_validation.sh`
+runs the live P0 scenarios.
 
 Behavior tests (`tests/run.sh [REPEATS] [OUT_DIR]`): headless `claude -p`
 sessions against throwaway fixtures, scored by `tests/score.py` into
