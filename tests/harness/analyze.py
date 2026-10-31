@@ -26,6 +26,9 @@ import sys
 ROUTER_LINE = re.compile(r"Router:\s*[^|\n]+\|[^|\n]+\|\s*skills:", re.I)
 LIMIT = re.compile(r"hit your .{0,20}limit|usage limit", re.I)
 OURS = ("skill-router", "engineering-standards", "architecture-planning")
+# Explicit classification line, e.g. "Risk: Medium" or "**Risk:** High - ..."
+RISK_LINE = re.compile(r"(?m)^\W{0,6}Risk\W{0,4}:\W{0,4}(Low|Medium|High)\b", re.I)
+MEDIUM_PLAN = re.compile(r"Plan \(Medium\):")
 PLAN = re.compile(r"Plan \(Medium\):|Risk\W{0,6}(Medium|High)\b", re.I)
 # Hand-written file content pushed through the shell (heredoc / inline
 # Python writes). Formatters, generators and sed-style mechanical
@@ -153,6 +156,7 @@ def analyse_turn(meta, turn, entries, events, driver, started=None):
     shell_writes = [ev for ev in changes if ev.get("tool") == "Bash" and ev.get("phase") == "post"
                     and SHELL_HANDWRITE.search(str((ev.get("input") or {}).get("command", "")))]
     plan_ts = next((ts for ts, t in timed_texts if PLAN.search(t)), None)
+    risk_hit = next(((ts, RISK_LINE.search(t).group(1).capitalize()) for ts, t in timed_texts if RISK_LINE.search(t)), None)
     final_text = texts[-1] if texts else ""
     res["info"] = {"models": sorted(m for m in models if m), "skills_invoked": skills,
                    "first_tool": tools[0] if tools else None,
@@ -161,6 +165,7 @@ def analyse_turn(meta, turn, entries, events, driver, started=None):
                    "first_modification": (f"{first_mod['phase']}:{first_mod['tool']}" if first_mod else None),
                    "tool_events": len(window),
                    "plan_present": plan_ts is not None,
+                   "risk_stated": risk_hit[1] if risk_hit else None,
                    "state_changes_by": [f"{c['phase']}:{c['tool']}" for c in changes][:10],
                    "asks_approval": asks_approval(final_text)}
 
@@ -200,6 +205,20 @@ def analyse_turn(meta, turn, entries, events, driver, started=None):
                   "plan at %s, first modification at %s (%s)" % (
                       "none" if plan_ts is None else round(plan_ts - t0, 1), round(first_mod["ts"] - t0, 1),
                       f"{first_mod['phase']}:{first_mod['tool']}"))
+    if exp.get("risk_before_modification"):
+        if risk_hit is None:
+            check("explicit Risk line before the first modification", False, "no Risk: line")
+        elif first_mod is not None:
+            check("explicit Risk line before the first modification", risk_hit[0] <= first_mod["ts"],
+                  f"Risk: {risk_hit[1]} at {round(risk_hit[0] - t0, 1)}s, first modification at {round(first_mod['ts'] - t0, 1)}s")
+        else:
+            check("explicit Risk line stated (no modification made)", True, f"Risk: {risk_hit[1]}")
+    if "risk_tier" in exp:
+        got = risk_hit[1] if risk_hit else None
+        check(f"stated tier is {exp['risk_tier']}", got == exp["risk_tier"], f"stated {got}")
+    if exp.get("no_medium_plan"):
+        hit = any(MEDIUM_PLAN.search(t) for _, t in timed_texts)
+        check("no Medium plan for Low work", not hit, "Plan (Medium) present" if hit else "absent")
     if "stops_for_approval" in exp:
         # A turn that went on to modify files did not stop, even if it ends
         # by offering optional follow-ups.

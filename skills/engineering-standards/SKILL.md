@@ -12,8 +12,16 @@ Project rules win. If the repo has a CLAUDE.md, CONTRIBUTING, lint config, or an
 established pattern, follow it over anything here.
 
 ## Risk, scope and planning (read first; applies to every change)
-This section is the single source of truth for risk tiers, scope, planning,
-shell writes and continuation. Other skills refer to it.
+This section is the single source of truth for risk classification, scope,
+planning, shell writes and continuation. Other skills refer to it.
+
+**Classify first.** Before the first modification of the working tree, by
+any tool, write one line:
+
+`Risk: Low|Medium|High - <reason in a few words>`
+
+Low needs nothing more. Medium adds the short plan below. High adds the
+complete plan and stops for explicit approval before any modification.
 
 **Scope.** Judge a change by its impact and reversibility, not by how many
 files it touches.
@@ -22,10 +30,10 @@ files it touches.
 - *Supporting files* are tests, docs, changelogs, fixtures and generated
   lockfiles. They never raise the tier by themselves.
 
-**Tiers.** Classify before the first modification. The highest matching
-tier wins regardless of size: a one-line change can be High.
-- **High - present a plan, then stop and wait for approval** (approval
-  rules: section 7):
+**Tiers.** Check them in this order; the first that matches wins, regardless
+of size: a one-line change can be High.
+- **High - complete plan, then stop for explicit approval** (approval rules:
+  section 7) when any of these High triggers applies:
   - database schema changes and migrations, including writing migration files;
   - core architecture changes: new layers or patterns, new service or
     process boundaries, swapping a framework, state manager or other major
@@ -38,24 +46,34 @@ tier wins regardless of size: a one-line change can be High.
   - destructive git (force-push, history rewrite, branch deletion), deploy,
     publish, send, or anything that costs money;
   - requirements that conflict or are too unclear to choose a safe design.
-- **Medium - write a short plan, then implement without waiting:** additive,
-  non-breaking contract changes (a new CLI option or command, endpoint,
-  parameter, field or config key); a new internal module; changes spread
-  across several implementation files or modules; mechanical changes across
-  many files (renames, in-codebase API migrations); a new dependency.
-- **Low - implement directly:** everything else, typically one or two
-  implementation files within existing patterns plus their tests and docs,
-  bug fixes that keep every contract, and tests-only or docs-only changes.
+- **Medium - short plan, then implement without waiting** for any new or
+  changed behavior that no High trigger covers: additive, non-breaking
+  changes such as a new CLI option or command, query parameter, endpoint,
+  field or config key; a new internal module; changes spread across several
+  implementation files or modules; mechanical changes across many files. A
+  new runtime dependency is Medium by default, and High only when a High
+  trigger applies (security-sensitive behavior, critical runtime or
+  deployment impact, major architecture consequences, data or system
+  changes that are hard to undo).
+- **Low - implement directly:** changes that add no new or changed
+  behavior: bug fixes that restore intended behavior and keep every
+  contract, internal refactors within existing patterns, and tests-only or
+  docs-only changes.
 
-**`architecture-planning` is required** for every High change and for
-changes with architectural impact: a new architectural boundary (a new
-service, process, package or layer, or connecting modules that did not
-interact); a new runtime dependency; any storage or data-model change;
-infrastructure, build or deploy changes; breaking contract changes. Other
-Medium work uses the short plan below; Low needs no plan.
+When uncertain between Low and Medium, classify as Medium. When uncertain
+between Medium and High, check the High triggers above: High if any
+applies, otherwise Medium.
 
-**Medium plan.** Before the first modification of the working tree, by any
-tool, write:
+**`architecture-planning` is independent of the risk tier.** Use it, at any
+tier, when a change affects module or service boundaries or the
+architecture, storage or data models, infrastructure, build or deploy,
+breaking contracts, or introduces a meaningful architectural dependency (a
+framework, ORM, datastore, messaging system or anything that shapes how the
+code is structured). A library used inside one existing module is not
+architectural. Its plan replaces the short Medium plan.
+
+**Medium plan.** After the Risk line and before the first modification of
+the working tree, by any tool, write:
 
 ```
 Plan (Medium): <goal in one line>
@@ -64,8 +82,7 @@ Plan (Medium): <goal in one line>
 - Validation: <tests and checks you will run>
 ```
 
-Then implement without waiting for approval. If you load
-`architecture-planning` for Medium work, its plan replaces this one.
+Then implement without waiting for approval.
 
 **Modifications and shell writes.** A modification is any change to the
 working tree, whatever tool makes it; the tiers, plans and approvals above
@@ -148,8 +165,8 @@ A change is done only when all applicable items hold:
 
 ## 7. Autonomy and escalation: autonomous by default, escalate by risk
 The tiers are defined in "Risk, scope and planning" at the top of this
-skill. Low and Medium proceed without waiting; High stops for approval
-under these rules.
+skill. Low and Medium proceed without waiting; High presents the complete
+plan and stops for explicit approval under these rules.
 
 **Approval rules for High risk**
 - A request to make a high-risk change approves the goal, not the

@@ -23,7 +23,13 @@ allow = ["Read", "Glob", "Grep"] + [f"Bash({c}:*)" for c in (
     "ls", "cat", "head", "tail", "wc", "grep", "find", "sed -n", "bash -n",
     "git status", "git log", "git diff", "git show",
     "./scripts/install.sh", "scripts/install.sh", "bash scripts/install.sh",
-    "tests/installer_test.sh", "bash tests/installer_test.sh")]
+    "tests/installer_test.sh", "bash tests/installer_test.sh",
+    # test runners and syntax checks the models reach for (P1 TUI runs were
+    # truncated by prompts for these)
+    "python -m pytest", "python3 -m pytest", "pytest", "python -m unittest",
+    "python3 -m unittest", "python -m py_compile", "python3 -m py_compile",
+    "npx jest", "npx vitest", "npm test", "npm run test", "node --check",
+    "terraform fmt", "terraform validate")]
 # Reading the sandbox's own ~/.claude is harmless and avoids prompts.
 extra = [os.path.join(os.path.dirname(path))]
 json.dump({"permissions": {"allow": allow, "additionalDirectories": extra},

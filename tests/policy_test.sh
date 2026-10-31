@@ -56,6 +56,19 @@ expect "a new coding request gets a fresh Router line" 'owner | grep -qiE "new (
 expect "re-invocation is conditional on content being out of context (e.g. after compaction)" 'cat "$STD" "$RT" | grep -qiE "compact" && cat "$STD" "$RT" | grep -qiE "no longer in context|not in context"'
 expect "no unconditional re-invocation rule" '! cat "$STD" "$RT" "$GL" | grep -qiE "always (re-?invoke|invoke .?skill-router.? again)"'
 
+echo "8. Approved P1 corrections (explicit tier, uncertainty, dependencies, planning independence)"
+flat() { owner | tr '\n' ' ' | tr -s ' '; }
+expect "an explicit 'Risk: Low|Medium|High' line is required before the first modification" 'owner | grep -qF "Risk: Low|Medium|High" && flat | grep -qiE "Risk: Low\|Medium\|High.{0,160}before the first modification|before the first modification.{0,200}Risk: Low\|Medium\|High"'
+expect "uncertain Low vs Medium: Medium" 'flat | grep -qiE "uncertain between Low and Medium.{0,40}Medium"'
+expect "uncertain Medium vs High: check the High triggers" 'flat | grep -qiE "uncertain between Medium and High.{0,120}(High trigger|triggers)"'
+expect "additive options and query parameters are Medium" 'flat | grep -qiE "Medium.{0,400}additive" && flat | grep -qiE "query parameter" && flat | grep -qiE "CLI option"'
+expect "Low excludes new behavior (no overlap with additive changes)" 'flat | grep -qiE "\*\*Low[^:*]{0,40}:\*\*[^*]{0,300}(no new or changed behavior|adds no behavior|no added behavior)"'
+expect "a new runtime dependency is Medium by default, High only on an explicit trigger" 'flat | grep -qiE "new runtime dependency is Medium" && flat | grep -qiE "High only (when|if) .{0,80}trigger"'
+expect "architecture-planning is independent of the risk tier" 'flat | grep -qiE "independent of the (risk )?tier"'
+expect "planning trigger is a meaningful architectural dependency, not any dependency" 'flat | grep -qiE "meaningful architectural dependency" && ! grep -qiE "new runtime dependency" "$RT" "$AP"'
+expect "High: complete plan, then explicit approval before any modification" 'flat | grep -qiE "complete plan" && flat | grep -qiE "explicit approval"'
+expect "global refers to the explicit Risk line without redefining tiers" 'grep -qF "Risk:" "$GL" && ! grep -qiE "additive|query parameter|runtime dependency" "$GL"'
+
 echo "7. Hygiene"
 for f in "$STD" "$RT" "$AP"; do
   n=$(basename "$(dirname "$f")")

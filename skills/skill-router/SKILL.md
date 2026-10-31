@@ -51,16 +51,17 @@ Several types can match (e.g. AI + Backend); list them all.
 
 ## Skills
 
-Risk tiers, scope and the planning triggers are defined in
-engineering-standards, section "Risk, scope and planning". Judge by impact,
-not by file count; tests and docs don't make a change bigger.
+Risk tiers, scope and when `architecture-planning` is needed are defined in
+engineering-standards, section "Risk, scope and planning". Route by those
+definitions, not by file count, and do not decide the tier here: it is
+stated with the `Risk:` line before the first modification.
 
 | Situation (first matching row wins) | Load |
 |---|---|
-| High risk or architectural impact (as defined there: e.g. schema/migration, security, breaking contract, new boundary, new runtime dependency, storage or infra change) | `architecture-planning`, then `engineering-standards` - both before any edit; a High plan stops for approval |
+| High risk, or a change that needs `architecture-planning` as defined there | `architecture-planning`, then `engineering-standards` - both before any edit |
 | Architecture, or a "build X" request in an empty repo | `architecture-planning` |
 | Release | `engineering-standards` (Definition of Done) |
-| Any other change - Low or Medium, any task type | `engineering-standards` (Medium writes its short plan before the first modification) |
+| Any other change, any task type | `engineering-standards` |
 
 Optional built-ins, only when they clearly add value:
 - `run` - to reproduce or verify runtime/UI behavior.

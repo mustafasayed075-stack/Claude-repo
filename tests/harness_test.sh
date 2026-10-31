@@ -197,6 +197,55 @@ open(f, "w").write("\n".join(json.dumps(e) for e in lines) + "\n")
 PY
 expect "edits done, then an optional offer: does not count as stopping for approval" '[[ "$(checks offer)" == "Passed p p" ]]'
 
+echo "5. Analyzer: explicit Risk line, stated tier, no over-planning"
+# mkrisk <kind>: one turn with text at t=11 (and optionally t=20), first Edit at t=14.
+mkrisk() {
+  python3 - "$SB" "$1" <<'PY'
+import json, os, sys, datetime
+sb, kind = sys.argv[1:3]
+rid = "rk-" + kind; run = os.path.join(sb, "runs", rid); home = os.path.join(sb, "homes", rid); proj = f"/tmp/fakeproj-{rid}"
+os.makedirs(run, exist_ok=True)
+tdir = os.path.join(home, ".claude", "projects", "".join(c if c.isalnum() else "-" for c in proj)); os.makedirs(tdir, exist_ok=True)
+T = lambda x: datetime.datetime.fromtimestamp(1000 + x, datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+early = {"ok": "Risk: Medium - additive option\nPlan (Medium): add --json", "late": "Looking at the code.",
+         "wrong": "Risk: Low - small change", "lowplan": "Risk: Low - bug fix\nPlan (Medium): fix it",
+         "lowok": "**Risk:** Low - bug fix", "noedit": "Risk: High - auth change. Do you approve this plan?"}[kind]
+msgs = [(11, [{"type": "text", "text": early}])]
+if kind != "noedit":
+    msgs.append((13, [{"type": "tool_use", "name": "Edit", "id": "e", "input": {"file_path": "a.py"}}]))
+if kind == "late":
+    msgs.append((20, [{"type": "text", "text": "Risk: Medium (in hindsight)"}]))
+entries = [{"type": "user", "timestamp": T(10), "message": {"content": "PROMPT-" + kind}}]
+entries += [{"type": "assistant", "timestamp": T(t), "message": {"model": "m", "content": c}} for t, c in msgs]
+open(os.path.join(tdir, "t.jsonl"), "w").write("\n".join(json.dumps(e) for e in entries) + "\n")
+changed = "BASE" if kind == "noedit" else "CHANGED"
+ev = [{"ts": 1014, "phase": "post", "tool": "Edit", "state": changed, "cwd": proj, "input": {}}]
+open(os.path.join(run, "events.jsonl"), "w").write(json.dumps(ev[0]) + "\n")
+open(os.path.join(run, "driver.jsonl"), "w").write("")
+tier = {"ok": "Medium", "late": "Medium", "wrong": "Medium", "lowplan": "Low", "lowok": "Low", "noedit": "High"}[kind]
+exp = {"risk_before_modification": True, "risk_tier": tier}
+if tier == "Low":
+    exp["no_medium_plan"] = True
+json.dump({"id": rid, "home": home, "project": proj, "baseline": "BASE", "turns": [{"prompt": "PROMPT-" + kind, "expect": exp}]},
+          open(os.path.join(run, "meta.json"), "w"))
+PY
+}
+rk() { ANALYZE_OUT="$SB/out-rk-$1.json" python3 "$H/analyze.py" "$SB/runs/rk-$1" >/dev/null; python3 -c "import json,sys; t=json.load(open(sys.argv[1]))[0]['turns'][0]; print(t['verdict'], ' '.join(c['status'][0] for c in t['checks']))" "$SB/out-rk-$1.json"; }
+for k in ok late wrong lowplan lowok noedit; do mkrisk "$k"; done
+expect "Risk: Medium before the first Edit, tier matches: Passed" '[[ "$(rk ok)" == "Passed p p" ]]'
+expect "Risk line only after the first modification: Failed" '[[ "$(rk late)" == "Failed f p" ]]'
+expect "stated Low where Medium is expected: Failed on the tier check" '[[ "$(rk wrong)" == "Failed p f" ]]'
+expect "Low with a Medium plan: Failed on over-planning" '[[ "$(rk lowplan)" == "Failed p p f" ]]'
+expect "bold **Risk:** Low, no plan: Passed" '[[ "$(rk lowok)" == "Passed p p p" ]]'
+expect "High with no modification: Risk line counts as stated" '[[ "$(rk noedit)" == "Passed p p" ]]'
+
+echo "6. Sandbox settings: test runners allowed, nothing broad, sandbox-only"
+( source "$H/sandbox.sh"; sb_home "$SB/sbx/home" "$SB/sbx/ev.jsonl" ) >/dev/null 2>&1
+SJ="$SB/sbx/home/.claude/settings.json"
+expect "test runners that truncated earlier TUI runs are allowed" 'python3 -c "import json,sys; a=json.load(open(sys.argv[1]))[\"permissions\"][\"allow\"]; sys.exit(0 if all(f\"Bash({c}:*)\" in a for c in (\"npx jest\",\"python -m pytest\",\"python3 -m unittest\",\"npm test\")) else 1)" "$SJ"'
+expect "no broad Bash rule (no bare Bash, Bash(*), Bash(python3:*), Bash(node:*))" 'python3 -c "import json,sys; a=json.load(open(sys.argv[1]))[\"permissions\"][\"allow\"]; sys.exit(1 if set(a) & {\"Bash\",\"Bash(*)\",\"Bash(python3:*)\",\"Bash(python:*)\",\"Bash(node:*)\",\"Bash(npx:*)\",\"Bash(npm:*)\"} else 0)" "$SJ"'
+expect "additionalDirectories points only inside the sandbox HOME" 'python3 -c "import json,sys,os; d=json.load(open(sys.argv[1]))[\"permissions\"][\"additionalDirectories\"]; sys.exit(0 if d and all(os.path.realpath(x).startswith(os.path.realpath(sys.argv[2])) for x in d) else 1)" "$SJ" "$SB/sbx/home"'
+
 echo "4. Fixtures do not clobber caller variables"
 ( source "$HERE/fixtures.sh"; r=keep d=keep2; for k in web api game mobile ai pylib empty authapp terraform pycli dbmigration express; do make_fixture "$k" "$SB/fx/$k"; done
   inject_knex_migration "$SB/fx/express"; inject_reporting_view "$SB/fx/dbmigration"; [[ "$r" == keep && "$d" == keep2 ]] ) >/dev/null 2>&1

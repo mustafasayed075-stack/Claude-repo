@@ -1,6 +1,6 @@
 ---
 name: architecture-planning
-description: Plan before building - required for high-risk changes and for changes with architectural impact - a new service, process, package or layer, a new runtime dependency, a storage or data-model change, infrastructure/build/deploy changes, a breaking API or data contract - and for starting a new project in an empty repo. Classifies risk first, produces a right-sized plan (design, affected components, validation, rollback), and decides whether to implement or stop for approval. Not for small changes within existing patterns.
+description: Plan before building - required for high-risk changes and, at any risk tier, for changes with architectural impact - module or service boundaries, a meaningful architectural dependency (framework, ORM, datastore), storage or data models, infrastructure/build/deploy, breaking API or data contracts - and for starting a new project in an empty repo. Classifies risk first, produces a right-sized plan (design, affected components, validation, rollback), and decides whether to implement or stop for approval. Not for small changes within existing patterns.
 ---
 
 # Architecture & Planning
@@ -11,9 +11,9 @@ written its `Router:` line, write it now, before anything else.
 Goal: a plan sized to the change. A small feature gets a short plan; a new
 system gets a fuller one. Do not produce ceremony for its own sake.
 
-Use it when engineering-standards' "Risk, scope and planning" section requires it (High risk or architectural impact), or to start a new project.
-Other Medium work writes that section's short `Plan (Medium):` instead; Low
-work needs no plan.
+Use it when engineering-standards' "Risk, scope and planning" section requires it (High risk, or architectural impact at any tier), or to start a new project.
+Its plan replaces that section's short `Plan (Medium):`; other Low and
+Medium work does not need this skill.
 
 ## Step 0 - Classify risk (mandatory)
 Before designing, classify the change as Low, Medium, or High with the tiers
@@ -85,11 +85,11 @@ Add only if useful: assumptions/open questions, dependencies or contract
 changes, steps. Keep each field to a few lines.
 
 ## Proceed or stop
-- **Low / Medium:** show the plan before the first modification of the
-  working tree, then implement it in the same turn within the existing
-  architecture. Do not ask for approval.
+- **Low / Medium:** after the `Risk:` line, show the plan before the first
+  modification of the working tree, then implement it in the same turn.
+  Do not ask for approval.
 - **High**, or a new project in an empty repo where the stack is not
-  specified: show the plan, do not create or edit any files, and end by
+  specified: show the complete plan, do not create or edit any files, and end by
   asking the user to approve the plan explicitly. The user's request for
   the feature or change is not approval of the plan.
 - **After the user approves:** re-verify the plan against the current code
