@@ -407,7 +407,10 @@ for l in open(sys.argv[1]):
 
 # 1. Discovery: does a fresh session know the skills and the routing rule?
 # score.py checks the quote against global/CLAUDE.md and the decoy answer.
-for r in $(seq 1 "$REPEATS"); do
+# REPS / PROBE_REPS: space-separated repeat numbers to (re)run, e.g. to redo
+# runs that hit a usage limit; SKIP_DISCOVERY=1 skips step 1.
+REPS="${REPS:-$(seq -s ' ' 1 "$REPEATS")}"
+[[ "${SKIP_DISCOVERY:-0}" == 1 ]] || for r in $(seq 1 "$REPEATS"); do
   ( cd "$OUT" && timeout 300 claude -p 'Without using any tools, reply with only a JSON object with these keys: "skills": array of the names of every skill available to you; "routing_instruction_quote": copy verbatim the sentence from your instructions (not from a skill description) that tells you when to use skill-router, or "" if you have none; "decoy_skill_exists": true or false, whether a skill named release-manager is available.' \
     </dev/null > "$OUT/discovery-$r.txt" 2>&1 ) &
 done
@@ -415,7 +418,7 @@ wait
 
 # 2. Routing + execution
 jobs_running=0
-for r in $(seq 1 "$REPEATS"); do
+for r in $REPS; do
   for s in "${SCENARIOS[@]}"; do
     IFS='|' read -r name fx prompt followup inject <<<"$s"
     run_one "$name" "$fx" "$prompt" "${followup:-}" "$r" "${inject:-}" &
@@ -430,7 +433,7 @@ wait
 PROBES="${PROBES:-2}"
 mkdir -p "$OUT/probe/work"
 jobs_running=0
-for r in $(seq 1 "$PROBES"); do
+for r in ${PROBE_REPS:-$(seq -s ' ' 1 "$PROBES")}; do
   for s in "${SCENARIOS[@]}"; do
     IFS='|' read -r name fx prompt _ <<<"$s"
     [[ "$name" == control ]] && continue

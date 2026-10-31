@@ -99,7 +99,7 @@ def result_text(content):
 
 
 def parse(path):
-    out = dict(skills=[], texts=[], tests={}, results={}, final="", subtype=None)
+    out = dict(skills=[], texts=[], tests={}, results={}, final="", subtype=None, invalid=None)
     if not path.exists():
         return out
     for line in path.read_text(errors="replace").splitlines():
@@ -122,6 +122,11 @@ def parse(path):
                     out["results"][c.get("tool_use_id")] = (bool(c.get("is_error")), result_text(c.get("content")))
         elif e.get("type") == "result":
             out["final"], out["subtype"] = e.get("result") or "", e.get("subtype")
+            # An API-level error (usage limit, overload, auth) arrives as
+            # subtype "success" with is_error set: the session never really
+            # ran, so the turn is invalid, neither pass nor fail.
+            if e.get("is_error") and e.get("subtype") == "success":
+                out["invalid"] = (e.get("result") or "API error").strip()[:80]
     return out
 
 
@@ -135,6 +140,13 @@ def code_result(*turns):
             elif code != "passed" and TEST_FAILED.search(out):
                 code = "failed"
     return code
+
+
+def changed_since(work, base):
+    # Bytecode written by running Python tests is not an authored change.
+    files = set(git(work, "diff", "--name-only", base).split())
+    files |= set(git(work, "ls-files", "--others", "--exclude-standard").split())
+    return {f for f in files if "__pycache__/" not in f and not f.endswith(".pyc")}
 
 
 def in_plan(path, plan):
@@ -170,14 +182,12 @@ def analyse(jsonl, work):
     t2 = parse(t2_path)
     turn1_file = Path(str(work) + ".turn1")
     base = Path(str(work) + ".base").read_text().strip()
-    now = set(git(work, "diff", "--name-only", base).split())
-    now |= set(git(work, "ls-files", "--others", "--exclude-standard").split())
+    now = changed_since(work, base)
     changed1 = set(turn1_file.read_text().split()) if turn1_file.exists() else now
     base2_file = Path(str(work) + ".base2")
     if base2_file.exists():
         b2 = base2_file.read_text().strip()
-        now2 = set(git(work, "diff", "--name-only", b2).split())
-        now2 |= set(git(work, "ls-files", "--others", "--exclude-standard").split())
+        now2 = changed_since(work, b2)
     else:
         now2 = now
     turn2_edits = sorted(now2 - changed1)
@@ -185,6 +195,8 @@ def analyse(jsonl, work):
     plan = text1.lower()
     out_of_plan = [f for f in turn2_edits if not TEST_FILE.search(f) and not in_plan(f, plan)]
     return dict(
+        invalid=t1["invalid"],
+        turn2_invalid=t2["invalid"],
         skills=t1["skills"],
         subtype=t1["subtype"],
         router_line=any(ROUTER_LINE.search(t) for t in t1["texts"]),
@@ -300,15 +312,24 @@ def main(out):
         print(f"  {stem}: skills listed={pf(listed)} instruction quoted verbatim={pf(quoted)} decoy rejected={pf(decoy)}")
 
     print("\n== Per run")
-    agg = defaultdict(lambda: dict(n=0, sel=0, beh=0, appr=0, appr_n=0, passed=0, failed=0))
+    agg = defaultdict(lambda: dict(n=0, sel=0, beh=0, appr=0, appr_n=0, passed=0, failed=0,
+                                   invalid=0, appr_invalid=0))
     for j in sorted(out.glob("*-*.jsonl")):
         rid = j.stem
         name = rid.rsplit("-", 1)[0]
         if name not in EXPECT:
             continue
         r = analyse(j, out / "work" / rid)
-        sel, beh, appr = check(name, r)
         a = agg[name]
+        if r["invalid"]:
+            a["invalid"] += 1
+            print(f"  {rid:22} INVALID (session did not run: {r['invalid']})")
+            continue
+        sel, beh, appr = check(name, r)
+        if appr is not None and r["turn2_invalid"]:
+            a["appr_invalid"] += 1
+            print(f"  {rid:22} approval turn INVALID (did not run: {r['turn2_invalid']})")
+            appr = None
         a["n"] += 1
         a["sel"] += not sel
         a["beh"] += not beh
@@ -334,6 +355,8 @@ def main(out):
         if name not in EXPECT:
             continue
         r = analyse(j, out / "work" / j.stem)
+        if r["invalid"]:
+            continue
         for cmd, outcome, detail in r["test_log"]:
             if outcome == "not run":
                 blocked += 1
@@ -348,6 +371,9 @@ def main(out):
         res = defaultdict(int)
         for j in sorted(probe.glob("*-*.jsonl")):
             r = analyse(j, probe / "work" / j.stem)
+            if r["invalid"]:
+                res["INVALID"] += 1
+                continue
             other = [k for k in r["skills"] if k != "skill-router"]
             if r["router_line"]:
                 res["present"] += 1
@@ -357,16 +383,19 @@ def main(out):
             else:
                 res["inconclusive"] += 1
                 print(f"  inconclusive {j.stem}: stopped before routing finished (skills={'>'.join(r['skills']) or '-'})")
-        print(f"  present={res['present']} missing={res['MISSING']} inconclusive={res['inconclusive']}")
+        print(f"  present={res['present']} missing={res['MISSING']} inconclusive={res['inconclusive']} invalid={res['INVALID']}")
 
     print("\n== Summary (runs / total). Code execution is reported separately and is not part of Behavior.")
-    print(f"  {'scenario':18} {'selection':>9} {'behavior':>9} {'after approval':>15} {'tests passed':>13} {'tests failed':>13}")
+    print("  Counts are over valid runs; INVALID runs (API/usage-limit errors) are listed separately.")
+    print(f"  {'scenario':26} {'selection':>9} {'behavior':>9} {'after approval':>15} {'tests passed':>13} {'invalid':>8}")
     for name in EXPECT:
         if name in agg:
             a = agg[name]
             tag = " (held-out/new)" if name in HELD_OUT else ""
             ap = f"{a['appr']}/{a['appr_n']}" if a["appr_n"] else "-"
-            print(f"  {name:18} {a['sel']:>6}/{a['n']:<2} {a['beh']:>6}/{a['n']:<2} {ap:>15} {a['passed']:>10}/{a['n']:<2} {a['failed']:>10}/{a['n']:<2}{tag}")
+            v = a["n"]
+            inv = f"{a['invalid']}" + (f"+{a['appr_invalid']}t2" if a["appr_invalid"] else "")
+            print(f"  {name:26} {a['sel']:>6}/{v:<2} {a['beh']:>6}/{v:<2} {ap:>15} {a['passed']:>10}/{v:<2} {inv:>8}{tag}")
 
 
 if __name__ == "__main__":
