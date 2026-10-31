@@ -40,6 +40,13 @@ ino="$(stat -c %i "$H/.claude/CLAUDE.md")"; sum="$(sha256sum < "$H/.claude/CLAUD
 rm -rf "$SRC"; setup; rc=$?
 expect "re-running the setup script is idempotent (CLAUDE.md not rewritten)" '[[ $rc -eq 0 && "$(stat -c %i "$H/.claude/CLAUDE.md")" == "$ino" && "$(sha256sum < "$H/.claude/CLAUDE.md")" == "$sum" ]]'
 
+echo "1b. This repo's SessionStart hook, as cloned (JSON contract)"
+HH="$SANDBOX/home-hook"; mkdir -p "$HH"
+hout="$(HOME="$HH" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$SRC" "$SRC/.claude/hooks/session-start.sh" </dev/null)"
+expect "cloned hook prints one SessionStart JSON object with reloadSkills and the routing block" 'python3 -c "import json,sys; d=json.loads(sys.argv[1]); h=d[\"hookSpecificOutput\"]; sys.exit(0 if h[\"hookEventName\"]==\"SessionStart\" and h[\"reloadSkills\"] is True and h[\"additionalContext\"]==open(sys.argv[2]).read().rstrip(\"\\n\") else 1)" "$hout" "$SRC/global/CLAUDE.md"'
+expect "cloned hook installed the skills into a fresh HOME" 'HOME="$HH" "$SRC/scripts/install.sh" --check >/dev/null'
+expect "second run of the cloned hook is silent" '[[ -z "$(HOME="$HH" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$SRC" "$SRC/.claude/hooks/session-start.sh" </dev/null)" ]]'
+
 echo "2. Disposable project with no hook of its own"
 git -C "$PROJ" init -q
 printf '[project]\nname = "units"\nversion = "0.1.0"\n' > "$PROJ/pyproject.toml"

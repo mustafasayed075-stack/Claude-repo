@@ -108,26 +108,56 @@ expect "uninstall leaves only user lines (plus one separator blank line)" '[[ "$
 expect "uninstall never deletes CLAUDE.md" '[[ -f "$H/CLAUDE.md" ]]'
 expect "no temp files left anywhere" '[[ -z "$(find "$SANDBOX" -name ".CLAUDE.md.*" -o -name ".*.new.*")" ]]'
 
-echo "H. SessionStart hook"
+echo "H. SessionStart hook (JSON contract)"
+# hj <stdout> <python expr over d>: stdout must be exactly one JSON object.
+hj() { python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert isinstance(d,dict); h=d.get("hookSpecificOutput",{}); sys.exit(0 if eval(sys.argv[2]) else 1)' "$1" "$2" 2>/dev/null; }
+runhook() { HOME="$1" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$2" "$2/.claude/hooks/session-start.sh" </dev/null; }
+mkrepo() { mkdir -p "$1"; cp -R "$REPO/.claude" "$REPO/scripts" "$REPO/skills" "$REPO/global" "$1/"; }
+CTX='h.get("additionalContext")'
 HH=$(home hookhome)
-out1=$(HOME="$HH" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$REPO" "$HOOK")
-out2=$(HOME="$HH" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$REPO" "$HOOK")
-expect "first run installs and prints the routing block" '[[ "$out1" == "$(cat "$REPO/global/CLAUDE.md")" ]] && CLAUDE_HOME="$HH/.claude" "$INSTALL" --check >/dev/null'
-expect "second run is silent (no reinstall)" '[[ -z "$out2" ]]'
+out1=$(runhook "$HH" "$REPO")
+expect "install: stdout is one JSON object with hookEventName SessionStart" 'hj "$out1" "h.get(\"hookEventName\")==\"SessionStart\""'
+expect "install: reloadSkills is true" 'hj "$out1" "h.get(\"reloadSkills\") is True"'
+expect "install: additionalContext is the routing block, no systemMessage" 'hj "$out1" "$CTX==open(\"$REPO/global/CLAUDE.md\").read().rstrip(\"\\n\") and \"systemMessage\" not in d"'
+expect "install: skills actually installed" 'CLAUDE_HOME="$HH/.claude" "$INSTALL" --check >/dev/null'
+out2=$(runhook "$HH" "$REPO"); rc=$?
+expect "current install: fast path prints nothing, exit 0" '[[ $rc -eq 0 && -z "$out2" ]]'
 sed -i 's/Engineering Skill System/OLD/' "$HH/.claude/CLAUDE.md"
-out3=$(HOME="$HH" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$REPO" "$HOOK")
-expect "stale block triggers exactly one refresh" '[[ -n "$out3" ]] && [[ -z "$(HOME="$HH" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$REPO" "$HOOK")" ]]'
+out3=$(runhook "$HH" "$REPO")
+expect "stale block: one refresh with reloadSkills, then silent" 'hj "$out3" "h.get(\"reloadSkills\") is True" && [[ -z "$(runhook "$HH" "$REPO")" ]]'
+UR="$SANDBOX/upgrade-repo"; mkrepo "$UR"; HU=$(home hookupgrade); runhook "$HU" "$UR" >/dev/null
+sed -i 's/^description: Decide how/description: UPGRADED Decide how/' "$UR/skills/skill-router/SKILL.md"
+out=$(runhook "$HU" "$UR")
+expect "upgrade: changed SKILL.md reinstalled with reloadSkills" 'hj "$out" "h.get(\"reloadSkills\") is True" && grep -q "UPGRADED" "$HU/.claude/skills/skill-router/SKILL.md"'
 HN=$(home hooklocal)
 out=$(HOME="$HN" CLAUDE_CODE_REMOTE= CLAUDE_PROJECT_DIR="$REPO" "$HOOK"); rc=$?
 expect "not remote: no-op, exit 0" '[[ $rc -eq 0 && -z "$out" && ! -e "$HN/.claude" ]]'
 HC=$(home hookconflict); mkdir -p "$HC/.claude/skills/skill-router"
-out=$(HOME="$HC" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$REPO" "$HOOK"); rc=$?
-expect "conflict: exit 0 and states the reason" '[[ $rc -eq 0 && "$out" == *"not managed by this system"* ]]'
-SP="$SANDBOX/path with spaces/repo"; mkdir -p "$SP"; cp -R "$REPO/.claude" "$REPO/scripts" "$REPO/skills" "$REPO/global" "$SP/"
+out=$(runhook "$HC" "$REPO"); rc=$?
+expect "conflict: exit 0, valid JSON, no reloadSkills" '[[ $rc -eq 0 ]] && hj "$out" "\"reloadSkills\" not in h"'
+expect "conflict: reason kept in additionalContext and systemMessage" 'hj "$out" "\"not managed by this system\" in $CTX and \"not managed by this system\" in d.get(\"systemMessage\",\"\")"'
+expect "conflict: nothing installed" '[[ ! -e "$HC/.claude/skills/engineering-standards" && ! -e "$HC/.claude/CLAUDE.md" ]]'
+SR="$SANDBOX/special-repo"; mkrepo "$SR"
+printf '# Ctx "quotes" \\back\\slash $(not run) `tick` – ünïcode\n\ttab line\n' > "$SR/global/CLAUDE.md"
+want=$(cat "$SR/global/CLAUDE.md")
+out=$(runhook "$(home hookspecial)" "$SR")
+expect "special characters: JSON round-trips the context exactly" 'python3 -c "import json,sys; sys.exit(0 if json.loads(sys.argv[1])[\"hookSpecificOutput\"][\"additionalContext\"]==sys.argv[2] else 1)" "$out" "$want"'
+SHIM="$SANDBOX/shim"; mkdir -p "$SHIM"; printf '#!/bin/sh\nexit 1\n' > "$SHIM/python3"; chmod +x "$SHIM/python3"
+out=$(PATH="$SHIM:$PATH" runhook "$(home hookjq)" "$SR")
+expect "no python3: jq fallback emits the same JSON contract" 'python3 -c "import json,sys; d=json.loads(sys.argv[1]); h=d[\"hookSpecificOutput\"]; sys.exit(0 if h[\"hookEventName\"]==\"SessionStart\" and h[\"reloadSkills\"] is True and h[\"additionalContext\"]==sys.argv[2] else 1)" "$out" "$want"'
+HJC=$(home hookjqconflict); mkdir -p "$HJC/.claude/skills/skill-router"
+out=$(PATH="$SHIM:$PATH" runhook "$HJC" "$REPO")
+expect "no python3, conflict: jq fallback keeps reason, no reloadSkills" 'hj "$out" "\"reloadSkills\" not in h and \"not managed\" in d.get(\"systemMessage\",\"\")"'
+cp "$SHIM/python3" "$SHIM/jq"
+out=$(PATH="$SHIM:$PATH" runhook "$(home hookplain)" "$SR")
+expect "no python3 and no jq: plain-text context (documented degraded mode)" '[[ "$out" == "$want" ]]'
+SP="$SANDBOX/path with spaces/repo"; mkrepo "$SP"
 HS=$(home hookspaces)
 cmd=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"]["SessionStart"][0]["hooks"][0]["command"])' "$REPO/.claude/settings.json")
 out=$(HOME="$HS" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$SP" sh -c "$cmd" </dev/null)
-expect "settings.json command works from a path with spaces (run via sh -c)" '[[ -n "$out" ]] && CLAUDE_HOME="$HS/.claude" "$INSTALL" --check >/dev/null'
+expect "settings.json command from a path with spaces: valid JSON, installed" 'hj "$out" "h.get(\"reloadSkills\") is True" && CLAUDE_HOME="$HS/.claude" "$INSTALL" --check >/dev/null'
+out=$(printf '{"session_id":"x","hook_event_name":"SessionStart","source":"startup"}' | HOME="$(home hookstdin)" CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$REPO" "$HOOK")
+expect "hook payload on stdin does not leak into stdout" 'hj "$out" "h.get(\"reloadSkills\") is True"'
 
 echo "I. run.sh temp-dir guard"
 before=$(ls / | sha256sum)
