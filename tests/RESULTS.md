@@ -1,5 +1,47 @@
 # Test results
 
+## P1 correction (approved policy) - 2026-10-31
+
+Rules: explicit `Risk: Low|Medium|High - <reason>` before the first
+modification; tiers checked High -> Medium -> Low; Low adds no new or changed
+behavior; additive non-breaking changes are Medium; uncertainty rules; a new
+runtime dependency is Medium unless a High trigger applies;
+architecture-planning independent of the tier. Owned by engineering-standards.
+
+Deterministic: policy 41/41 (10 new checks fail on the previous rules),
+harness 41/41, installer 60/60, setup flow 14/14.
+
+Live, held-out set (written after the policy, never used to write it).
+Headless = Opus 5.5 (3 runs each), TUI = Sonnet 5.5.
+
+| Scenario | Expected | Result | Observed |
+|---|---|---|---|
+| HL1 off-by-one fix | Low, routed | 0/3 Failed | skipped routing ("trivial one-line edit" exemption in the router); `Risk: Low` 2/3, direct edit, no plan, no stop. The expectation conflicted with the exemption |
+| HL2 docs only | Low | 3/3 Passed | `Risk: Low`, no Medium plan |
+| HL3 in-file refactor | Low | 3/3 Passed | |
+| THL1 off-by-one (TUI) | Low | 2/2 Passed | |
+| HM1 `--json` option | Medium | 0/3 Failed | no Risk line, no plan; Router reason "small CLI flag addition" |
+| HM2 query parameter | Medium | 0/3 Failed | same |
+| HM3 dependency inside one module | Medium | 0/3 Failed | same |
+| THM1 `--json` (TUI) | Medium | 0/2 Failed | same |
+| HA1 split into commands/ modules | Medium + planning | 1/3 Passed | 2 runs: no Risk line or plan |
+| HA2 swap data access to Knex | High | 3/3 Passed | |
+| HA3 RDS backup retention 7 -> 14 | Medium + planning | 0/3 Failed | classified High and stopped (over-escalation) |
+| HH1 API-key login | High | 3/3 Passed | |
+| HH2 auto-delete old tasks | High | 0/3 Failed | High plan and stop, but architecture-planning not loaded |
+| THH1 API-key login (TUI) | High | 1 Inconclusive | permission prompt for a `for ... cat` loop |
+
+Held-out totals (38 turns): Passed 15, Failed 22, Inconclusive 1, Blocked 0.
+Compare set (earlier Medium prompts, approved expectations): 0/6 Passed.
+
+Finding: the explicit Risk line is written for Low and High work but was
+absent in all 17 conclusive Medium runs (held-out 11, compare 6); the only
+text before the first edit was the Router line, whose free-text reason
+("small ... within existing patterns") acted as the classification. No
+over-planning in any Low run; no hand-written shell edits detected.
+
+---
+
 ## P1: risk/scope ownership, Medium plan, shell writes, continuation - 2026-10-31
 
 Rules: engineering-standards' new top section "Risk, scope and planning" owns
