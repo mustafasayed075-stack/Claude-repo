@@ -242,6 +242,7 @@ E
     echo '{"name":"shop-api","version":"2.4.0","scripts":{"start":"node src/app.js","test":"jest"},"dependencies":{"express":"^4.19.0","pg":"^8.11.0"},"devDependencies":{"jest":"^29.7.0","supertest":"^7.0.0"}}' > "$d/package.json"
     printf "const { Pool } = require('pg');\nmodule.exports = new Pool();\n" > "$d/src/db.js"
     printf "const express = require('express');\nconst app = express();\napp.use(express.json());\napp.use('/users', require('./routes/users'));\napp.use('/orders', require('./routes/orders'));\napp.use('/products', require('./routes/products'));\nmodule.exports = app;\n" > "$d/src/app.js"
+    local r
     for r in users orders products; do
       cat > "$d/src/routes/$r.js" <<E
 const router = require('express').Router();
@@ -297,6 +298,7 @@ E
 
 inject_knex_migration() {
   printf "const knex = require('knex');\nmodule.exports = knex({ client: 'pg', connection: process.env.DATABASE_URL });\n" > "$1/src/db.js"
+  local r
   for r in users orders products; do
     cat > "$1/src/routes/$r.js" <<E
 const router = require('express').Router();

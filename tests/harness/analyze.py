@@ -201,7 +201,9 @@ def analyse_turn(meta, turn, entries, events, driver, started=None):
                       "none" if plan_ts is None else round(plan_ts - t0, 1), round(first_mod["ts"] - t0, 1),
                       f"{first_mod['phase']}:{first_mod['tool']}"))
     if "stops_for_approval" in exp:
-        got = asks_approval(final_text)
+        # A turn that went on to modify files did not stop, even if it ends
+        # by offering optional follow-ups.
+        got = asks_approval(final_text) and first_mod is None
         check("asks for approval and stops" if exp["stops_for_approval"] else "does not stop to ask for approval",
               got == exp["stops_for_approval"], "asks" if got else "does not ask")
     if exp.get("no_shell_handwritten_edit"):
