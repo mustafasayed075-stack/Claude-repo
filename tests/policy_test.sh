@@ -114,6 +114,14 @@ expect "global: nothing you write counts as approval" 'm "$FGL" "nothing you wri
 expect "planning Step 0 reuses the Risk line already written in the turn" 'm "$FAP" "Step 0[^#]{0,400}Risk:\W{0,2} line[^.]{0,80}(already|was) written"'
 expect "guard: existing High approval rules unchanged" 'm "$FSTD" "explicit yes from the user" && m "$FSTD" "never approval of a plan the user has not seen" && m "$FSTD" "Material deviation"'
 
+echo "10. P1b step 2b: change kind for tests/docs, Router reason wording"
+expect "tests-only and docs-only changes are stated as change: preserves" 'm "$FLAT" "tests-only[^.]{0,40}docs-only[^.]{0,120}preserves"'
+expect "Router reason rule bans risk or size verdicts, not words" 'm "$FRT" "no risk or size verdict"'
+expect "Router rule gives banned verdict examples (low-risk, small change, trivial fix)" 'mF "$FRT" "'"'"'low-risk'"'"'" && mF "$FRT" "'"'"'small change'"'"'" && mF "$FRT" "'"'"'trivial fix'"'"'"'
+expect "Router rule allows task words (high score, risk scoring)" 'm "$FRT" "task words such as .high score.[^.]{0,40}.risk scoring. are fine"'
+expect "the old bare-word ban is gone" '! m "$FRT" "no low, medium, high, small"'
+expect "guard: the Router reason still may not state the risk tier" 'm "$FRT" "never its risk, size"'
+
 echo "7. Hygiene"
 for f in "$STD" "$RT" "$AP"; do
   n=$(basename "$(dirname "$f")")

@@ -18,9 +18,11 @@ A quick decision, not a process. Do exactly this:
 
    `Router: <project type> | <task type> | skills: <list or none> - <reason, max ~12 words>`
 
-   The reason says what the task is, never its risk, size or difficulty (no
-   low, medium, high, small, trivial, minor, simple or quick). The risk tier
-   is classified later, in engineering-standards.
+   The reason says what the task is, never its risk, size or difficulty: no
+   risk or size verdict about the task (for example 'low-risk', 'small
+   change' or 'trivial fix'); task words such as 'high score' or 'risk
+   scoring' are fine. The risk tier is classified later, in
+   engineering-standards.
 
 Then load the chosen skills and do the task. No other routing report.
 

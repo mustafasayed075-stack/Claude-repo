@@ -95,7 +95,7 @@ of size: a one-line change can be High.
   behavior: fixes that restore the established contract (`change: restores`,
   with evidence) and keep every contract, behavior-preserving internal
   refactors within existing patterns (`change: preserves`), and tests-only
-  or docs-only changes. Not Low, even if one line: a new or changed option,
+  or docs-only changes (also `change: preserves`). Not Low, even if one line: a new or changed option,
   parameter, endpoint, field, command, output or message, default value, or
   dependency.
 
