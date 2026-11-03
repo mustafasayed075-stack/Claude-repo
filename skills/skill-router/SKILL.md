@@ -18,6 +18,10 @@ A quick decision, not a process. Do exactly this:
 
    `Router: <project type> | <task type> | skills: <list or none> - <reason, max ~12 words>`
 
+   The reason says what the task is, never its risk, size or difficulty (no
+   low, medium, high, small, trivial, minor, simple or quick). The risk tier
+   is classified later, in engineering-standards.
+
 Then load the chosen skills and do the task. No other routing report.
 
 Recommend only skills in this session's available-skills list; if a mapped
@@ -58,10 +62,10 @@ stated with the `Risk:` line before the first modification.
 
 | Situation (first matching row wins) | Load |
 |---|---|
-| High risk, or a change that needs `architecture-planning` as defined there | `architecture-planning`, then `engineering-standards` - both before any edit |
+| Architectural impact visible in the request, as defined there | `architecture-planning`, then `engineering-standards` - both before any edit |
 | Architecture, or a "build X" request in an empty repo | `architecture-planning` |
 | Release | `engineering-standards` (Definition of Done) |
-| Any other change, any task type | `engineering-standards` |
+| Any other change, any task type | `engineering-standards`; a High classification there loads `architecture-planning` before the plan (every High change needs it) |
 
 Optional built-ins, only when they clearly add value:
 - `run` - to reproduce or verify runtime/UI behavior.
@@ -76,9 +80,11 @@ framework's own conventions.
 Your routing decision persists for its task. For a new coding request, write a fresh Router line; call this skill again only if its content is no longer in context (e.g. after compaction).
 
 ## No skill needed
-Questions, explanations, code reading, trivial edits (typo, one-line
-change, a command the user specified), or when the user named the
-approach. Do the work directly; skip the Router line too.
+Questions, explanations, code reading, and edits that cannot execute:
+comments, documentation files and prose, whitespace the toolchain ignores.
+Do the work directly; skip the Router line too. Every code, config, schema,
+build or deploy edit is routed, including docstrings and user-visible
+strings, whatever its size and even when the user dictated the change.
 
 **Before your next tool call: have you written the `Router:` line? If not,
 write it now.**

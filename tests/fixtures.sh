@@ -271,6 +271,16 @@ module.exports = router;
 E
     done
     printf "const request = require('supertest');\njest.mock('../src/db', () => ({ query: jest.fn(async () => ({ rows: [{ id: 1 }] })) }));\nconst app = require('../src/app');\ntest('GET /users/1', async () => {\n  const res = await request(app).get('/users/1');\n  expect(res.body.id).toBe(1);\n});\n" > "$d/test/users.test.js" ;;
+  # --- P1b held-out variants (added after the P1b rules were written) ---
+  pylib_bug)  # NT1: a genuine bug; the docstring states the established contract
+    printf 'def apply_discount(price, percent):\n    """Return price reduced by percent (0-100), rounded to cents."""\n    if not 0 <= percent <= 100:\n        raise ValueError("percent must be 0-100")\n    return round(price * (1 - percent / 100), 2)\n\ndef total(items):\n    """Return the total of (price, quantity) pairs: the sum of price times quantity, rounded to cents."""\n    return round(sum(p + q for p, q in items), 2)\n' > "$d/pricing.py"
+    printf '[project]\nname = "pricing"\nversion = "0.1.0"\n[project.optional-dependencies]\ntest = ["pytest"]\n' > "$d/pyproject.toml" ;;
+  pylib_typo)  # NT3: the only defect is a typo inside a comment
+    printf '# Discounts are given as a percnetage from 0 to 100.\ndef apply_discount(price, percent):\n    if not 0 <= percent <= 100:\n        raise ValueError("percent must be 0-100")\n    return round(price * (1 - percent / 100), 2)\n\ndef total(items):\n    return round(sum(p * q for p, q in items), 2)\n' > "$d/pricing.py"
+    printf '[project]\nname = "pricing"\nversion = "0.1.0"\n[project.optional-dependencies]\ntest = ["pytest"]\n' > "$d/pyproject.toml" ;;
+  pycli_readme_typo)  # NT4: the pycli fixture plus a README with one misspelling
+    make_fixture pycli "$d"
+    printf '# todo-cli\n\nA small command-line todo list. Tasks are stored in a JSON file; you recieve an id for each task you add.\n\n    todo add "buy milk"\n    todo list\n' > "$d/README.md" ;;
   esac
   commit "$d" init
   git -C "$d" rev-parse HEAD > "$d.base"

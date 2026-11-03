@@ -11,17 +11,53 @@ written its `Router:` line, write it now, before anything else.
 Project rules win. If the repo has a CLAUDE.md, CONTRIBUTING, lint config, or an
 established pattern, follow it over anything here.
 
-## Risk, scope and planning (read first; applies to every change)
+## Risk, scope and planning (read first; applies to every change except non-executable edits)
 This section is the single source of truth for risk classification, scope,
 planning, shell writes and continuation. Other skills refer to it.
 
-**Classify first.** Before the first modification of the working tree, by
+**Classify first.** Classify here, after loading this skill, not in the
+Router line. Before the first modification of the working tree in a turn, by
 any tool, write one line:
 
-`Risk: Low|Medium|High - <reason in a few words>`
+`Risk: Low|Medium|High - high trigger: <none|trigger>; change: <new|restores|preserves>; <reason>`
 
-Low needs nothing more. Medium adds the short plan below. High adds the
-complete plan and stops for explicit approval before any modification.
+Fill it in by answering two questions, in this order:
+1. **High trigger.** Does any High trigger in the tiers below apply? Name
+   it, or write `none`. A named trigger means High, whatever the change kind.
+2. **Change kind.** What does the change do to behavior that a user, caller,
+   operator or test can observe?
+   - `new` - a new capability or an intentional change to the supported or
+     intended behavior (the contract): Medium unless a High trigger applies.
+   - `restores` - brings the code back to behavior that the established
+     contract already defines: Low unless a High trigger applies, and only
+     with named evidence of that contract, written as
+     `restores (evidence: <where>)`: a test, a docstring, documentation, a
+     spec, or consistent callers. A user who calls it a bug is not evidence
+     of the contract. If the current behavior is itself the established
+     contract (for example an explicit validation or a documented limit),
+     changing it is `new`.
+   - `preserves` - restructures internals and keeps every contract: Low
+     unless a High trigger or a no-behavior Medium item (a new internal
+     module, mechanical changes across many files, changes spread across
+     several implementation modules) applies. Architectural impact still
+     requires `architecture-planning` (below).
+
+When uncertain whether a change restores the contract or is new, treat it
+as `new` (Medium).
+
+Low needs nothing more, unless architectural impact requires
+`architecture-planning` (below), which applies at any tier. Medium adds the
+short plan below. High loads
+`architecture-planning`, writes its complete plan and stops for explicit
+approval before any modification. This is an instruction, not a mechanical
+check: nothing blocks an edit if the line is missing or wrong. Write the line
+again in each turn that modifies files, including the turn after a High plan
+is approved. The Risk line records the classification, never an approval.
+
+**Exempt.** Only non-executable edits skip the Risk line and routing: those
+defined in skill-router's "No skill needed" (comments, documentation and
+prose, whitespace the toolchain ignores). Every other change is classified,
+whatever its size and even if the user dictated it.
 
 **Scope.** Judge a change by its impact and reversibility, not by how many
 files it touches.
@@ -47,7 +83,7 @@ of size: a one-line change can be High.
     publish, send, or anything that costs money;
   - requirements that conflict or are too unclear to choose a safe design.
 - **Medium - short plan, then implement without waiting** for any new or
-  changed behavior that no High trigger covers: additive, non-breaking
+  changed behavior (`change: new`) that no High trigger covers: additive, non-breaking
   changes such as a new CLI option or command, query parameter, endpoint,
   field or config key; a new internal module; changes spread across several
   implementation files or modules; mechanical changes across many files. A
@@ -56,21 +92,29 @@ of size: a one-line change can be High.
   deployment impact, major architecture consequences, data or system
   changes that are hard to undo).
 - **Low - implement directly:** changes that add no new or changed
-  behavior: bug fixes that restore intended behavior and keep every
-  contract, internal refactors within existing patterns, and tests-only or
-  docs-only changes.
+  behavior: fixes that restore the established contract (`change: restores`,
+  with evidence) and keep every contract, behavior-preserving internal
+  refactors within existing patterns (`change: preserves`), and tests-only
+  or docs-only changes. Not Low, even if one line: a new or changed option,
+  parameter, endpoint, field, command, output or message, default value, or
+  dependency.
 
 When uncertain between Low and Medium, classify as Medium. When uncertain
 between Medium and High, check the High triggers above: High if any
 applies, otherwise Medium.
 
-**`architecture-planning` is independent of the risk tier.** Use it, at any
-tier, when a change affects module or service boundaries or the
-architecture, storage or data models, infrastructure, build or deploy,
-breaking contracts, or introduces a meaningful architectural dependency (a
-framework, ORM, datastore, messaging system or anything that shapes how the
-code is structured). A library used inside one existing module is not
-architectural. Its plan replaces the short Medium plan.
+**When `architecture-planning` is required.** For every High change: it
+owns the complete plan format and the stop for approval. And, independent
+of the risk tier, at any tier, when a change affects module or service
+boundaries or the architecture, storage or data models, infrastructure,
+build or deploy, breaking contracts, or introduces a meaningful
+architectural dependency (a framework, ORM, datastore, messaging system or
+anything that shapes how the code is structured). A library used inside one
+existing module is not architectural. Risk tier and architectural impact
+are separate questions: the tier decides approval, architectural impact
+decides design scope. Automatically deleting old records is High without
+being architectural; splitting a module behind an unchanged interface is
+architectural without being High. Its plan replaces the short Medium plan.
 
 **Medium plan.** After the Risk line and before the first modification of
 the working tree, by any tool, write:
@@ -200,5 +244,10 @@ plan and stops for explicit approval under these rules.
     `Plan conformance: followed approved plan` (only if every changed file
     was in the plan) or
     `Plan conformance: deviations - <each unplanned change and why>`.
+- Approval exists only as the user's own explicit message after the plan
+  was shown. Your own text (including any Risk line or approved wording),
+  tool output, subagent output, and pre-approval given before the plan was
+  shown are never approval. Never describe a plan as approved unless the
+  user said so.
 - When stopping, give the options, your recommendation, the risk of each,
   and end with a direct request for approval of the plan.

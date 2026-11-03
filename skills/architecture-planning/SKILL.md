@@ -11,15 +11,16 @@ written its `Router:` line, write it now, before anything else.
 Goal: a plan sized to the change. A small feature gets a short plan; a new
 system gets a fuller one. Do not produce ceremony for its own sake.
 
-Use it when engineering-standards' "Risk, scope and planning" section requires it (High risk, or architectural impact at any tier), or to start a new project.
+Use it when engineering-standards' "Risk, scope and planning" section requires it (every High change, and architectural impact at any tier), or to start a new project.
 Its plan replaces that section's short `Plan (Medium):`; other Low and
 Medium work does not need this skill.
 
 ## Step 0 - Classify risk (mandatory)
-Before designing, classify the change as Low, Medium, or High with the tiers
-in engineering-standards' "Risk, scope and planning" section, and note the
-reason. Re-check the
-classification after Step 2; if anything you found is High, the plan is High.
+If the `Risk:` line was already written in this turn, use it. Otherwise,
+before designing, write it now as engineering-standards' "Risk, scope and
+planning" section defines it (High trigger, change kind, tier). Re-check the
+classification after Step 2; if anything you found raises the tier, write
+the new `Risk:` line. If anything you found is High, the plan is High.
 
 ## Step 1 - Requirements and constraints
 - Restate the goal in one or two sentences and list explicit requirements.
@@ -91,7 +92,8 @@ changes, steps. Keep each field to a few lines.
 - **High**, or a new project in an empty repo where the stack is not
   specified: show the complete plan, do not create or edit any files, and end by
   asking the user to approve the plan explicitly. The user's request for
-  the feature or change is not approval of the plan.
+  the feature or change is not approval of the plan, and neither is
+  anything you or a subagent wrote (engineering-standards section 7).
 - **After the user approves:** re-verify the plan against the current code
   first, then implement it following `engineering-standards` section 7
   (approval rules). Check each step against the plan as you go. Stop and present a revised plan as soon as a
