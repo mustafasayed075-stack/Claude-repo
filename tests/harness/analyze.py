@@ -69,7 +69,15 @@ EVIDENCE_LABEL = re.compile(r"\b(user|users|reporter|customer|issue|ticket|reque
                             r"|\bbug[- ]report\b|\b(reported|called|labell?ed|filed)\s+as\s+a\s+bug\b|\b(it is|it's|this is)\s+a\s+bug\b", re.I)
 EVIDENCE_SOURCE = re.compile(r"\b(test\w*|docstring|docs?|documentation|readme|spec\w*|contract|callers?|type hints?|schema|changelog|api reference)\b", re.I)
 MEDIUM_PLAN = re.compile(r"Plan \(Medium\):")
+# Older, lenient plan signal (kept for P1-era expectations): a Risk line with
+# Medium/High also counts. P1b uses STRICT_PLAN instead.
 PLAN = re.compile(r"Plan \(Medium\):|Risk\W{0,6}(Medium|High)\b", re.I)
+# A real plan: the Medium plan header, or architecture-planning's plan.
+STRICT_PLAN = re.compile(r"Plan \(Medium\):|^\W{0,6}proposed design\W{0,4}:", re.I | re.M)
+# architecture-planning's complete plan: design, affected components, validation, rollback.
+PLAN_FIELDS = [re.compile(r"(?im)^\W{0,6}" + f + r"\W{0,4}:") for f in
+               ("proposed design", "affected components", "validation", "rollback")]
+CONFORMANCE = re.compile(r"Plan conformance:")
 # Hand-written file content pushed through the shell (heredoc / inline
 # Python writes). Formatters, generators and sed-style mechanical
 # transformations are allowed and not matched.
@@ -256,6 +264,8 @@ def analyse_turn(meta, turn, entries, events, driver, started=None, result=None)
     shell_writes = [ev for ev in changes if ev.get("tool") == "Bash" and ev.get("phase") == "post"
                     and SHELL_HANDWRITE.search(str((ev.get("input") or {}).get("command", "")))]
     plan_ts = next((ts for ts, t in timed_texts if PLAN.search(t)), None)
+    strict_plan_ts = next((ts for ts, t in timed_texts if STRICT_PLAN.search(t)), None)
+    plan_fields = [bool(any(f.search(t) for t in texts)) for f in PLAN_FIELDS]
     risk_hit = next(((ts, RISK_LINE.search(t).group(1).capitalize()) for ts, t in timed_texts if RISK_LINE.search(t)), None)
     risk_line = next((t[RISK_LINE.search(t).start():].split("\n", 1)[0] for _, t in timed_texts if RISK_LINE.search(t)), "")
     rf = risk_fields(risk_line)
@@ -282,6 +292,9 @@ def analyse_turn(meta, turn, entries, events, driver, started=None, result=None)
                    "first_modification": (f"{first_mod['phase']}:{first_mod['tool']}" if first_mod else None),
                    "tool_events": len(window),
                    "plan_present": plan_ts is not None,
+                   "strict_plan_present": strict_plan_ts is not None,
+                   "complete_plan_fields": plan_fields,
+                   "plan_conformance_line": bool(any(CONFORMANCE.search(t) for t in texts)),
                    "risk_stated": risk_hit[1] if risk_hit else None,
                    "risk_trigger": rf["trigger"], "risk_change": rf["change"], "risk_evidence": rf["evidence"],
                    "restores_evidence_label_only": label_only,
@@ -337,6 +350,21 @@ def analyse_turn(meta, turn, entries, events, driver, started=None, result=None)
                   "plan at %s, first modification at %s (%s)" % (
                       "none" if plan_ts is None else round(plan_ts - t0, 1), round(first_mod["ts"] - t0, 1),
                       f"{first_mod['phase']}:{first_mod['tool']}"))
+    if exp.get("medium_plan_before_modification"):
+        name = "Medium plan (Plan (Medium): or a planning plan) before the first modification"
+        if first_mod is None:
+            check(name, strict_plan_ts is not None, "no modification; plan " + ("present" if strict_plan_ts else "absent"))
+        else:
+            check(name, strict_plan_ts is not None and strict_plan_ts <= first_mod["ts"],
+                  "plan at %s, first modification at %s" % (
+                      "none" if strict_plan_ts is None else round(strict_plan_ts - t0, 1), round(first_mod["ts"] - t0, 1)))
+    if exp.get("complete_plan"):
+        missing = [n for n, ok in zip(("proposed design", "affected components", "validation", "rollback"), plan_fields) if not ok]
+        check("complete plan (design, affected components, validation, rollback)", not missing,
+              f"missing {missing}" if missing else "all four fields present")
+    if exp.get("plan_conformance_line"):
+        hit = any(CONFORMANCE.search(t) for t in texts)
+        check("Plan conformance line present", hit, "present" if hit else "absent")
     if exp.get("risk_before_modification"):
         if risk_hit is None:
             check("explicit Risk line before the first modification", False, "no Risk: line")
