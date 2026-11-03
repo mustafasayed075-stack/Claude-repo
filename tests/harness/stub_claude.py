@@ -9,15 +9,18 @@ the analyzer can find the turn, and prints stream-json events.
 The working directory is <OUT>/runs/<model>/<run>/project. An optional
 <OUT>/stub_control.json maps "<run>@<model>" to a behaviour:
   limit         this run answers with a usage-limit message (is_error result)
-  limit_always  this run and its replacement both do
+  apierror      this run ends with a non-limit API error (is_error result)
+  <x>_always    behaviour <x> for this run and for its replacement
   leak          the transcript's skill listing shows a skill that exists only
                 in the real ~/.claude (session-start-hook)
+  slow          answers after 3 seconds (a run still in flight)
 """
 import datetime
 import json
 import os
 import re
 import sys
+import time
 import uuid
 
 
@@ -37,10 +40,10 @@ def main():
     cpath = os.path.join(out, "stub_control.json")
     if os.path.exists(cpath):
         control = json.load(open(cpath))
-    behaviour = control.get(f"{run}@{model}") or (
-        "limit_always" if control.get(f"{re.sub(r'-r$', '', run)}@{model}") == "limit_always" else None)
-    if behaviour == "limit_always":
-        behaviour = "limit"
+    behaviour = control.get(f"{run}@{model}")
+    if not behaviour and str(control.get(f"{re.sub(r'-r$', '', run)}@{model}", "")).endswith("_always"):
+        behaviour = control[f"{re.sub(r'-r$', '', run)}@{model}"]  # also applies to the replacement run
+    behaviour = (behaviour or "").replace("_always", "") or None
 
     stream = "--input-format" in argv
     home = os.environ.get("HOME", "")
@@ -55,16 +58,19 @@ def main():
     t.flush()
 
     def answer(m):
+        if behaviour == "slow":
+            time.sleep(3)
         if m == "/compact":
             print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "session_id": sid, "result": "compacted"}), flush=True)
             return
-        text = "You've hit your 5-hour limit" if behaviour == "limit" else "(stub) no model was called"
+        text = ("You've hit your 5-hour limit" if behaviour == "limit" else
+                "API Error: 500 Internal server error" if behaviour == "apierror" else "(stub) no model was called")
         t.write(json.dumps({"type": "user", "timestamp": now(), "message": {"content": m}}) + "\n")
         t.write(json.dumps({"type": "assistant", "timestamp": now(),
                             "message": {"model": model, "content": [{"type": "text", "text": text}]}}) + "\n")
         t.flush()
         print(json.dumps({"type": "assistant", "message": {"model": model, "content": [{"type": "text", "text": text}]}}), flush=True)
-        print(json.dumps({"type": "result", "subtype": "success", "is_error": behaviour == "limit",
+        print(json.dumps({"type": "result", "subtype": "success", "is_error": behaviour in ("limit", "apierror"),
                           "session_id": sid, "result": text}), flush=True)
 
     msgs = []

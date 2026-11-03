@@ -188,8 +188,9 @@ expect "the dry run analyzed every run and wrote a report" '[[ -f "$OUT/report.m
 
 echo "3. Replacement policy (D8) and isolation-leak check"
 OUT2="$SB/dry2"; mkdir -p "$OUT2"
-# stub behaviour per run: limit = usage-limit turn (Invalid), leak = listing shows a real-HOME-only skill
-printf '{"NM1-1@claude-opus-5-5": "limit", "NM2-1@claude-opus-5-5": "limit_always", "NM3-1@claude-opus-5-5": "leak"}\n' > "$OUT2/stub_control.json"
+# stub behaviour per run: apierror = a non-limit API error (Invalid, replaced; a usage limit instead
+# stops the batch, see section 5), leak = listing shows a real-HOME-only skill
+printf '{"NM1-1@claude-opus-5-5": "apierror", "NM2-1@claude-opus-5-5": "apierror_always", "NM3-1@claude-opus-5-5": "leak"}\n' > "$OUT2/stub_control.json"
 ONLY="NM1 NM2 NM3" MODELS="claude-opus-5-5" REPS=1 bash "$HERE/p1b_validation.sh" --dry-run "$OUT2" > "$SB/dry2.log" 2>&1; rc2=$?
 rep="$(py "$OUT2" <<'PY' 2>&1
 import json, os, sys
@@ -305,6 +306,95 @@ PY
 )"
 expect "report: replacement used, verdicts separate, T1 counted on conclusive runs, hard key counted on an Invalid run" '[[ "$syn" == ok ]] || { echo "      got: $syn" >&2; false; }'
 expect "report: over-escalation, Risk-line split and flagged Router reasons (verbatim) are listed" '[[ "$syn" == ok ]]'
+
+echo "5. Batches, resume and usage limits (step 3b)"
+V="$HERE/p1b_validation.sh"
+meta() { python3 -B -c 'import json,sys; m=json.load(open(sys.argv[1])); print(m.get(sys.argv[2]))' "$1/meta.json" "$2"; }
+# 5a resume: completed runs are skipped, an interrupted run is archived and re-run
+O3="$SB/b3"; R3="$O3/runs/claude-opus-5-5"
+ONLY="NM1" MODELS="claude-opus-5-5" REPS=2 bash "$V" --dry-run "$O3" > "$SB/b3-1.log" 2>&1
+rm -f "$R3/NM1-2/done.json"                       # NM1-2 looks interrupted
+ONLY="NM1" MODELS="claude-opus-5-5" REPS=2 bash "$V" --dry-run "$O3" > "$SB/b3-2.log" 2>&1; rc3=$?
+expect "resume: a completed run is skipped (its claude was called once, not twice)" '[[ $rc3 -eq 0 && $(wc -l < "$R3/NM1-1/stub_calls.jsonl") -eq 1 ]] && grep -q "skip done claude-opus-5-5 NM1-1" "$SB/b3-2.log"'
+expect "resume: an interrupted run is archived (kept as evidence) and run again" '[[ -f "$R3/NM1-2/done.json" ]] && ls "$O3"/aborted/claude-opus-5-5/NM1-2.* >/dev/null 2>&1'
+# 5b subsets across invocations, batches recorded, remaining listed against the full approved plan
+ONLY="NM2" MODELS="claude-opus-5-5" REPS=2 bash "$V" --dry-run "$O3" > "$SB/b3-3.log" 2>&1
+sub="$(py "$O3" <<'PY' 2>&1
+import json, os, sys
+o = sys.argv[1]; m = json.load(open(f"{o}/manifest.json")); rem = json.load(open(f"{o}/remaining.json"))
+err = []
+if len(m.get("batches", [])) != 3: err.append(f"{len(m.get('batches', []))} batches")
+if sorted(os.listdir(f"{o}/runs/claude-opus-5-5")) != ["NM1-1", "NM1-2", "NM2-1", "NM2-2"]: err.append("runs " + str(sorted(os.listdir(f"{o}/runs/claude-opus-5-5"))))
+if len(rem["base"]) != 115 - 4: err.append(f"{len(rem['base'])} base runs remaining, expected 111")
+if "claude-opus-5-5 NM3-1" not in rem["base"] or "claude-opus-5-5 NM1-1" in rem["base"]: err.append("remaining list wrong")
+print("ok" if not err else "; ".join(err))
+PY
+)"
+expect "subset batches (ONLY/MODELS) add up; every batch is recorded; remaining lists the rest of the 115 runs" '[[ "$sub" == ok ]] || { echo "      got: $sub" >&2; false; }'
+# 5c HEAD mismatch: resuming after a new commit is refused
+cp -a "$REPO" "$SB/repo-head" && git -C "$SB/repo-head" add -A && git -C "$SB/repo-head" -c user.email=t@t -c user.name=t commit -qm "snapshot for the test" --allow-empty
+ONLY="NM1" MODELS="claude-opus-5-5" REPS=1 bash "$SB/repo-head/tests/p1b_validation.sh" --dry-run "$SB/b4" > /dev/null 2>&1
+git -C "$SB/repo-head" -c user.email=t@t -c user.name=t commit -qm "a later commit" --allow-empty
+ONLY="NM2" MODELS="claude-opus-5-5" REPS=1 bash "$SB/repo-head/tests/p1b_validation.sh" --dry-run "$SB/b4" > "$SB/b4.log" 2>&1; rc4=$?
+expect "resume refuses when HEAD differs from the commit of the earlier runs (and runs nothing)" '[[ $rc4 -eq 2 ]] && grep -q "refusing: HEAD .* differs from the commit of the earlier runs" "$SB/b4.log" && [[ ! -d "$SB/b4/runs/claude-opus-5-5/NM2-1" ]]'
+# 5d usage limit: stop launching, mark in-flight runs Invalid, no replacement during the limit, print what remains
+O5="$SB/b5"; R5="$O5/runs/claude-opus-5-5"; mkdir -p "$O5"
+printf '{"NM1-1@claude-opus-5-5": "limit", "NM2-1@claude-opus-5-5": "slow"}\n' > "$O5/stub_control.json"
+PARALLEL=2 ONLY="NM1 NM2 NM3" MODELS="claude-opus-5-5" REPS=1 bash "$V" --dry-run "$O5" > "$SB/b5-1.log" 2>&1; rc5=$?
+expect "limit: no new run is launched after the limit signal (NM3 never starts)" '[[ ! -d "$R5/NM3-1" ]] && grep -q "USAGE LIMIT" "$SB/b5-1.log"'
+expect "limit: a run still in flight when the limit hit is marked Invalid" '[[ "$(meta "$R5/NM2-1" invalidated_by_limit)" == True ]]'
+expect "limit: no replacement is spent while the limit is active" '[[ ! -d "$R5/NM1-1-r" && ! -d "$R5/NM2-1-r" ]]'
+expect "limit: exactly what remains is printed (NM3-1 to run; NM1-1 and NM2-1 to replace; 115-2 in the full plan)" 'grep -q "remaining base runs in this batch'"'"'s selection: 1: claude-opus-5-5 NM3-1$" "$SB/b5-1.log" && grep -q "remaining base runs in the full approved plan: 113:" "$SB/b5-1.log" && grep -q "replacements due: claude-opus-5-5 NM1-1, claude-opus-5-5 NM2-1$" "$SB/b5-1.log"'
+# 5e the next batch runs what remains, then the due replacements (one each, D8)
+printf '{}\n' > "$O5/stub_control.json"
+PARALLEL=2 ONLY="NM1 NM2 NM3" MODELS="claude-opus-5-5" REPS=1 bash "$V" --dry-run "$O5" > "$SB/b5-2.log" 2>&1
+expect "next batch: the remaining run and both replacements run once; originals are marked replaced_by" '[[ -f "$R5/NM3-1/done.json" && -f "$R5/NM1-1-r/done.json" && -f "$R5/NM2-1-r/done.json" && "$(meta "$R5/NM1-1" replaced_by)" == NM1-1-r && ! -d "$R5/NM1-1-r-r" ]]'
+# 5i a later batch never runs a finished replacement again, even when the replacement itself was Invalid
+printf '{"NM3-1@claude-opus-5-5": "apierror_always"}\n' > "$O5/stub_control.json"
+mv "$R5/NM3-1" "$SB/NM3-1.bak"   # make NM3 run again in this batch, failing, then its replacement failing too
+PARALLEL=2 ONLY="NM1 NM2 NM3" MODELS="claude-opus-5-5" REPS=1 bash "$V" --dry-run "$O5" > "$SB/b5-3.log" 2>&1
+PARALLEL=2 ONLY="NM1 NM2 NM3" MODELS="claude-opus-5-5" REPS=1 bash "$V" --dry-run "$O5" > "$SB/b5-4.log" 2>&1
+expect "a later batch does not run any replacement again (one per run, D8), even a failed one" '[[ $(wc -l < "$R5/NM3-1-r/stub_calls.jsonl") -eq 1 && $(wc -l < "$R5/NM1-1-r/stub_calls.jsonl") -eq 1 ]] && ! ls "$O5"/aborted/claude-opus-5-5/NM3-1-r.* >/dev/null 2>&1 && grep -q "replacements due: none" "$SB/b5-4.log"'
+# 5f parallelism: live default 1, at most 2 (fake claude first on PATH: no model can be reached)
+cp -a "$REPO" "$SB/repo-live" && git -C "$SB/repo-live" add -A && git -C "$SB/repo-live" -c user.email=t@t -c user.name=t commit -qm "snapshot for the test" --allow-empty
+PATH="$SB/fakebin:$PATH" PARALLEL=3 ONLY="NM1" MODELS="claude-opus-5-5" REPS=1 bash "$SB/repo-live/tests/p1b_validation.sh" "$SB/b6" > "$SB/b6.log" 2>&1; rc6=$?
+expect "live mode refuses PARALLEL above 2" '[[ $rc6 -eq 2 ]] && grep -q "refusing: PARALLEL" "$SB/b6.log" && [[ ! -e "$SB/b6/manifest.json" ]]'
+rm -f "$SB/FAKE_CLAUDE_CALLED"
+PATH="$SB/fakebin:$PATH" ONLY="NM1" MODELS="claude-opus-5-5" REPS=1 bash "$SB/repo-live/tests/p1b_validation.sh" "$SB/b7" > "$SB/b7.log" 2>&1
+expect "live mode defaults to PARALLEL=1 (and used the fake claude, not a real one)" 'grep -q "parallel 1" "$SB/b7.log" && [[ -e "$SB/FAKE_CLAUDE_CALLED" ]]'
+# 5g real ~/.claude fingerprint per batch; a P0-style reinstall is labelled as such, other changes are not
+mkdir -p "$SB/realhome/.claude"; echo "# my own global notes" > "$SB/realhome/.claude/CLAUDE.md"
+O8="$SB/b8"
+HOME="$SB/realhome" ONLY="NM1" MODELS="claude-opus-5-5" REPS=1 bash "$V" --dry-run "$O8" > /dev/null 2>&1
+HOME="$SB/realhome" bash "$REPO/scripts/install.sh" > /dev/null 2>&1      # what the P0 hook does on a session restart
+HOME="$SB/realhome" ONLY="NM2" MODELS="claude-opus-5-5" REPS=1 bash "$V" --dry-run "$O8" > /dev/null 2>&1
+echo "something else" > "$SB/realhome/.claude/skills/skill-router/EXTRA.md"
+HOME="$SB/realhome" ONLY="NM3" MODELS="claude-opus-5-5" REPS=1 bash "$V" --dry-run "$O8" > "$SB/b8-3.log" 2>&1
+fp="$(py "$O8" <<'PY' 2>&1
+import json, sys
+b = json.load(open(sys.argv[1] + "/manifest.json"))["batches"]
+notes = [x.get("fingerprint_note") for x in b]
+ok = (len(b) == 3 and all(x.get("real_claude_before") and x.get("real_claude_after") for x in b)
+      and notes[0] == "unchanged" and notes[1].startswith("changed before this batch: P0 reinstall")
+      and notes[2].startswith("changed before this batch: NOT a P0 reinstall"))
+print("ok" if ok else f"notes {notes}")
+PY
+)"
+expect "fingerprint before/after every batch; a P0 reinstall between batches is labelled, any other change is flagged" '[[ "$fp" == ok ]] || { echo "      got: $fp" >&2; false; }'
+# 5h report: a run invalidated by the limit counts as Invalid even if its own turns passed
+inv="$(py "$HERE" "$SB/syn2" <<'PY' 2>&1
+import importlib.util, json, os, sys
+here, base = sys.argv[1:3]
+spec = importlib.util.spec_from_file_location("rep", here + "/p1b_report.py"); R = importlib.util.module_from_spec(spec); spec.loader.exec_module(R)
+d = os.path.join(base, "runs", "claude-opus-5-5", "NM2-1"); os.makedirs(d)
+json.dump({"id": "NM2-1", "scenario": "NM2", "rep": 1, "model": "claude-opus-5-5", "invalidated_by_limit": True}, open(d + "/meta.json", "w"))
+json.dump([{"id": "NM2-1", "turns": [{"verdict": "Passed", "checks": [], "info": {"models": ["claude-opus-5-5"]}}]}], open(d + "/analysis.json", "w"))
+rep = R.build(base, json.load(open(here + "/p1b_scenarios.json")))
+v = rep["scenarios"]["claude-opus-5-5"]["NM2"]["verdicts"]
+print("ok" if v["Invalid"] == 1 and v["Passed"] == 0 else f"verdicts {v}")
+PY
+)"
+expect "report: a run invalidated by the limit is Invalid" '[[ "$inv" == ok ]] || { echo "      got: $inv" >&2; false; }'
 
 echo
 echo "P1b validation tests: $PASS passed, $FAIL failed"

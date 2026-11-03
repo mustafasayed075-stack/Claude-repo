@@ -73,7 +73,9 @@ def load_runs(base):
             except (OSError, ValueError):
                 continue
             turns = ana[0]["turns"] if ana else []
-            runs.append({"model": model, "name": name, "meta": meta, "turns": turns, "verdict": run_verdict(turns)})
+            # a run still in flight when a usage limit hit is Invalid, whatever its own turns show
+            verdict = "Invalid" if meta.get("invalidated_by_limit") else run_verdict(turns)
+            runs.append({"model": model, "name": name, "meta": meta, "turns": turns, "verdict": verdict})
     return runs
 
 
@@ -266,12 +268,30 @@ def render(rep):
     return "\n".join(L)
 
 
+def batches_section(out):
+    L = []
+    try:
+        m = json.load(open(os.path.join(out, "manifest.json")))
+        rem = json.load(open(os.path.join(out, "remaining.json")))
+    except (OSError, ValueError):
+        return L
+    L += ["## Batches", "", f"Commit {m['commit']}; dry run: {m['dry_run']}", "",
+          "| Batch | Selection | Parallel | Real ~/.claude | Usage limit |", "|---|---|---|---|---|"]
+    for b in m.get("batches", []):
+        lim = b.get("limit_hit")
+        L.append(f"| {b['n']} | {b.get('only') or 'all scenarios'} / {b.get('models') or 'all models'} | {b.get('parallel')} | "
+                 f"{b.get('fingerprint_note')} | {('hit by ' + lim['run']) if lim else 'none'} |")
+    L += ["", f"Remaining base runs: {len(rem['base'])}; replacements due: {len(rem['replacements_due'])}", ""]
+    return L
+
+
 def main():
     out = sys.argv[1]
     sc = json.load(open(os.path.join(out, "scenarios.json")))
     rep = build(out, sc)
     json.dump(rep, open(os.path.join(out, "report.json"), "w"), indent=2)
     print(render(rep))
+    print("\n".join(batches_section(out)))
 
 
 if __name__ == "__main__":
