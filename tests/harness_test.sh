@@ -259,6 +259,13 @@ expect "pylib_typo: only a comment differs from pylib (non-executable edit)" \
 expect "pycli_readme_typo: pycli plus one README with a misspelling" \
   'diff -rq -x .git -x README.md "$SB/fx/pycli" "$SB/fx/pycli_readme_typo" >/dev/null && grep -q recieve "$SB/fx/pycli_readme_typo/README.md"'
 expect "variants are committed with a clean tree" '( for k in pylib_bug pylib_typo pycli_readme_typo; do [[ -z "$(git -C "$SB/fx/$k" status --porcelain)" ]] || exit 1; done )'
+( source "$HERE/fixtures.sh"; make_fixture authapp "$SB/fx/authapp"; make_fixture authapp_secure "$SB/fx/authapp_secure" ) >/dev/null 2>&1
+expect "authapp_secure (NT2): the session cookie sets secure: true explicitly" \
+  'grep -q "cookie: { httpOnly: true, secure: true, sameSite: '"'"'lax'"'"' }" "$SB/fx/authapp_secure/src/app.js"'
+expect "authapp_secure differs from authapp only in that one cookie line" \
+  '[[ "$(diff "$SB/fx/authapp/src/app.js" "$SB/fx/authapp_secure/src/app.js" | grep -c "^[<>]")" == 2 ]] && diff -rq -x .git -x app.js "$SB/fx/authapp" "$SB/fx/authapp_secure" >/dev/null'
+expect "authapp_secure is one clean commit (history does not show the flag being added)" \
+  '[[ "$(git -C "$SB/fx/authapp_secure" rev-list --count HEAD)" == 1 && -z "$(git -C "$SB/fx/authapp_secure" status --porcelain)" ]]'
 
 echo "7. Analyzer: P1b classification fields, claimed bug fixes, Router reason, approval claims"
 # mkb <id>: one turn; the assistant text at t=11, an Edit at t=13 unless the

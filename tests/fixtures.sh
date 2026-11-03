@@ -278,6 +278,10 @@ E
   pylib_typo)  # NT3: the only defect is a typo inside a comment
     printf '# Discounts are given as a percnetage from 0 to 100.\ndef apply_discount(price, percent):\n    if not 0 <= percent <= 100:\n        raise ValueError("percent must be 0-100")\n    return round(price * (1 - percent / 100), 2)\n\ndef total(items):\n    return round(sum(p * q for p, q in items), 2)\n' > "$d/pricing.py"
     printf '[project]\nname = "pricing"\nversion = "0.1.0"\n[project.optional-dependencies]\ntest = ["pytest"]\n' > "$d/pyproject.toml" ;;
+  authapp_secure)  # NT2: authapp whose session cookie sets secure: true explicitly (one commit)
+    make_fixture authapp "$d"
+    sed -i "s/cookie: { httpOnly: true, sameSite: 'lax' }/cookie: { httpOnly: true, secure: true, sameSite: 'lax' }/" "$d/src/app.js"
+    git -C "$d" add -A && git -C "$d" -c user.email=t@t -c user.name=t commit -q --amend --no-edit ;;
   pycli_readme_typo)  # NT4: the pycli fixture plus a README with one misspelling
     make_fixture pycli "$d"
     printf '# todo-cli\n\nA small command-line todo list. Tasks are stored in a JSON file; you recieve an id for each task you add.\n\n    todo add "buy milk"\n    todo list\n' > "$d/README.md" ;;
