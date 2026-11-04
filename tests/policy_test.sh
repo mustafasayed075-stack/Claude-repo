@@ -63,7 +63,7 @@ expect "re-invocation is conditional on content being out of context (e.g. after
 expect "no unconditional re-invocation rule" '! q "$(cat "$STD" "$RT" "$GL")" -qiE "always (re-?invoke|invoke .?skill-router.? again)"'
 
 echo "8. Approved P1 corrections (explicit tier, uncertainty, dependencies, planning independence)"
-expect "an explicit 'Risk: Low|Medium|High' line is required before the first modification" 'q "$OWN" -qF "Risk: Low|Medium|High" && q "$FLAT" -qiE "Risk: Low\|Medium\|High.{0,160}before the first modification|before the first modification.{0,200}Risk: Low\|Medium\|High"'
+expect "the tier (Low|Medium|High) is stated before the first modification" 'q "$OWN" -qF "Risk: Low|Medium|High" && q "$FLAT" -qiE "Risk: Low\|Medium\|High.{0,160}before the first modification|before the first modification.{0,200}Risk: Low\|Medium\|High"'
 expect "uncertain Low vs Medium: Medium" 'q "$FLAT" -qiE "uncertain between Low and Medium.{0,40}Medium"'
 expect "uncertain Medium vs High: check the High triggers" 'q "$FLAT" -qiE "uncertain between Medium and High.{0,120}(High trigger|triggers)"'
 expect "additive options and query parameters are Medium" 'q "$FLAT" -qiE "Medium.{0,400}additive" && q "$FLAT" -qiE "query parameter" && q "$FLAT" -qiE "CLI option"'
@@ -72,7 +72,7 @@ expect "a new runtime dependency is Medium by default, High only on an explicit 
 expect "architecture-planning is independent of the risk tier" 'q "$FLAT" -qiE "independent of the (risk )?tier"'
 expect "planning trigger is a meaningful architectural dependency, not any dependency" 'q "$FLAT" -qiE "meaningful architectural dependency" && ! grep -qiE "new runtime dependency" "$RT" "$AP"'
 expect "High: complete plan, then explicit approval before any modification" 'q "$FLAT" -qiE "complete plan" && q "$FLAT" -qiE "explicit approval"'
-expect "global refers to the explicit Risk line without redefining tiers" 'grep -qF "Risk:" "$GL" && ! grep -qiE "additive|query parameter|runtime dependency" "$GL"'
+expect "global mentions the Risk line and adds no Medium/Low wording of its own (no additive, query parameter, runtime dependency)" 'grep -qF "Risk:" "$GL" && ! grep -qiE "additive|query parameter|runtime dependency" "$GL"'
 
 echo "9. P1b: classification by change kind, routing exemption, High planning, approval source"
 # Uses the captured texts above (no pipes into grep -q).
@@ -82,7 +82,7 @@ TBL="$(awk '/^\| Situation/{f=1;next} f&&/^\|---/{next} f&&/^\|/{print} f&&!/^\|
 m() { grep -qiE -- "$2" <<< "$1"; }   # m <text> <ERE>, case-insensitive
 mF() { grep -qF -- "$2" <<< "$1"; }   # mF <text> <fixed string>
 # Classification procedure (owner section)
-expect "classification happens in engineering-standards, not in the Router line" 'm "$FLAT" "not in the Router line"'
+expect "D7: the classification is the Router line's risk field (engineering-standards says so)" 'm "$FLAT" "classify in the Router line" && ! m "$FLAT" "not in the Router line"'
 expect "the Risk line names the High trigger and the change kind (new|restores|preserves)" 'mF "$OWN" "high trigger: <none|" && mF "$OWN" "change: <new|restores|preserves>"'
 expect "a new capability or intentional contract change is Medium" 'm "$FLAT" "(new capability|intentional(ly)? (contract )?chang)[^.]{0,160}\bMedium\b"'
 expect "restoring the established contract is Low and must name its evidence" 'm "$FLAT" "restor[^.]{0,200}\bLow\b" && m "$FLAT" "restor[^.]{0,200}only with (named )?evidence"'
@@ -98,8 +98,8 @@ expect "the Risk line records the classification, never an approval" 'm "$FLAT" 
 expect "High loads architecture-planning before its plan" 'm "$FLAT" "High[^.]{0,200}load\w* .?architecture-planning"'
 expect "every High change requires architecture-planning (standards, router, planning, global)" 'm "$FSTD" "every High change" && m "$FRT" "every High change" && m "$FAP" "every High change" && m "$FGL" "every High change"'
 expect "guard: architectural impact still requires planning independent of the tier" 'm "$FLAT" "independent of the (risk )?tier"'
-expect "router table does not route on a tier it has not decided (no 'High risk' row)" '! m "$TBL" "high risk"'
-expect "router: a High classification in engineering-standards loads architecture-planning" 'm "$FRT" "High classification[^.|]{0,120}architecture-planning"'
+expect "D7: the router table routes High on the stated risk field (risk: High loads architecture-planning first)" 'm "$(head -1 <<< "$TBL")" "risk: High[^|]{0,120}\|[^|]*architecture-planning"'
+expect "guard: the table has no free-standing 'High risk' row (the tier comes only from the risk field)" '! m "$TBL" "high risk"'
 expect "Router reason carries no risk or size verdict" 'm "$FRT" "never its risk, size"'
 # Routing exemption
 expect "global and router exempt only edits that cannot execute" 'm "$FGL" "cannot execute" && m "$FRT" "cannot execute"'
@@ -122,6 +122,24 @@ expect "Router rule allows task words (high score, risk scoring)" 'm "$FRT" "tas
 expect "the old bare-word ban is gone" '! m "$FRT" "no low, medium, high, small"'
 expect "guard: the Router reason still may not state the risk tier" 'm "$FRT" "never its risk, size"'
 
+echo "11. D7 (option b): the tier in the Router line"
+# The tier test in global/CLAUDE.md uses only engineering-standards wording: each High-trigger
+# phrase appears verbatim in both files.
+D7HIGH=("database schema changes and migrations" "core architecture changes" \
+  "authentication, authorization, permissions, crypto, secrets or other security controls" \
+  "API, CLI, event or data-contract changes that can break compatibility" \
+  "moving, deleting or transforming data in ways that are hard to undo" \
+  "infrastructure changes that can cause downtime or data loss" "destructive git" \
+  "deploy, publish, send, or anything that costs money" "requirements that conflict or are too unclear to choose a safe design")
+expect "global's High test lists every engineering-standards High trigger, in its exact words" '( for p in "${D7HIGH[@]}"; do mF "$FGL" "$p" && mF "$FSTD" "$p" || exit 1; done )'
+expect "global's Medium and Low wording is engineering-standards wording" 'mF "$FGL" "new or changed behavior" && mF "$FSTD" "new or changed behavior" && mF "$FGL" "restore the established contract" && mF "$FSTD" "restore the established contract" && mF "$FGL" "behavior-preserving internal refactors" && mF "$FSTD" "behavior-preserving internal refactors"'
+expect "global step 1: the Router line carries the risk tier" 'm "$FGL" "Router:.{0,80}decision[^.]{0,120}risk"'
+expect "Medium: Plan (Medium) in the same response as the Router line, before any tool call other than loading skills" 'm "$FLAT" "Plan \(Medium\):[^.]{0,80}same response as the Router line[^.]{0,120}other than loading skills" && m "$FRT" "Medium[^.]{0,80}Plan \(Medium\):[^.]{0,80}same response" && m "$FGL" "Plan \(Medium\):[^.]{0,60}same response as the Router line"'
+expect "re-check after reading the code: a higher tier is written as a Risk line before the first modification" 'm "$FLAT" "tier rises[^.]{0,200}Risk:" && m "$FLAT" "lower tier needs a stated reason"'
+expect "router: the risk field is answered with the two questions defined in engineering-standards" 'm "$FRT" "risk:[^.]{0,200}(two questions|High trigger)[^.]{0,200}engineering-standards"'
+expect "planning Step 0 uses the Router line's risk field" 'm "$FAP" "Step 0[^#]{0,300}Router line.{0,3}s .?risk:"'
+expect "guard: High still stops for explicit approval; approval is the user's own message" 'm "$FLAT" "High loads .?architecture-planning.?, writes its complete plan and stops for explicit approval" && m "$FGL" "nothing you write counts as approval"'
+
 echo "7. Hygiene"
 for f in "$STD" "$RT" "$AP"; do
   n=$(basename "$(dirname "$f")")
@@ -134,7 +152,7 @@ sys.exit(0 if name == sys.argv[2] and len(desc) <= 1024 else 1)
 PY
 )'
 done
-expect "Router line format unchanged" 'grep -qF "Router: <project type> | <task type> | skills: <list or none> - <reason" "$RT"'
+expect "D7: Router line format carries the risk field before skills" 'grep -qF "Router: <project type> | <task type> | risk: <Low|Medium|High> (<High trigger or none>; <new|restores|preserves>) | skills: <list or none> - <reason" "$RT"'
 expect "High approval rules still present" 'has "$STD" "approves the goal, not the" && has "$STD" "Plan conformance: followed approved plan"'
 
 echo

@@ -16,9 +16,10 @@ Its plan replaces that section's short `Plan (Medium):`; other Low and
 Medium work does not need this skill.
 
 ## Step 0 - Classify risk (mandatory)
-If the `Risk:` line was already written in this turn, use it. Otherwise,
-before designing, write it now as engineering-standards' "Risk, scope and
-planning" section defines it (High trigger, change kind, tier). Re-check the
+Use the tier in the Router line's `risk:` field. If a later `Risk:` line was
+already written in this turn (a re-check), use that one. If neither exists,
+before designing, write the `Risk:` line now as engineering-standards' "Risk,
+scope and planning" section defines it (High trigger, change kind, tier). Re-check the
 classification after Step 2; if anything you found raises the tier, write
 the new `Risk:` line. If anything you found is High, the plan is High.
 

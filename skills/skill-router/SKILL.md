@@ -10,19 +10,30 @@ A quick decision, not a process. Do exactly this:
 1. **Look** at the file listing (root and one level down) and the main
    manifest (package.json, pyproject.toml, pubspec.yaml, ...). Do not read
    source files to route; that belongs to the task itself.
-2. **Decide** project type, task type, and skills using the tables below.
+2. **Decide** project type, task type, the risk tier, and skills using the
+   tables below.
 3. **Write one line of text**, then act on it. Write it in the same
    response as your next tool call (text first), whatever that call is: loading
    a skill, reading a file, or running a command. Never skip it because you
    are about to call a tool:
 
-   `Router: <project type> | <task type> | skills: <list or none> - <reason, max ~12 words>`
+   `Router: <project type> | <task type> | risk: <Low|Medium|High> (<High trigger or none>; <new|restores|preserves>) | skills: <list or none> - <reason, max ~12 words>`
+
+   The risk: field is the classification: answer it with the two questions
+   of engineering-standards ("Risk, scope and planning"): does a High
+   trigger apply (name it, or write none), and what kind of change is it;
+   the tier test in your global instructions lists those triggers in
+   engineering-standards' words. For a fix that restores the established
+   contract write `restores (evidence: <where>)`. When uncertain between Low
+   and Medium, write Medium.
 
    The reason says what the task is, never its risk, size or difficulty: no
    risk or size verdict about the task (for example 'low-risk', 'small
    change' or 'trivial fix'); task words such as 'high score' or 'risk
-   scoring' are fine. The risk tier is classified later, in
-   engineering-standards.
+   scoring' are fine.
+
+   When the tier is Medium, write `Plan (Medium):` (engineering-standards)
+   in this same response, before any tool call other than loading skills.
 
 Then load the chosen skills and do the task. No other routing report.
 
@@ -59,15 +70,15 @@ Several types can match (e.g. AI + Backend); list them all.
 
 Risk tiers, scope and when `architecture-planning` is needed are defined in
 engineering-standards, section "Risk, scope and planning". Route by those
-definitions, not by file count, and do not decide the tier here: it is
-stated with the `Risk:` line before the first modification.
+definitions, not by file count. The tier is the one you state in the risk:
+field of the Router line; a re-check after reading the code can raise it.
 
 | Situation (first matching row wins) | Load |
 |---|---|
-| Architectural impact visible in the request, as defined there | `architecture-planning`, then `engineering-standards` - both before any edit |
+| risk: High (every High change needs it), or architectural impact visible in the request, as defined there | `architecture-planning`, then `engineering-standards` - both before any edit |
 | Architecture, or a "build X" request in an empty repo | `architecture-planning` |
 | Release | `engineering-standards` (Definition of Done) |
-| Any other change, any task type | `engineering-standards`; a High classification there loads `architecture-planning` before the plan (every High change needs it) |
+| Any other change, any task type | `engineering-standards` |
 
 Optional built-ins, only when they clearly add value:
 - `run` - to reproduce or verify runtime/UI behavior.

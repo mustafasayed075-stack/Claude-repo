@@ -15,13 +15,13 @@ established pattern, follow it over anything here.
 This section is the single source of truth for risk classification, scope,
 planning, shell writes and continuation. Other skills refer to it.
 
-**Classify first.** Classify here, after loading this skill, not in the
-Router line. Before the first modification of the working tree in a turn, by
-any tool, write one line:
+**Classify first.** Classify in the Router line, the line skill-router has
+you write before loading any other skill. Before the first modification of
+the working tree in a turn, by any tool, that line states the tier:
 
-`Risk: Low|Medium|High - high trigger: <none|trigger>; change: <new|restores|preserves>; <reason>`
+`Router: <project type> | <task type> | risk: Low|Medium|High (<High trigger or none>; <new|restores|preserves>) | skills: <list or none> - <reason>`
 
-Fill it in by answering two questions, in this order:
+Fill the risk field in by answering two questions, in this order:
 1. **High trigger.** Does any High trigger in the tiers below apply? Name
    it, or write `none`. A named trigger means High, whatever the change kind.
 2. **Change kind.** What does the change do to behavior that a user, caller,
@@ -45,16 +45,27 @@ Fill it in by answering two questions, in this order:
 When uncertain whether a change restores the contract or is new, treat it
 as `new` (Medium).
 
+**Re-check after reading the code.** If what you find means the tier rises
+(or the change kind differs), write the new classification before the first
+modification, as one line, and act on it:
+
+`Risk: Low|Medium|High - high trigger: <none|trigger>; change: <new|restores|preserves>; <reason>`
+
+A lower tier needs a stated reason in that line.
+
 Low needs nothing more, unless architectural impact requires
-`architecture-planning` (below), which applies at any tier. Medium adds the
-short plan below. High loads
+`architecture-planning` (below), which applies at any tier. Medium writes
+`Plan (Medium):` (below) in the same response as the Router line, before any
+tool call other than loading skills, and updates it before the first
+modification if reading the code changes the scope. High loads
 `architecture-planning`, writes its complete plan and stops for explicit
 approval before any modification. This is an instruction, not a mechanical
-check: nothing blocks an edit if the line is missing or wrong. Write the line
-again in each turn that modifies files, including the turn after a High plan
-is approved. The Risk line records the classification, never an approval.
+check: nothing blocks an edit if the line is missing or wrong. Classify again
+in each turn that modifies files, including the turn after a High plan is
+approved. The Router line's risk field and any Risk line: each records the
+classification, never an approval.
 
-**Exempt.** Only non-executable edits skip the Risk line and routing: those
+**Exempt.** Only non-executable edits skip routing and classification: those
 defined in skill-router's "No skill needed" (comments, documentation and
 prose, whitespace the toolchain ignores). Every other change is classified,
 whatever its size and even if the user dictated it.
@@ -116,8 +127,9 @@ decides design scope. Automatically deleting old records is High without
 being architectural; splitting a module behind an unchanged interface is
 architectural without being High. Its plan replaces the short Medium plan.
 
-**Medium plan.** After the Risk line and before the first modification of
-the working tree, by any tool, write:
+**Medium plan.** In the same response as the Router line, before any tool
+call other than loading skills, and so before the first modification of the
+working tree by any tool, write:
 
 ```
 Plan (Medium): <goal in one line>
