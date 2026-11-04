@@ -26,7 +26,12 @@ import os
 import re
 import sys
 
-ROUTER_LINE = re.compile(r"Router:\s*[^|\n]+\|[^|\n]+\|\s*skills:", re.I)
+# Router line, with or without the D7 risk field between task type and skills:
+#   Router: <type> | <task> | skills: ... - <reason>
+#   Router: <type> | <task> | risk: <tier> (<trigger or none>; <change kind>) | skills: ... - <reason>
+ROUTER_LINE = re.compile(r"Router:\s*[^|\n]+\|[^|\n]+\|(?:\s*risk\s*:[^|\n]*\|)?\s*skills:", re.I)
+ROUTER_RISK = re.compile(r"Router:[^\n]*?\|\s*risk\s*:\s*(Low|Medium|High)\b\s*\((.*?)\)\s*\|\s*skills:", re.I)
+ROUTER_RISK_INNER = re.compile(r"^\s*(.*?)\s*;\s*(new|restores|preserves)\b(?:\s*\(\s*evidence\s*:\s*([^)]*)\))?", re.I)
 LIMIT = re.compile(r"hit your .{0,20}limit|usage limit", re.I)
 OURS = ("skill-router", "engineering-standards", "architecture-planning")
 # Explicit classification line, e.g. "Risk: Medium" or "**Risk:** High - ..."
@@ -38,7 +43,7 @@ RISK_CHANGE = re.compile(r"\bchange\W{0,3}:\s*\W{0,2}(new|restores|preserves)\b"
 RISK_EVIDENCE = re.compile(r"restores\W{0,2}\s*\(\s*evidence\s*:\s*([^)\n]*)\)", re.I)
 NO_TRIGGER = re.compile(r"^\W*(none|n/?a|no)\W*$", re.I)
 # Router reason: the text after " - " that follows "skills: ...".
-ROUTER_REASON = re.compile(r"Router:\s*[^|\n]+\|[^|\n]+\|\s*skills:[^\n]*?\s[-–—]\s+([^\n]+)", re.I)
+ROUTER_REASON = re.compile(r"Router:\s*[^|\n]+\|[^|\n]+\|(?:\s*risk\s*:[^|\n]*\|)?\s*skills:[^\n]*?\s[-–—]\s+([^\n]+)", re.I)
 # A risk or size verdict about the task (skill-router: "no risk or size
 # verdict about the task"). Task words such as "high score", "risk scoring"
 # or "minor version" are not verdicts.
@@ -232,6 +237,7 @@ def analyse_turn(meta, turn, entries, events, driver, started=None, result=None)
     first_assistant = start + assistant[0] if assistant else end
     names, raw = listing_names(entries, first_assistant)
     texts, skills, tools, models, timed_texts = [], [], [], set(), []
+    order = []  # ("text", text) / ("tool", name), in transcript order
     for e in seg:
         if e.get("type") != "assistant":
             continue
@@ -240,10 +246,22 @@ def analyse_turn(meta, turn, entries, events, driver, started=None, result=None)
             if c.get("type") == "text":
                 texts.append(c["text"])
                 timed_texts.append((epoch(e.get("timestamp", "")) or 0, c["text"]))
+                order.append(("text", c["text"]))
             elif c.get("type") == "tool_use":
                 tools.append(c["name"])
+                order.append(("tool", c["name"]))
                 if c["name"] == "Skill":
                     skills.append(str(c["input"].get("skill", "")).split(":")[-1])
+    # Medium plan written with the Router line: before any tool call other than loading skills
+    plan_with_router, seen_router = False, False
+    for kind, val in order:
+        if kind == "tool" and val != "Skill":
+            break
+        if kind == "text":
+            seen_router = seen_router or bool(ROUTER_LINE.search(val))
+            if seen_router and STRICT_PLAN.search(val):
+                plan_with_router = True
+                break
     hook_ctx = "\n".join(json.dumps(e.get("attachment")) for e in entries
                          if str((e.get("attachment") or {}).get("hookName", "")).startswith("SessionStart"))
     joined = "\n".join(texts)
@@ -266,9 +284,27 @@ def analyse_turn(meta, turn, entries, events, driver, started=None, result=None)
     plan_ts = next((ts for ts, t in timed_texts if PLAN.search(t)), None)
     strict_plan_ts = next((ts for ts, t in timed_texts if STRICT_PLAN.search(t)), None)
     plan_fields = [bool(any(f.search(t) for t in texts)) for f in PLAN_FIELDS]
-    risk_hit = next(((ts, RISK_LINE.search(t).group(1).capitalize()) for ts, t in timed_texts if RISK_LINE.search(t)), None)
-    risk_line = next((t[RISK_LINE.search(t).start():].split("\n", 1)[0] for _, t in timed_texts if RISK_LINE.search(t)), "")
-    rf = risk_fields(risk_line)
+    # Classification events, in order: the Router-line risk field (D7) and Risk lines (P1b).
+    # The earliest one is the classification "before the first modification"; the stated tier and
+    # fields are the last one before the first modification (a re-check after reading code can
+    # raise the Router tier), or the first one when none came before it.
+    cls = []
+    for n, (ts, t) in enumerate(timed_texts):
+        for m in ROUTER_RISK.finditer(t):
+            inner = ROUTER_RISK_INNER.match(m.group(2))
+            cls.append((ts, n, m.start(), m.group(1).capitalize(),
+                        {"trigger": inner.group(1).strip() if inner else None,
+                         "change": inner.group(2).lower() if inner else None,
+                         "evidence": inner.group(3).strip() if inner and inner.group(3) else None}, "router"))
+        for m in RISK_LINE.finditer(t):
+            line = t[m.start():].split("\n", 1)[0]
+            cls.append((ts, n, m.start(), m.group(1).capitalize(), risk_fields(line), "risk_line"))
+    cls.sort(key=lambda c: (c[0], c[1], c[2]))
+    pre = [c for c in cls if first_mod is None or c[0] <= first_mod["ts"]]
+    chosen = pre[-1] if pre else (cls[0] if cls else None)
+    risk_hit = (cls[0][0], chosen[3]) if cls else None
+    rf = chosen[4] if chosen else risk_fields("")
+    router_cls = next((c for c in cls if c[5] == "router"), None)
     label_only = rf["change"] == "restores" and evidence_label_only(rf["evidence"])
     reason_m = ROUTER_REASON.search(joined)
     router_reason = reason_m.group(1).strip() if reason_m else None
@@ -296,6 +332,10 @@ def analyse_turn(meta, turn, entries, events, driver, started=None, result=None)
                    "complete_plan_fields": plan_fields,
                    "plan_conformance_line": bool(any(CONFORMANCE.search(t) for t in texts)),
                    "risk_stated": risk_hit[1] if risk_hit else None,
+                   "risk_source": chosen[5] if chosen else None,
+                   "router_risk_field": router_cls is not None,
+                   "router_tier": router_cls[3] if router_cls else None,
+                   "plan_with_router": plan_with_router,
                    "risk_trigger": rf["trigger"], "risk_change": rf["change"], "risk_evidence": rf["evidence"],
                    "restores_evidence_label_only": label_only,
                    "router_reason": router_reason,

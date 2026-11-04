@@ -60,7 +60,8 @@ elif [[ -e "$OUT" ]] && [[ -n "$(ls -A "$OUT" | grep -v '^stub_control\.json$')"
   echo "refusing: $OUT is not empty and holds no earlier batch" >&2; exit 2
 fi
 mkdir -p "$OUT" || exit 1; OUT="$(cd "$OUT" && pwd -P)"
-SC="$HERE/p1b_scenarios.json"
+SC="${SCENARIOS:-$HERE/p1b_scenarios.json}"   # SCENARIOS=tests/d7_scenarios.json selects the D7 set
+SC="$(cd "$(dirname "$SC")" && pwd)/$(basename "$SC")"
 source "$HERE/harness/sandbox.sh"
 source "$HERE/fixtures.sh"
 
@@ -116,7 +117,7 @@ if [[ $RESUME -eq 0 ]]; then
   git -C "$REPO" archive HEAD skills global scripts | tar -x -C "$SRC" || { echo "git archive failed" >&2; exit 1; }
   cp "$SC" "$OUT/scenarios.json"
 fi
-cmp -s "$SC" "$OUT/scenarios.json" || { echo "refusing: tests/p1b_scenarios.json differs from the earlier batches" >&2; exit 2; }
+cmp -s "$SC" "$OUT/scenarios.json" || { echo "refusing: the scenario file $SC differs from the one of the earlier batches" >&2; exit 2; }
 rm -f "$LIMIT"
 FP_BEFORE="$(fingerprint)"
 python3 -B - "$OUT" "$COMMIT" "$DRY" "$CLAUDE_BIN" "$FP_BEFORE" "${ONLY:-}" "${MODELS:-}" "$PARALLEL" "$(p0_reinstall)" \

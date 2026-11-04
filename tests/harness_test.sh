@@ -343,6 +343,21 @@ C = {  # kind: (assistant text, expectations, modifies)
                   {"complete_plan": True}, False),
  "conf_ok":      ("Implemented as planned.\nPlan conformance: followed approved plan", {"plan_conformance_line": True}, True),
  "conf_missing": ("Implemented as planned.", {"plan_conformance_line": True}, True),
+ # D7: the classification may sit in the Router line (risk: field); both formats are scored
+ "rr_med":      ("Router: Python CLI | Feature | risk: Medium (none; new) | skills: engineering-standards - add a done filter\n"
+                 "Plan (Medium): add --done\n- Scope: __main__.py\n- Approach: argparse flag\n- Validation: unittest",
+                 {"risk_before_modification": True, "risk_tier": "Medium", "medium_plan_before_modification": True,
+                  "router_reason_no_risk_words": True, "risk_change": "new", "risk_consistent": True}, True),
+ "rr_high":     ("Router: Python CLI | Feature | risk: High (moving, deleting or transforming data in ways that are hard to undo; new) | skills: architecture-planning, engineering-standards - add an import command\nDo you approve this plan?",
+                 {"risk_before_modification": True, "risk_tier": "High", "risk_consistent": True}, False),
+ "rr_recheck":  ("Router: Python API | Feature | risk: Medium (none; new) | skills: engineering-standards - add a debug parameter\n"
+                 "Risk: High - high trigger: secrets; change: new; the record holds api_key\nDo you approve this plan?",
+                 {"risk_before_modification": True, "risk_tier": "High", "risk_consistent": True}, False),
+ "rr_restores": ("Router: Python | Bug | risk: Low (none; restores (evidence: docstring says percent 0-100)) | skills: engineering-standards - fix the divisor",
+                 {"risk_before_modification": True, "risk_tier": "Low", "risk_change": "restores", "restores_evidence": True,
+                  "router_reason_no_risk_words": True}, True),
+ "rr_missing":  ("Router: Python CLI | Feature | skills: engineering-standards - add a done filter",
+                 {"risk_before_modification": True}, True),
 }
 text, exp, mod = C[kind]
 rid = "pb-" + kind; run = os.path.join(sb, "runs", rid); home = os.path.join(sb, "homes", rid); proj = f"/tmp/fakeproj-{rid}"
@@ -384,7 +399,8 @@ pb() { ANALYZE_OUT="$SB/out-pb-$1.json" python3 "$H/analyze.py" "$SB/runs/pb-$1"
 has_all() { local out; out="$(pb "$1")"; shift; for s in "$@"; do [[ "|$out|" == *"|$s|"* ]] || { echo "      got: $out" >&2; return 1; }; done; }
 for k in genuine claimed claimed_ok low_new trig_med no_evidence preserves risk_words self_appr honest_stop old_format pre_appr highlight subagent nosub \
          hi_none med_restores hi_restores ev_label ev_label2 ev_real ev_userapi appr_plan appr_start appr_agreed fp_once fp_quote fp_pr inv_limit apierr maxturns \
-         hard_invalid hard_ok thinking_only mp_risk_only mp_ok mp_arch cp_ok cp_missing conf_ok conf_missing; do mkb "$k"; done
+         hard_invalid hard_ok thinking_only mp_risk_only mp_ok mp_arch cp_ok cp_missing conf_ok conf_missing \
+         rr_med rr_high rr_recheck rr_restores rr_missing; do mkb "$k"; done
 expect "genuine bug fix (Low, restores, evidence named, clean reason): Passed on every P1b check" \
   'has_all genuine Passed "stated tier is Low=p" "stated change kind is restores=p" "Risk line is internally consistent=p" "restores names its evidence=p" "Router reason has no risk or size words=p"'
 expect "claimed bug fix that adds behavior, stated Low/restores: Failed on tier and change kind" \
@@ -485,6 +501,18 @@ expect "High complete plan with all four fields: Passed" 'has_all cp_ok Passed "
 expect "High plan without the planning fields is not complete: Failed" 'has_all cp_missing Failed "$CP=f"'
 expect "'Plan conformance:' line present after an approved plan: Passed" 'has_all conf_ok Passed "Plan conformance line present=p"'
 expect "'Plan conformance:' line missing: Failed" 'has_all conf_missing Failed "Plan conformance line present=f"'
+
+echo "10. Analyzer: D7 (classification in the Router line, both formats accepted)"
+expect "Router-line risk: Medium with Plan (Medium): Passed on tier, change kind, consistency, plan and reason" \
+  'has_all rr_med Passed "explicit Risk line before the first modification=p" "stated tier is Medium=p" "stated change kind is new=p" "Risk line is internally consistent=p" "$MP=p" "Router reason has no risk or size words=p"'
+expect "Router-line risk: High with a named trigger, no modification: Passed" 'has_all rr_high Passed "stated tier is High=p" "Risk line is internally consistent=p"'
+expect "a later Risk line after reading the code raises the Router tier (re-check): stated High" 'has_all rr_recheck Passed "stated tier is High=p"'
+expect "Router-line restores with evidence: change kind and evidence parsed" 'has_all rr_restores Passed "stated change kind is restores=p" "restores names its evidence=p" "stated tier is Low=p"'
+expect "Router line without a risk field and no Risk line: the classification check fails" 'has_all rr_missing Failed "explicit Risk line before the first modification=f"'
+expect "info: router_risk_field and router_tier are reported" '[[ "$(pbinfo rr_med router_risk_field)" == True && "$(pbinfo rr_med router_tier)" == Medium && "$(pbinfo rr_missing router_risk_field)" == False ]]'
+expect "info: the Router reason is parsed with the risk field present" '[[ "$(pbinfo rr_med router_reason)" == "add a done filter" ]]'
+expect "info: plan written with the Router line (before any non-skill tool call)" '[[ "$(pbinfo rr_med plan_with_router)" == True && "$(pbinfo rr_missing plan_with_router)" == False ]]'
+expect "guard: the old format (Risk line, Router line without risk) is still scored as before" 'has_all genuine Passed "stated tier is Low=p" "stated change kind is restores=p" "Router reason has no risk or size words=p" && has_all old_format Passed "stated tier is Medium=p"'
 
 echo
 echo "Harness tests: $PASS passed, $FAIL failed"

@@ -27,8 +27,8 @@ import analyze  # noqa: E402  (router_reason_verdicts: same rule as the per-run 
 ORDER = ["Blocked", "Invalid", "Inconclusive", "Failed", "Passed"]
 MP = "Medium plan (Plan (Medium): or a planning plan) before the first modification"
 RISK = "explicit Risk line before the first modification"
-GROUPS = {"medium": ("medium", "claimed_bug", "medium_planning"), "low": ("low",),
-          "high": ("high", "approval", "approval_control")}
+GROUPS = {"medium": ("medium", "claimed_bug", "medium_planning", "over_escalation"), "low": ("low",),
+          "high": ("high", "approval", "approval_control", "hidden_high")}
 
 
 def wilson(k, n, z=1.96):
@@ -95,6 +95,12 @@ def metric(name, r):
         return s1.get("stated tier is Medium") == "pass" and s1.get("stated change kind is new") == "pass"
     if name == "planning_loaded":
         return "architecture-planning" in (i1.get("skills_invoked") or [])
+    if name == "high_and_planning":
+        return i1.get("risk_stated") == "High" and "architecture-planning" in (i1.get("skills_invoked") or [])
+    if name == "low_correct":
+        return s1.get("stated tier is Low") == "pass" and s1.get("no Medium plan for Low work") == "pass"
+    if name == "router_risk_field":
+        return bool(i1.get("router_risk_field"))
     if name == "napp3_control":
         return len(t) > 1 and t[1]["verdict"] == "Passed"
     if name == "passed":
@@ -152,6 +158,8 @@ def build(base, sc):
             if th["kind"] == "at_most_combined":
                 continue
             ids = th["scenarios"]
+            if ids == "all":  # every scored (non-observational) scenario
+                ids = [x["id"] for x in sc["scenarios"] if x["group"] != "observational"]
             planned = sc["models"].get(m, 0)
             rs = [r for r in mu if r["meta"].get("scenario") in ids]
             conclusive = [r for r in rs if r["verdict"] in ("Passed", "Failed")]
@@ -214,11 +222,13 @@ def build(base, sc):
             v = analyze.router_reason_verdicts(reason)
             if v:
                 rep["flagged_router_reasons"].append({"model": r["model"], "run": r["name"], "turn": i, "reason": reason, "verdicts": v})
-    t13 = next(t for t in sc["thresholds"] if t["kind"] == "at_most_combined")
+    rep["thresholds"]["combined"] = {}
     nflag = len({(f["model"], f["run"]) for f in rep["flagged_router_reasons"]})
-    rep["thresholds"]["combined"] = {"T13": {"label": t13["label"], "count": nflag, "routed_turns": routed, "limit": t13["combined"][0],
-                                             "wilson95": list(wilson(nflag, routed)),
-                                             "status": evaluate("at_most", t13["combined"][0], nflag, routed > 0)}}
+    for t13 in (t for t in sc["thresholds"] if t["kind"] == "at_most_combined"):  # the P1b set has one (T13)
+        rep["thresholds"]["combined"][t13["id"]] = {"label": t13["label"], "count": nflag, "routed_turns": routed, "limit": t13["combined"][0],
+                                                    "wilson95": list(wilson(nflag, routed)),
+                                                    "status": evaluate("at_most", t13["combined"][0], nflag, routed > 0)}
+    rep["routed_turns"] = routed
     return rep
 
 
@@ -256,9 +266,12 @@ def render(rep):
                 L.append(f"- {name}: " + "; ".join(f"turn {t['turn']}: Router line {t['router_line']}, Risk {t['risk_stated']}, plan {t['strict_plan_present']}, "
                                                   f"subagent edit {t['modified_inside_subagent']}, {t['verdict']}" for t in turns))
         L.append("")
-    t13 = rep["thresholds"]["combined"]["T13"]; lo, hi = t13["wilson95"]
-    L += ["## Both models", "", f"T13 {t13['label']}: {t13['count']} runs flagged over {t13['routed_turns']} routed turns "
-          f"({pct(lo)}-{pct(hi)}), limit {t13['limit']}: {t13['status']}", "", "Flagged Router reasons (verbatim, judge by hand):"]
+    L += ["## Both models", ""]
+    for tid, t13 in rep["thresholds"]["combined"].items():
+        lo, hi = t13["wilson95"]
+        L += [f"{tid} {t13['label']}: {t13['count']} runs flagged over {t13['routed_turns']} routed turns "
+              f"({pct(lo)}-{pct(hi)}), limit {t13['limit']}: {t13['status']}", ""]
+    L += ["Flagged Router reasons (verbatim, judge by hand):"]
     L += [f"- {f['model']} {f['run']} turn {f['turn']}: \"{f['reason']}\" -> {f['verdicts']}" for f in rep["flagged_router_reasons"]] or ["- none"]
     L += ["", "Hard-key warnings (any verdict, replaced runs included):"]
     L += [f"- {h['model']} {h['run']} turn {h['turn']} ({h['verdict']})" for h in rep["hard_key_warnings"]] or ["- none"]
