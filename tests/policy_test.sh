@@ -140,6 +140,13 @@ expect "router: the risk field is answered with the two questions defined in eng
 expect "planning Step 0 uses the Router line's risk field" 'm "$FAP" "Step 0[^#]{0,300}Router line.{0,3}s .?risk:"'
 expect "guard: High still stops for explicit approval; approval is the user's own message" 'm "$FLAT" "High loads .?architecture-planning.?, writes its complete plan and stops for explicit approval" && m "$FGL" "nothing you write counts as approval"'
 
+echo "12. D7 commit C: descriptions match the Router-line tier"
+desc() { python3 -B -c 'import re,sys; t=open(sys.argv[1]).read().split("---")[1]; print(re.search(r"^description: (.+)$", t, re.M).group(1))' "$1"; }
+DRT="$(desc "$RT")"; DAP="$(desc "$AP")"
+expect "skill-router description: it sets the risk tier in the Router line" 'm "$DRT" "risk tier[^.]{0,80}Router line"'
+expect "architecture-planning description: takes the tier from the Router line" 'm "$DAP" "tier from the Router line"'
+expect "architecture-planning description no longer claims to classify risk itself" '! m "$DAP" "classifies risk"'
+
 echo "7. Hygiene"
 for f in "$STD" "$RT" "$AP"; do
   n=$(basename "$(dirname "$f")")

@@ -1,6 +1,6 @@
 ---
 name: skill-router
-description: Decide how to approach a software engineering task in any repository - detect the project type from its files, classify the task (feature, bug, refactor, architecture, testing, release), and pick which skills to load, or decide none are needed. Use at the start of a coding task in a repo, especially an unfamiliar one, or when unsure which engineering skills apply. Skip for pure questions, chit-chat, or non-code work.
+description: Decide how to approach a software engineering task in any repository - detect the project type from its files, classify the task (feature, bug, refactor, architecture, testing, release), set its risk tier (Low, Medium, High) in the Router line, and pick which skills to load, or decide none are needed. Use at the start of a coding task in a repo, especially an unfamiliar one, or when unsure which engineering skills apply. Skip for pure questions, chit-chat, or non-code work.
 ---
 
 # Skill Router

@@ -1,6 +1,6 @@
 ---
 name: architecture-planning
-description: Plan before building - required for high-risk changes and, at any risk tier, for changes with architectural impact - module or service boundaries, a meaningful architectural dependency (framework, ORM, datastore), storage or data models, infrastructure/build/deploy, breaking API or data contracts - and for starting a new project in an empty repo. Classifies risk first, produces a right-sized plan (design, affected components, validation, rollback), and decides whether to implement or stop for approval. Not for small changes within existing patterns.
+description: Plan before building - required for high-risk changes and, at any risk tier, for changes with architectural impact - module or service boundaries, a meaningful architectural dependency (framework, ORM, datastore), storage or data models, infrastructure/build/deploy, breaking API or data contracts - and for starting a new project in an empty repo. Takes the risk tier from the Router line (or a later re-check Risk line), produces a right-sized plan (design, affected components, validation, rollback), and decides whether to implement or stop for approval. Not for small changes within existing patterns.
 ---
 
 # Architecture & Planning
