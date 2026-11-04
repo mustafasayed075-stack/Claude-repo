@@ -147,6 +147,12 @@ expect "skill-router description: it sets the risk tier in the Router line" 'm "
 expect "architecture-planning description: takes the tier from the Router line" 'm "$DAP" "tier from the Router line"'
 expect "architecture-planning description no longer claims to classify risk itself" '! m "$DAP" "classifies risk"'
 
+echo "13. D7 commit E: a High found by the re-check loads architecture-planning (clause restored from commit A)"
+ROW_OTHER="$(grep -F "| Any other change, any task type |" "$RT")"
+ROW_HIGH='| risk: High (every High change needs it), or architectural impact visible in the request, as defined there | `architecture-planning`, then `engineering-standards` - both before any edit |'
+expect "the 'Any other change' row loads architecture-planning for a High classification there (commit A wording)" 'mF "$ROW_OTHER" "| Any other change, any task type | \`engineering-standards\`; a High classification there loads \`architecture-planning\` before the plan (every High change needs it) |"'
+expect "guard: the risk: High row stays the first row, unchanged" '[[ "$(head -1 <<< "$TBL")" == "$ROW_HIGH" ]]'
+
 echo "7. Hygiene"
 for f in "$STD" "$RT" "$AP"; do
   n=$(basename "$(dirname "$f")")

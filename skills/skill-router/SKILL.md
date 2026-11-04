@@ -78,7 +78,7 @@ field of the Router line; a re-check after reading the code can raise it.
 | risk: High (every High change needs it), or architectural impact visible in the request, as defined there | `architecture-planning`, then `engineering-standards` - both before any edit |
 | Architecture, or a "build X" request in an empty repo | `architecture-planning` |
 | Release | `engineering-standards` (Definition of Done) |
-| Any other change, any task type | `engineering-standards` |
+| Any other change, any task type | `engineering-standards`; a High classification there loads `architecture-planning` before the plan (every High change needs it) |
 
 Optional built-ins, only when they clearly add value:
 - `run` - to reproduce or verify runtime/UI behavior.
