@@ -90,6 +90,10 @@ echo edited >> "$H/skills/skill-router/SKILL.md"; CLAUDE_HOME="$H" "$INSTALL" --
 expect "edited SKILL.md fails --check" '[[ $? -eq 1 ]]'
 inst "$H"; touch "$H/skills/skill-router/extra.md"; CLAUDE_HOME="$H" "$INSTALL" --check >/dev/null
 expect "extra file in skill dir fails --check" '[[ $? -eq 1 ]]'
+inst "$H"; echo edited >> "$H/skills/backend-api-data/references/api-contracts.md"; CLAUDE_HOME="$H" "$INSTALL" --check >/dev/null
+expect "edited reference file in a backend skill fails --check" '[[ $? -eq 1 ]]'
+inst "$H"; CLAUDE_HOME="$H" "$INSTALL" --check >/dev/null
+expect "install restores the backend skill's references" '[[ $? -eq 0 ]] && cmp -s "$REPO/skills/backend-api-data/references/api-contracts.md" "$H/skills/backend-api-data/references/api-contracts.md"'
 
 echo "F. No partial install on conflict"
 H=$(home f1); mkdir -p "$H/skills/skill-router"; echo x > "$H/skills/skill-router/SKILL.md"; inst "$H"; rc=$?
