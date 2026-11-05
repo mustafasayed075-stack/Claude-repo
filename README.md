@@ -29,7 +29,7 @@ byte-identical "Backend common rules" block and name no payment gateway.
 |---|---|---|
 | `backend-api-data` | built | endpoints, request/response shapes, errors, pagination, idempotency, schemas, queries, migrations, caching, file storage, multi-tenancy (PostgreSQL) |
 | `backend-security-privacy` | built | auth, sessions, tokens, permissions, secrets, uploads, webhooks, user data, payments |
-| `backend-reliability-performance` | planned | external calls, retries, queues, jobs, shutdown, slow endpoints, scaling |
+| `backend-reliability-performance` | built | external calls, retries, queues, jobs, shutdown, slow endpoints, scaling |
 | `backend-testing-delivery` | planned | tests, CI/CD, deploys, config, containers, IaC, observability |
 
 Checks: `tests/backend_skills_test.sh` (frontmatter, size limits, reference

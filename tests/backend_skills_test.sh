@@ -15,7 +15,7 @@ SANDBOX="$(mktemp -d)" || { echo "mktemp failed" >&2; exit 1; }
 trap 'rm -rf "$SANDBOX"' EXIT
 
 # The backend skills this stage ships. Stage 2 adds the other three here.
-EXPECTED=(backend-api-data backend-security-privacy)
+EXPECTED=(backend-api-data backend-security-privacy backend-reliability-performance)
 # Bracket patterns, so this file does not itself contain a gateway name.
 GATEWAYS='s[t]ripe|f[a]wry|p[a]ymob|x[p]ay|p[a]ytabs|p[a]ypal|a[d]yen|b[r]aintree|k[a]shier|g[e]idea|r[a]zorpay|c[h]eckout\.com'
 fm() { [[ -f "$1" ]] || return 0; python3 -B -c 'import re,sys; t=open(sys.argv[1]).read(); p=t.split("---"); m=re.search(r"^"+sys.argv[2]+r": (.+)$", p[1], re.M) if t.startswith("---") and len(p)>2 else None; print(m.group(1) if m else "")' "$1" "$2"; }
@@ -50,9 +50,14 @@ done
 echo "3. Reference pointers"
 for s in "${EXPECTED[@]}"; do
   d="$R/skills/$s"; [[ -f "$d/SKILL.md" ]] || continue
-  missing=""; for p in $(grep -ohE 'references/[a-z0-9-]+\.md' "$d/SKILL.md" "$d"/references/*.md "$d/SOURCES.md" 2>/dev/null | sort -u); do
-    [[ -f "$d/$p" ]] || missing+="$p "; done
-  expect "$s: every references/*.md named in the skill exists${missing:+ (missing: $missing)}" '[[ -z "$missing" ]]'
+  # "references/x.md" points into this skill; "backend-other/references/x.md" into that skill
+  missing=""; for p in $(grep -ohE '(backend-[a-z-]+/)?references/[a-z0-9-]+\.md' "$d/SKILL.md" "$d"/references/*.md "$d/SOURCES.md" 2>/dev/null | sort -u); do
+    if [[ "$p" == backend-* ]]; then [[ -f "$R/skills/$p" ]] || missing+="$p "; else [[ -f "$d/$p" ]] || missing+="$p "; fi; done
+  expect "$s: every references/*.md named in the skill exists, in this or the named backend skill${missing:+ (missing: $missing)}" '[[ -z "$missing" ]]'
+  # inside references/, a bare `name.md` points to a sibling reference file
+  sib=""; for n in $(grep -ohE '`[a-z0-9-]+\.md`' "$d"/references/*.md 2>/dev/null | tr -d '`' | sort -u); do
+    [[ -f "$d/references/$n" ]] || sib+="$n "; done
+  expect "$s: every sibling reference named inside references/ exists${sib:+ (missing: $sib)}" '[[ -z "$sib" ]]'
   orphan=""; for r in "$d"/references/*.md; do
     [[ -f "$r" ]] || continue
     grep -qF "references/$(basename "$r")" "$d/SKILL.md" || orphan+="$(basename "$r") "; done
