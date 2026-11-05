@@ -39,3 +39,16 @@ T judgement or secondary.
 | Practitioner posts (lock queues, fast defaults, CIC, autovacuum, sizing) | Corroboration only | Specific timeout numbers treated as heuristics; low-quality posts ignored | Secondary | P |
 | MySQL 8.4 manual (online DDL) | Not adopted | This skill targets PostgreSQL | Primary | n/a |
 | Microsoft REST API Guidelines | Not adopted | Not retrieved during research | n/a | n/a |
+| Owner confirmation (review of stage 1) | Egypt's IANA zone id is `Africa/Cairo` | Not in the research reports | Owner | V |
+
+## Notes on SKILL.md rows
+
+Source commentary kept out of the decision table:
+
+- API-2: the pagination rule follows Google AIP-158.
+- API-3: the Idempotency-Key header spec is an IETF Internet-Draft, not an
+  RFC; check Datatracker for the current revision (status P for the draft).
+- API-10: the lock-queue pile-up is documented by practitioners; the
+  PostgreSQL docs define `lock_timeout` but do not describe the queue effect.
+- API-16: the PostgreSQL wiki / HikariCP pool formula is only a starting
+  point; whether it applies per pool or fleet-wide is not settled.

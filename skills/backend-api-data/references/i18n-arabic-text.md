@@ -73,8 +73,7 @@ settled, and confirm it before relying on it.
   IANA zone stored for scheduling; Egypt reinstated DST, so never hard-code
   +02:00. Confirm current rules in the IANA tz database. (V for the storage
   rule; the DST date is from memory in the reports, so verify)
-- TODO(verify): the exact IANA zone identifier for Egypt is not named in the
-  reports; take it from the tz database.
+- Egypt's IANA zone id is `Africa/Cairo`. (V)
 - TODO(verify): Hijri calendar display and Ramadan-specific scheduling are not
   covered by the reports.
 
