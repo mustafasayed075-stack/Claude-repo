@@ -15,7 +15,7 @@ SANDBOX="$(mktemp -d)" || { echo "mktemp failed" >&2; exit 1; }
 trap 'rm -rf "$SANDBOX"' EXIT
 
 # The backend skills this stage ships. Stage 2 adds the other three here.
-EXPECTED=(backend-api-data backend-security-privacy backend-reliability-performance)
+EXPECTED=(backend-api-data backend-security-privacy backend-reliability-performance backend-testing-delivery)
 # Bracket patterns, so this file does not itself contain a gateway name.
 GATEWAYS='s[t]ripe|f[a]wry|p[a]ymob|x[p]ay|p[a]ytabs|p[a]ypal|a[d]yen|b[r]aintree|k[a]shier|g[e]idea|r[a]zorpay|c[h]eckout\.com'
 fm() { [[ -f "$1" ]] || return 0; python3 -B -c 'import re,sys; t=open(sys.argv[1]).read(); p=t.split("---"); m=re.search(r"^"+sys.argv[2]+r": (.+)$", p[1], re.M) if t.startswith("---") and len(p)>2 else None; print(m.group(1) if m else "")' "$1" "$2"; }
