@@ -142,6 +142,9 @@ This file owns the connection-budget rule; other skills point here.
 - Lost update (read-modify-write under Read Committed): fix with an atomic
   `SET x = x + 1`, `FOR UPDATE`, or a version check. Write skew: Serializable,
   or lock a shared parent row. (V)
+- Guarded atomic update for balances and stock:
+  `UPDATE ... SET balance = balance - $1 WHERE balance >= $1` (zero rows
+  updated means insufficient funds). (T)
 - Default: Read Committed plus atomic updates or row locks on hot paths;
   Serializable plus a bounded, jittered retry wrapper for cross-row
   invariants. Never hold a transaction across network calls. (T)
