@@ -165,6 +165,24 @@ out=$(cd "$SANDBOX" && TMPDIR="$SANDBOX/does-not-exist" "$REPO/tests/run.sh" 0 2
 expect "mktemp failure exits non-zero" '[[ $rc -ne 0 && "$out" == *"mktemp failed"* ]]'
 expect "filesystem root unchanged" '[[ "$(ls / | sha256sum)" == "$before" ]]'
 
+echo "J. CRLF source checkout (Windows, core.autocrlf=true)"
+# Git Bash's awk drops the CR when it copies the block, so a block deployed
+# from a CRLF checkout holds LF lines while the source keeps CRLF.
+CRA="$SANDBOX/crlf-all"; mkrepo "$CRA"
+for f in "$CRA/global/CLAUDE.md" "$CRA"/skills/*/SKILL.md; do sed -i 's/$/\r/' "$f"; done
+H=$(home j1); CLAUDE_HOME="$H" "$CRA/scripts/install.sh" >/dev/null 2>&1
+CLAUDE_HOME="$H" "$CRA/scripts/install.sh" --check >/dev/null 2>&1; rc=$?
+expect "CRLF source: install, then --check is ok" '[[ $rc -eq 0 ]]'
+expect "CRLF source: CLAUDE.md is written with LF only" '[[ -z "$(tr -cd "\r" < "$H/CLAUDE.md")" ]]'
+inst "$H" 2>/dev/null; CLAUDE_HOME="$H" "$CRA/scripts/install.sh" >/dev/null 2>&1; s1=$(sha "$H/CLAUDE.md")
+CLAUDE_HOME="$H" "$CRA/scripts/install.sh" >/dev/null 2>&1
+expect "CRLF source: reinstall leaves CLAUDE.md unchanged" '[[ "$(sha "$H/CLAUDE.md")" == "$s1" ]]'
+CRG="$SANDBOX/crlf-global"; mkrepo "$CRG"; sed -i 's/$/\r/' "$CRG/global/CLAUDE.md"
+H=$(home j2); inst "$H"; CLAUDE_HOME="$H" "$CRG/scripts/install.sh" --check >/dev/null 2>&1; rc=$?
+expect "LF block deployed, CRLF source (Git Bash awk): --check is ok, not STALE" '[[ $rc -eq 0 ]]'
+sed -i 's/Engineering Skill System/OLD VERSION/' "$H/CLAUDE.md"; CLAUDE_HOME="$H" "$CRG/scripts/install.sh" --check >/dev/null 2>&1; rc=$?
+expect "guard: CRLF source still reports a real content difference as STALE" '[[ $rc -eq 1 ]]'
+
 echo
 echo "Installer tests: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

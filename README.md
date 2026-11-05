@@ -53,6 +53,14 @@ The installer:
 Start a new Claude Code session after installing. Edit the files under `skills/`
 in this repo and re-run the installer. Don't edit the deployed copies.
 
+Line endings (Windows): `.gitattributes` sets `* text=auto eol=lf`, so a
+checkout uses LF even with `core.autocrlf=true`. A clone made before that
+file existed may still hold CRLF files; the installer ignores a trailing CR
+in `global/CLAUDE.md` when it writes and checks the managed block, so
+`--check` does not report a false `STALE`. To convert such a clone to LF:
+`git rm --cached -r . && git reset --hard` (this discards uncommitted
+changes).
+
 ## Persistence between sessions
 
 `~/.claude` on a local machine persists, so run the installer once there.
