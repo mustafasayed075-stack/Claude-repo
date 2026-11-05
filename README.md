@@ -8,9 +8,9 @@ directory so they apply in every project.
 
 | Skill | Purpose |
 |---|---|
-| `skill-router` | Detect project type and task type; choose which skills to load, or none. |
-| `engineering-standards` | Baseline rules: understand first, right-size architecture, errors/security, tests, Definition of Done, autonomy vs. escalation. |
-| `architecture-planning` | Right-sized design before large or risky changes. |
+| `skill-router` | Detect project type and task type, state the risk tier (Low, Medium, High) in the `Router:` line, and choose which skills to load, or none. |
+| `engineering-standards` | Owns risk classification (tiers, High triggers, the `Plan (Medium):` short plan, the re-check `Risk:` line). Baseline rules: understand first, right-size architecture, errors/security, tests, Definition of Done, autonomy vs. escalation. |
+| `architecture-planning` | Complete plan for every High change and for architectural impact at any tier; for High it stops for the user's explicit approval. |
 
 Existing built-in skills (`code-review`, `security-review`, `simplify`, `run`,
 `init`, `claude-api`) are referenced by the router and not duplicated.

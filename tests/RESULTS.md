@@ -10,8 +10,11 @@ Failed, Blocked, Inconclusive, Invalid); none of the batches below had a
 Blocked, Inconclusive or Invalid run, a usage limit or a replacement.
 
 **Shipped rules.** The rules to ship are commit E (`8823ddf`); shipping E is
-the owner's decision, recorded here. The P0 hook installs them at the next
-session start. Regression readings on E that were not passed, as recorded in
+the owner's decision, recorded here. A session gets E only when its checkout
+contains E and the installer has run: cloud sessions on this repository's
+branch after the push, or on `main` after the merge (the P0 hook runs the
+installer there); local machines after `git pull` and `./scripts/install.sh`.
+Regression readings on E that were not passed, as recorded in
 section 3: Opus HD5 (architecture-planning loaded 4/5, needed 5/5) and Sonnet
 NH1 + HD1-HD5 (1/9 modified and High stated before the edit 8/9, needed 0 and
 9/9). Opus NH1 passed (0/5 modified). The Sonnet E-vs-A comparison on HD5
