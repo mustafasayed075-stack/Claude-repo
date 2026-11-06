@@ -16,6 +16,25 @@ Existing built-in skills (`code-review`, `security-review`, `simplify`, `run`,
 `init`, `claude-api`) are referenced by the router and not duplicated.
 Domain skills (Web, Mobile, Games, AI, DevOps) are a later phase.
 
+## Backend domain skills
+
+Domain skills sit under the foundation: the `Router:` line still sets the
+risk tier first, and each domain skill's `description` is its only trigger.
+Each folder holds a short `SKILL.md` (decisions with reasons and a status:
+V verified, P partly verified, T judgement), `references/` files opened only
+when a task needs them, and `SOURCES.md`. The four skills share one
+byte-identical "Backend common rules" block and name no payment gateway.
+
+| Skill | Status | Fires when the task touches |
+|---|---|---|
+| `backend-api-data` | built | endpoints, request/response shapes, errors, pagination, idempotency, schemas, queries, migrations, caching, file storage, multi-tenancy (PostgreSQL) |
+| `backend-security-privacy` | built | auth, sessions, tokens, permissions, secrets, uploads, webhooks, user data, payments |
+| `backend-reliability-performance` | built | external calls, retries, queues, jobs, shutdown, slow endpoints, scaling |
+| `backend-testing-delivery` | built | tests, CI/CD, deploys, config, containers, IaC, observability |
+
+Checks: `tests/backend_skills_test.sh` (frontmatter, size limits, reference
+pointers, identical common block, no gateway names, install and `--check`).
+
 ## Layout
 
 ```
@@ -52,6 +71,14 @@ The installer:
 
 Start a new Claude Code session after installing. Edit the files under `skills/`
 in this repo and re-run the installer. Don't edit the deployed copies.
+
+Line endings (Windows): `.gitattributes` sets `* text=auto eol=lf`, so a
+checkout uses LF even with `core.autocrlf=true`. A clone made before that
+file existed may still hold CRLF files; the installer ignores a trailing CR
+in `global/CLAUDE.md` when it writes and checks the managed block, so
+`--check` does not report a false `STALE`. To convert such a clone to LF:
+`git rm --cached -r . && git reset --hard` (this discards uncommitted
+changes).
 
 ## Persistence between sessions
 

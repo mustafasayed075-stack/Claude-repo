@@ -96,16 +96,24 @@ p0_reinstall() { # does the real ~/.claude now hold exactly this repo's rules (w
   python3 -B - "$REAL_CLAUDE" "$SRC" <<'PY'
 import os, sys
 real, src = sys.argv[1:3]
-ok = all(os.path.exists(f"{real}/skills/{s}/SKILL.md") and open(f"{real}/skills/{s}/SKILL.md").read() == open(f"{src}/skills/{s}/SKILL.md").read()
-         for s in ("skill-router", "engineering-standards", "architecture-planning"))
+# every skill folder in the installed source is managed (the installer copies whole folders, references/ included)
+skills = sorted(s for s in os.listdir(f"{src}/skills") if os.path.isdir(f"{src}/skills/{s}"))
+def files(root):
+    return {os.path.relpath(os.path.join(d, f), root) for d, _, fs in os.walk(root) for f in fs}
+ok = True
+extra = []
+for s in skills:
+    want, have = f"{src}/skills/{s}", f"{real}/skills/{s}"
+    if not os.path.isdir(have):
+        ok = False
+        continue
+    wf, hf = files(want), files(have) - {".engineering-skill-system"}
+    ok = ok and wf <= hf and all(open(f"{want}/{f}", "rb").read() == open(f"{have}/{f}", "rb").read() for f in wf)
+    extra += [f"{s}/{f}" for f in sorted(hf - wf)]
 md = f"{real}/CLAUDE.md"
 ok = ok and os.path.exists(md) and open(f"{src}/global/CLAUDE.md").read().strip() in open(md).read()
-extra = [f for s in os.listdir(f"{real}/skills") if s not in ("skill-router", "engineering-standards", "architecture-planning", "session-start-hook")
-         for f in [s]] if os.path.isdir(f"{real}/skills") else []
-for s in ("skill-router", "engineering-standards", "architecture-planning"):
-    d = f"{real}/skills/{s}"
-    if os.path.isdir(d):
-        extra += [f"{s}/{f}" for f in os.listdir(d) if f not in ("SKILL.md", ".engineering-skill-system")]
+if os.path.isdir(f"{real}/skills"):
+    extra += [s for s in os.listdir(f"{real}/skills") if s not in skills and s != "session-start-hook"]
 print("yes" if ok and not extra else "no")
 PY
 }

@@ -20,7 +20,7 @@ CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 SKILLS_DIR="$CLAUDE_HOME/skills"
 GLOBAL_MD="$CLAUDE_HOME/CLAUDE.md"
 SOURCE_MD="$REPO_DIR/global/CLAUDE.md"
-SKILLS=(engineering-standards skill-router architecture-planning)
+SKILLS=(engineering-standards skill-router architecture-planning backend-api-data backend-security-privacy backend-reliability-performance backend-testing-delivery)
 MARKER=".engineering-skill-system"
 MARKER_TEXT="managed-by: engineering-skill-system"
 BEGIN="<!-- BEGIN engineering-skill-system (managed by Claude-repo/scripts/install.sh) -->"
@@ -75,13 +75,17 @@ block_state() {
 }
 
 block_body() { awk -v b="$BEGIN" -v e="$END" '$0==e{inb=0} inb{print} $0==b{inb=1}' "$1"; }
+# Lines of stdin or $1 without a trailing CR. A CRLF checkout (Windows,
+# core.autocrlf=true) must not look different from an LF one; some awks
+# (Git Bash) drop the CR when they copy a line and others keep it.
+no_cr() { awk '{ sub(/\r$/, "") } 1' "$@"; }
 without_block() { awk -v b="$BEGIN" -v e="$END" '$0==b{skip=1;next} $0==e{skip=0;next} !skip' "$1"; }
 
 # $1 with the managed block replaced in place, or appended if absent.
 render_md() {
   if [[ "$(block_state "$1")" == ok ]]; then
     awk -v b="$BEGIN" -v e="$END" -v src="$SOURCE_MD" '
-      $0==b { print; while ((getline l < src) > 0) print l; skip=1; next }
+      $0==b { print; while ((getline l < src) > 0) { sub(/\r$/, "", l); print l }; skip=1; next }
       $0==e { skip=0 }
       !skip' "$1"
   else
@@ -91,7 +95,7 @@ render_md() {
       echo
     fi
     echo "$BEGIN"
-    cat "$SOURCE_MD"
+    no_cr "$SOURCE_MD"
     echo "$END"
   fi
 }
@@ -130,7 +134,7 @@ check() {
   md="$(md_target)"
   case "$(block_state "$md")" in
     ok)
-      if diff -q <(block_body "$md") "$SOURCE_MD" >/dev/null; then
+      if diff -q <(block_body "$md" | no_cr) <(no_cr "$SOURCE_MD") >/dev/null; then
         echo "ok       $GLOBAL_MD managed block is current"
       else
         echo "STALE    $GLOBAL_MD managed block differs from source"; rc=1
