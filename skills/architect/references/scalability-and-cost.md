@@ -22,6 +22,8 @@ decisions.
 ## 1. ARCH-16 Stateless processes (V)
 - App processes are stateless (Twelve-Factor processes page). State lives in
   the database, cache or object storage; no sticky sessions.
+- Mechanics: Rules:
+  `backend-reliability-performance/references/performance-and-scaling.md`.
 - Exception: real-time connections are process-bound. Their state must be
   recoverable (the client reconnects and resumes from the last seen id) and is
   never the source of truth.
@@ -33,7 +35,8 @@ Then, in the usual order, skipping steps the measurement does not point to:
 2. Scale the machine up.
 3. Add stateless app copies.
 4. Move slow work async (ARCH-18).
-5. Cache specific hot reads, with a stated TTL and an invalidation owner.
+5. Cache specific hot reads, with a stated TTL and an invalidation owner
+   (Rules: `backend-api-data/references/caching-and-files.md`).
 6. Add a read replica for read-heavy or reporting paths that tolerate lag.
 7. Partition or shard only with an ADR.
 
@@ -70,6 +73,9 @@ The brief states:
 
 Metrics detail: Rules:
 `backend-reliability-performance/references/performance-and-scaling.md`.
+Cost basics (tags, budgets, right-sizing): Rules:
+`backend-testing-delivery/references/containers-iac-config.md` (section
+"Cost basics"). This skill owns only the design-time EGP estimate.
 
 ## 7. ARCH-43 Failure-mode table (P)
 One row per container and external dependency:

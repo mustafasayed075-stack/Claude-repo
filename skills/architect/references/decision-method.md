@@ -49,7 +49,7 @@ Start from the shape default, then list what in this idea breaks it.
 
 | Shape | Default | Watch for |
 |---|---|---|
-| Business app with roles | Modular monolith, one relational DB, a worker process for email, SMS, files | Too many layers for CRUD; an authorization point per module |
+| Business app with roles | Modular monolith, one relational DB, a worker process for email, SMS, files (Rules: `backend-reliability-performance/references/messaging-and-jobs.md`) | Too many layers for CRUD; an authorization point per module (Rules: `backend-security-privacy/references/authorization-and-abuse.md`) |
 | Multi-tenant SaaS | Modular monolith, tenant id on every tenant table, central scoping, single DB first, database row policies as defence in depth (Rules: `backend-api-data/references/tenancy-and-data-lifecycle.md`) | Noisy neighbour (per-tenant quotas and rate limits); per-tenant export and deletion; a cross-tenant leak test as a fitness function |
 | Mobile app, on-device logic (for example an Android content filter) | Logic and data on the device; no backend unless a feature needs one; rule or blocklist updates delivered as signed, versioned data separate from app releases; user browsing data never leaves the device by default | Battery and background-kill behaviour of popular Android OEMs; sensitive-permission and store-policy review for VPN or accessibility-style APIs (verify with current store policy); tamper and bypass by the user; low-end devices and minimum OS version; slow app updates (keep update channels in data, not code) |
 | Integration or automation (for example n8n) | Use the workflow platform first; idempotent steps keyed by source event id; retries with backoff; a dead-letter or failed-runs list someone checks; webhook signature check; secrets in the platform credential store; complex rules and prompts versioned outside the flow | Third-party rate limits; duplicate events; human approval before customer-facing messages until quality is proven; platform messaging-policy limits (verify); an audit log of every automated action; replay of a failed run |
@@ -98,6 +98,10 @@ If the choice flips on a small change, mark it fragile in the ADR.
   fallback. Mechanics: Rules: `backend-api-data/references/api-contracts.md`
   (idempotency), `backend-api-data/references/caching-and-files.md`, and
   `backend-reliability-performance/references/timeouts-retries-overload.md`.
+  Gap: no backend skill owns the offline sync design (local store, conflict
+  rule, sync queue); the pointers cover idempotent writes, caching and retries
+  only. TODO(verify): record the sync design in an ADR until a mobile skill
+  owns it.
 - **ARCH-30 Data residency and Law 151/2020 (T).** Record the data-residency and
   Law 151/2020 decision as an ADR before choosing hosting: what is decided now,
   what is deferred to a legal review, and the trigger for that review. This is

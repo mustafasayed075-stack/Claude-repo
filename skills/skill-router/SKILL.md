@@ -73,16 +73,19 @@ engineering-standards, section "Risk, scope and planning". Route by those
 definitions, not by file count. The tier is the one you state in the risk:
 field of the Router line; a re-check after reading the code can raise it.
 
+Routing line: `architect` = a new system, a new idea, or a whole-system
+review. `architecture-planning` = a planned change inside existing code,
+including the first build after `architect` has designed it. Backend detail =
+the four backend skills. For a new system, a new idea or a whole-system review,
+load `architect` first, before the table below; then apply the first matching
+row for anything that edits code.
+
 | Situation (first matching row wins) | Load |
 |---|---|
 | risk: High (every High change needs it), or architectural impact visible in the request, as defined there | `architecture-planning`, then `engineering-standards` - both before any edit |
 | Architecture: a new system, a new idea or a whole-system review, or a "build X" request in an empty repo | `architect` for the design; then `architecture-planning` before the first edit |
 | Release | `engineering-standards` (Definition of Done) |
 | Any other change, any task type | `engineering-standards`; a High classification there loads `architecture-planning` before the plan (every High change needs it) |
-
-Routing line: `architect` = a new system, a new idea, or a whole-system
-review. `architecture-planning` = a planned change inside existing code.
-Backend detail = the four backend skills.
 
 Optional built-ins, only when they clearly add value:
 - `run` - to reproduce or verify runtime/UI behavior.

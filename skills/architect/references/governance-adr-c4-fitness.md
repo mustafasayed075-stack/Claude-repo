@@ -60,7 +60,9 @@ Everything else is a line in the brief.
 - Why: an unchecked rule decays, and checks that are too strict too early block
   exploration.
 - This skill decides which checks exist and why. How they run in CI: Rules:
-  `backend-testing-delivery/references/testing-strategy.md`.
+  `backend-testing-delivery/references/testing-strategy.md` (section "Static
+  analysis"; the tenant-isolation test is its section "Two-tenant
+  authorization").
 - Not fitness functions here: latency budgets (Rules:
   `backend-reliability-performance/references/slo-and-incidents.md`) and
   dependency or vulnerability scans (Rules:
@@ -87,11 +89,19 @@ Everything else is a line in the brief.
   supporting papers are preprints, and one is a position paper with no data.
 
 ## 8. ARCH-27 Structural risk (T)
-Use the foundation tier names exactly; define no new tiers.
+Use the foundation tier names exactly; define no new tiers. The tier test
+stays in engineering-standards ("Risk, scope and planning"); the items below
+are this skill's additional High triggers for structural work, in the same way
+the backend skills list theirs. They add no tier and lower nothing.
 - High (plan first via `architecture-planning`): the change touches a trust
   boundary, authentication or authorization, a personal-data flow, or adds a
-  new external dependency or store.
-- Medium: the change crosses a module boundary or changes a public interface.
+  new external dependency or store. Why: each is hard to undo or widens what
+  can leak.
+- High: a public-interface change that can break compatibility (the
+  foundation's API and data-contract trigger).
+- Medium: the change crosses a module boundary, or changes a public interface
+  in a non-breaking, additive way. Why: new behavior with no High trigger is
+  Medium under the foundation.
 
 ## 9. ARCH-28 Slice-end checks (T)
 At the end of each slice, check for:

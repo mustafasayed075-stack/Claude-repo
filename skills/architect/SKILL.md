@@ -12,8 +12,9 @@ alternative. It never restates a rule another skill owns: it points to it as
 skill's rule IDs).
 
 **Routing line.** `architect` = a new system, a new idea, or a whole-system
-review. `architecture-planning` = a planned change inside existing code.
-Backend detail = the four backend skills.
+review. `architecture-planning` = a planned change inside existing code,
+including the first build after this skill has designed it. Backend detail =
+the four backend skills.
 
 Status tags: V verified on a primary page, P partly verified or
 experience-based, T judgement (say "verify in your environment"). Never
@@ -119,8 +120,8 @@ examples are in the references.
 
 | ID | Default | Why | Tag |
 |---|---|---|---|
-| ARCH-26 | Module map (with module classes), dependency rules and a do-not list in CLAUDE.md, enforced by CI | AI raises throughput but lowers stability; checks protect you | P |
-| ARCH-27 | Use the foundation tiers: boundary, auth, personal-data or new-store changes are High; module-boundary or public-interface changes are Medium | Reuses the existing approval process | T |
+| ARCH-26 | Module map (with module classes), dependency rules and a do-not list in CLAUDE.md, enforced by CI | DORA 2025 reports AI raises throughput but lowers stability; checks protect you | P |
+| ARCH-27 | Foundation tiers only. Also High here: a trust-boundary, personal-data or new external dependency or store change. Medium: a module-boundary or non-breaking public-interface change; a breaking one is High | Reuses the existing approval process | T |
 | ARCH-28 | At each slice end, check for duplication, unrequested abstractions, scattered logic and imports that break the map | Split files can still hide scattered logic | T |
 
 ### Egypt-first inputs (`references/decision-method.md`)
@@ -198,6 +199,9 @@ decision and do not override it.
 End every design or review with a short "Not verified" list. Always include
 what this skill itself has not verified (see `SOURCES.md`): the ARCH-17
 order, the ARCH-3 thresholds, every shape-table item, the Android store-policy
-and OEM items, Mermaid C4 syntax, and every Egypt item (connectivity,
-foreign-currency hosting cost, data residency, Law 151/2020 duties:
-not legal advice, the Arabic text governs).
+and OEM items, Mermaid C4 syntax, the offline sync design (no owner yet),
+every Egypt item (connectivity, foreign-currency hosting cost, data residency,
+Law 151/2020 duties: not legal advice, the Arabic text governs), and the
+sources not read in full: the Prime Video original post, the CISA October
+2023 PDF, the ISO/IEC 25010:2011 withdrawal, DORA beyond its first third, the
+OWASP threat-modeling and LLM guidance, and SRE chapters other than 22.

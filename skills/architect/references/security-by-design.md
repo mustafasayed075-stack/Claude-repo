@@ -16,6 +16,11 @@ belong to backend-security-privacy.
 - Mark the trust boundaries on the C4 container diagram (`../templates/c4.md`).
 - STRIDE is a prompt list for "what can go wrong", not a requirement.
 - Output: a short threat list per trust boundary, in the format below.
+- Ownership: this skill owns the system-level threat model (one list per
+  trust boundary, at design time). The per-feature STRIDE pass before a
+  High-risk feature is owned by Rules:
+  `backend-security-privacy/references/authorization-and-abuse.md`
+  (section "Threat modelling").
 
 Threat list format (one table per trust boundary):
 
@@ -28,7 +33,8 @@ From the CISA Secure by Design principles (April 2023 joint guide and the
 October 2023 alert):
 - Security features are on by default and cost nothing extra.
 - Turning one off is an explicit, logged choice.
-- Privileged accounts get MFA by default.
+- Privileged accounts get MFA by default (mechanics: Rules:
+  `backend-security-privacy/references/auth-and-sessions.md`, section "MFA").
 - Remove features that only enlarge the attack surface.
 - The maker owns the customer's security outcome.
 
