@@ -20,7 +20,11 @@ CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 SKILLS_DIR="$CLAUDE_HOME/skills"
 GLOBAL_MD="$CLAUDE_HOME/CLAUDE.md"
 SOURCE_MD="$REPO_DIR/global/CLAUDE.md"
-SKILLS=(engineering-standards skill-router architecture-planning backend-api-data backend-security-privacy backend-reliability-performance backend-testing-delivery)
+SKILLS=(engineering-standards skill-router architecture-planning backend-api-data backend-security-privacy backend-reliability-performance backend-testing-delivery architect)
+# Skills this system once shipped and no longer does. install and uninstall
+# remove them only if they carry the ownership marker; --check fails while
+# any of them still exists (managed or not), so a leftover is noticed.
+RETIRED=(architecture-brief)
 MARKER=".engineering-skill-system"
 MARKER_TEXT="managed-by: engineering-skill-system"
 BEGIN="<!-- BEGIN engineering-skill-system (managed by Claude-repo/scripts/install.sh) -->"
@@ -131,6 +135,13 @@ check() {
       foreign) echo "FOREIGN  $SKILLS_DIR/$s exists but is not managed by this system"; rc=1 ;;
     esac
   done
+  for s in "${RETIRED[@]}"; do
+    case "$(skill_state "$s")" in
+      ours) echo "RETIRED  skill $s is still installed; run the installer to remove it"; rc=1 ;;
+      foreign) echo "RETIRED  $SKILLS_DIR/$s exists and is not managed by this system; remove it by hand"; rc=1 ;;
+      absent) ;;
+    esac
+  done
   md="$(md_target)"
   case "$(block_state "$md")" in
     ok)
@@ -164,6 +175,13 @@ install() {
     rm -rf "${SKILLS_DIR:?}/$s"
     mv "$new" "$SKILLS_DIR/$s"
   done
+  for s in "${RETIRED[@]}"; do
+    case "$(skill_state "$s")" in
+      ours) rm -rf "${SKILLS_DIR:?}/$s"; echo "Removed retired skill $s." ;;
+      foreign) echo "WARNING  $SKILLS_DIR/$s is a retired skill name but is not managed by this system; it was left alone" >&2 ;;
+      absent) ;;
+    esac
+  done
   write_file "$md" < <(render_md "$md")
   echo "Installed to $CLAUDE_HOME. Start a new Claude Code session to load it."
   check
@@ -180,6 +198,9 @@ uninstall() {
       foreign) echo "SKIPPED  $SKILLS_DIR/$s: not managed by this system" >&2; rc=1 ;;
       absent) ;;
     esac
+  done
+  for s in "${RETIRED[@]}"; do
+    [[ "$(skill_state "$s")" != ours ]] || rm -rf "${SKILLS_DIR:?}/$s"
   done
   if [[ "$(block_state "$md")" == ok ]]; then
     write_file "$md" < <(without_block "$md")

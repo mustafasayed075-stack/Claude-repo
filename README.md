@@ -16,6 +16,20 @@ Existing built-in skills (`code-review`, `security-review`, `simplify`, `run`,
 `init`, `claude-api`) are referenced by the router and not duplicated.
 Domain skills (Web, Mobile, Games, AI, DevOps) are a later phase.
 
+## Architect skill
+
+`skills/architect` is the system-level architect: `architect` = a new system,
+a new idea, or a whole-system review; `architecture-planning` = a planned
+change inside existing code; backend detail = the four backend skills. In
+Design mode it writes `docs/ARCHITECTURE_BRIEF.md`, short ADRs in
+`docs/decisions/`, `docs/c4.md` (a Mermaid flowchart with labelled trust
+boundaries) and fitness functions; Review mode produces findings only and
+never edits code. Rules ARCH-1 to ARCH-49 carry V/P/T status tags; the
+references and `templates/` hold the detail. It replaces the earlier
+`architecture-brief` skill: the installer removes a managed copy, and
+`--check` fails while any `architecture-brief` folder remains. Checks:
+`tests/architect_skill_test.sh`.
+
 ## Backend domain skills
 
 Domain skills sit under the foundation: the `Router:` line still sets the

@@ -169,6 +169,23 @@ out=$(cd "$SANDBOX" && TMPDIR="$SANDBOX/does-not-exist" "$REPO/tests/run.sh" 0 2
 expect "mktemp failure exits non-zero" '[[ $rc -ne 0 && "$out" == *"mktemp failed"* ]]'
 expect "filesystem root unchanged" '[[ "$(ls / | sha256sum)" == "$before" ]]'
 
+echo "K. Eight skills and the retired architecture-brief"
+SK=$(sed -n 's/^SKILLS=(\(.*\))$/\1/p' "$INSTALL")
+expect "the installer lists 8 skills, architect among them" '[[ $(wc -w <<< "$SK") -eq 8 && " $SK " == *" architect "* ]]'
+H=$(home k1); inst "$H"
+expect "install deploys all 8 skills" '( for s in $SK; do [[ -f "$H/skills/$s/SKILL.md" && -f "$H/skills/$s/.engineering-skill-system" ]] || exit 1; done )'
+mkdir -p "$H/skills/architecture-brief"; printf 'managed-by: engineering-skill-system\n' > "$H/skills/architecture-brief/.engineering-skill-system"
+out=$(CLAUDE_HOME="$H" "$INSTALL" --check 2>&1); rc=$?
+expect "--check fails and names a managed architecture-brief" '[[ $rc -eq 1 && "$out" == *"RETIRED  skill architecture-brief"* ]]'
+inst "$H"
+expect "install removes the managed architecture-brief; --check then passes" '[[ ! -e "$H/skills/architecture-brief" ]] && CLAUDE_HOME="$H" "$INSTALL" --check >/dev/null'
+mkdir -p "$H/skills/architecture-brief"; echo "user skill" > "$H/skills/architecture-brief/SKILL.md"
+inst "$H"; out=$(CLAUDE_HOME="$H" "$INSTALL" --check 2>&1); rc=$?
+expect "an unmanaged architecture-brief is left alone and --check fails" '[[ "$(cat "$H/skills/architecture-brief/SKILL.md")" == "user skill" && $rc -eq 1 && "$out" == *"remove it by hand"* ]]'
+H=$(home k2); inst "$H"; mkdir -p "$H/skills/architecture-brief"; printf 'managed-by: engineering-skill-system\n' > "$H/skills/architecture-brief/.engineering-skill-system"
+inst "$H" --uninstall
+expect "uninstall removes a managed architecture-brief with the 8 skills" '[[ ! -e "$H/skills/architecture-brief" && ! -e "$H/skills/architect" ]]'
+
 echo "J. CRLF source checkout (Windows, core.autocrlf=true)"
 # Git Bash's awk drops the CR when it copies the block, so a block deployed
 # from a CRLF checkout holds LF lines while the source keeps CRLF.

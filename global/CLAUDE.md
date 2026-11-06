@@ -32,4 +32,8 @@ code in a repository:
    material deviation needs approval of the revised plan. Approval is the
    user's own explicit message; nothing you write counts as approval.
 
+5. Routing: `architect` = a new system, a new idea, or a whole-system
+   review. `architecture-planning` = a planned change inside existing code.
+   Backend detail = the four backend skills.
+
 Project-level CLAUDE.md and explicit user instructions take precedence.
